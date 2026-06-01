@@ -25,14 +25,27 @@ Soroban smart contracts for the Invoice Liquidity Network — a two-sided protoc
 
 ## Quickstart
 
+A `Makefile` at the repo root provides all common developer commands:
+
+| Command | Description |
+|---------|-------------|
+| `make build` | Compile all contracts to optimised WASM |
+| `make test` | Run the full test suite |
+| `make fmt` | Format all Rust source files |
+| `make lint` | Run Clippy with denied warnings |
+| `make deploy-testnet` | Deploy all contracts to Stellar testnet |
+| `make coverage` | Generate a tarpaulin HTML coverage report |
+| `make clean` | Remove build artefacts |
+| `make help` | List all available targets |
+
 ```bash
 # Build all contracts
-cargo build --target wasm32v1-none --release
+make build
 
 # Run tests
-cargo test
+make test
 
-# Run fuzz suite
+# Run fuzz suite (directly via cargo)
 cargo test -p iln_fuzz
 ```
 
