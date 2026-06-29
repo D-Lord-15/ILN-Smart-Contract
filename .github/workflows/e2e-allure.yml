@@ -12,21 +12,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'pnpm'
 
-      - name: Install E2E dependencies
-        working-directory: tests/e2e
-        run: npm install
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Install Allure CLI
-        run: npm install -g allure-commandline
+        run: pnpm add -g allure-commandline
 
       - name: Run E2E tests with Allure
         working-directory: tests/e2e
-        run: npm run test:e2e:allure
+        run: pnpm --filter @iln/e2e-tests run test:e2e:allure
         continue-on-error: true
 
       - name: Generate Allure report

@@ -227,3 +227,73 @@ jobs:
         with:
           name: coverage-report
           path: coverage/cobertura.xml
+
+  # Snyk vulnerability scanning for npm packages across all monorepo packages.
+  snyk:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Snyk to check for vulnerabilities (SDK)
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=sdk/package.json --severity-threshold=high
+
+      - name: Run Snyk to check for vulnerabilities (CLI)
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=cli/package.json --severity-threshold=high
+
+      - name: Run Snyk to check for vulnerabilities (Indexer)
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=indexer/package.json --severity-threshold=high
+
+      - name: Run Snyk to check for vulnerabilities (Notifications)
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=notifications/package.json --severity-threshold=high
+
+      - name: Run Snyk to check for vulnerabilities (E2E Tests)
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --file=tests/e2e/package.json --severity-threshold=high
+
+      - name: Upload Snyk results as PR comment
+        uses: snyk/actions/node@master
+        if: always()
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          command: monitor
+          args: --all-projects --severity-threshold=high
