@@ -28,6 +28,48 @@ jobs:
           fi
         shell: bash
 
+  # TypeScript workspace tests using Turborepo for caching and parallel execution
+  typescript-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Turborepo cache
+        uses: actions/cache@v4
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+
+      - name: Run typecheck (Turbo)
+        run: npm run typecheck
+
+      - name: Run build (Turbo)
+        run: npm run build
+
+      - name: Run tests (Turbo)
+        run: npm run test:ci
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: typescript-coverage
+          path: |
+            sdk/coverage/
+            indexer/coverage/
+            notifications/coverage/
+            cli/coverage/
+
   # Unit / workspace tests that do not require the external testnet.
   test:
     runs-on: ubuntu-latest
