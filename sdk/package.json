@@ -18,6 +18,9 @@
     "test": "vitest run --coverage",
     "test:ci": "vitest run --coverage",
     "test:integration": "vitest run --config vitest.config.ts",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist coverage node_modules/.cache",
     "docs": "typedoc --out docs src/index.ts"
   },
   "dependencies": {
@@ -32,39 +35,5 @@
     "typedoc": "^0.25.12",
     "typescript": "^5.4.0",
     "vitest": "^1.6.1"
-  },
-  "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node",
-    "extensionsToTreatAsEsm": [
-      ".ts"
-    ],
-    "transform": {
-      "^.+\\.tsx?$": [
-        "ts-jest",
-        {
-          "useESM": true
-        }
-      ]
-    },
-    "moduleNameMapper": {
-      "^(\\.{1,2}/.*)\\.js$": "$1"
-    },
-    "testPathIgnorePatterns": [
-      "/node_modules/",
-      "/tests/integration/"
-    ],
-    "collectCoverageFrom": [
-      "src/**/*.ts",
-      "!src/index.ts"
-    ],
-    "coverageThreshold": {
-      "global": {
-        "lines": 95,
-        "functions": 95,
-        "branches": 95,
-        "statements": 95
-      }
-    }
   }
 }

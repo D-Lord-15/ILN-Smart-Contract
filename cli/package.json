@@ -11,7 +11,9 @@
     "build": "tsc",
     "test": "vitest run",
     "test:cli-e2e": "vitest run tests/e2e",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist node_modules/.cache"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^16.0.1",
@@ -24,13 +26,5 @@
     "execa": "^9.0.0",
     "typescript": "^5.4.0",
     "vitest": "^4.1.9"
-  },
-  "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node",
-    "testMatch": [
-      "**/tests/**/*.test.ts",
-      "**/src/**/*.test.ts"
-    ]
   }
 }

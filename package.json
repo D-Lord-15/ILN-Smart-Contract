@@ -1,11 +1,14 @@
 {
   "name": "iln-smart-contract",
+  "version": "0.0.0",
   "private": true,
+  "description": "Invoice Liquidity Network Smart Contracts",
   "packageManager": "pnpm@9.0.0",
   "engines": {
     "node": ">=20.0.0"
   },
   "scripts": {
+    "preinstall": "npx only-allow pnpm",
     "build": "turbo run build",
     "test": "turbo run test",
     "lint": "turbo run lint",

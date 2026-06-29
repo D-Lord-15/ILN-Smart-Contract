@@ -3,4 +3,5 @@ packages:
   - 'cli'
   - 'indexer'
   - 'notifications'
+  - 'tests/e2e'
   - 'packages/*'
