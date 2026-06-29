@@ -1,0 +1,6 @@
+packages:
+  - 'sdk'
+  - 'cli'
+  - 'indexer'
+  - 'notifications'
+  - 'packages/*'

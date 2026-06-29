@@ -484,3 +484,5 @@ bash scripts/check_benchmark_regression.sh
 
 Open a [GitHub Discussion](https://github.com/Invoice-Liquidity-Network/ILN-Smart-Contract/discussions)
 or comment on the relevant issue.
+## Dependabot
+Dependabot is configured to automatically submit PRs to update dependencies. Maintainers should review and merge them as appropriate.

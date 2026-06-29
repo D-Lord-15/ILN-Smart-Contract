@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 /**
  * Tests for getReputation().
  *
@@ -12,16 +13,16 @@ import type { ReputationProfile } from "./reputation.js";
 import { SorobanRpc, Keypair, Address } from "@stellar/stellar-sdk";
 
 // ---------------------------------------------------------------------------
-// jest.mock — patch scValToNative only
+// vi.mock — patch scValToNative only
 // ---------------------------------------------------------------------------
 
-jest.mock("@stellar/stellar-sdk", () => {
-  const actual = jest.requireActual(
+vi.mock("@stellar/stellar-sdk", () => {
+  const actual = vi.importActual(
     "@stellar/stellar-sdk"
   ) as typeof import("@stellar/stellar-sdk");
   return {
     ...actual,
-    scValToNative: jest.fn().mockImplementation(actual.scValToNative),
+    scValToNative: vi.fn().mockImplementation(actual.scValToNative),
   };
 });
 
@@ -53,7 +54,7 @@ beforeEach(() => {
 
 function serverWith(sim: any): SorobanRpc.Server {
   return {
-    simulateTransaction: jest.fn().mockResolvedValue(sim),
+    simulateTransaction: vi.fn().mockResolvedValue(sim),
   } as unknown as SorobanRpc.Server;
 }
 

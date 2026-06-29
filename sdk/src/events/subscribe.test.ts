@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 /**
  * Tests for sdk/src/events/subscribe.ts
  *
@@ -14,14 +15,14 @@ import type { ILNEvent, EventFilter } from "./types.js";
 // Mock @stellar/stellar-sdk (scValToNative / xdr)
 // ---------------------------------------------------------------------------
 
-jest.mock("@stellar/stellar-sdk", () => {
-  const actual = jest.requireActual("@stellar/stellar-sdk");
+vi.mock("@stellar/stellar-sdk", () => {
+  const actual = vi.importActual("@stellar/stellar-sdk");
   return {
     ...actual,
-    scValToNative: jest.fn((scVal: any) => scVal?.__native ?? scVal),
+    scValToNative: vi.fn((scVal: any) => scVal?.__native ?? scVal),
     xdr: {
       ScVal: {
-        fromXDR: jest.fn((b64: string, _fmt: string) => {
+        fromXDR: vi.fn((b64: string, _fmt: string) => {
           // Return the decoded value stored in our test fixtures
           return { __native: DECODED_TOPICS[b64] ?? b64 };
         }),
@@ -388,9 +389,9 @@ function makeMockHorizon(opts: {
   let onerrorCb: ((err: unknown) => void) | null = null;
   let closeCalledCount = 0;
 
-  const closeStream = jest.fn(() => { closeCalledCount++; });
+  const closeStream = vi.fn(() => { closeCalledCount++; });
 
-  const stream = jest.fn((cbs: { onmessage: Function; onerror: Function }) => {
+  const stream = vi.fn((cbs: { onmessage: Function; onerror: Function }) => {
     onmessageCb = cbs.onmessage as any;
     onerrorCb = cbs.onerror as any;
 
@@ -412,8 +413,8 @@ function makeMockHorizon(opts: {
     return closeStream;
   });
 
-  const forContract = jest.fn(() => ({ limit: () => ({ stream }) }));
-  const contractEvents = jest.fn(() => ({ forContract }));
+  const forContract = vi.fn(() => ({ limit: () => ({ stream }) }));
+  const contractEvents = vi.fn(() => ({ forContract }));
 
   const horizon = { contractEvents } as any;
 
@@ -465,7 +466,7 @@ describe("subscribe — happy path", () => {
     const badRaw = { type: "contract", topic: [], value: "" };
     const { horizon } = makeMockHorizon({ events: [badRaw] });
 
-    const handler = jest.fn();
+    const handler = vi.fn();
     expect(() =>
       subscribe(horizon, "CBCONTRACT", {}, handler)
     ).not.toThrow();
@@ -480,20 +481,20 @@ describe("subscribe — happy path", () => {
 describe("subscribe — unsubscribe", () => {
   it("returns a function", () => {
     const { horizon } = makeMockHorizon();
-    const unsub = subscribe(horizon, "CBCONTRACT", {}, jest.fn());
+    const unsub = subscribe(horizon, "CBCONTRACT", {}, vi.fn());
     expect(typeof unsub).toBe("function");
   });
 
   it("calling unsubscribe closes the stream", () => {
     const { horizon, closeStream } = makeMockHorizon();
-    const unsub = subscribe(horizon, "CBCONTRACT", {}, jest.fn());
+    const unsub = subscribe(horizon, "CBCONTRACT", {}, vi.fn());
     unsub();
     expect(closeStream).toHaveBeenCalledTimes(1);
   });
 
   it("stops delivering events after unsubscribe", () => {
     const { horizon, triggerMessage } = makeMockHorizon();
-    const handler = jest.fn();
+    const handler = vi.fn();
     const unsub = subscribe(horizon, "CBCONTRACT", {}, handler);
 
     unsub();
@@ -504,7 +505,7 @@ describe("subscribe — unsubscribe", () => {
 
   it("calling unsubscribe multiple times is safe (idempotent)", () => {
     const { horizon, closeStream } = makeMockHorizon();
-    const unsub = subscribe(horizon, "CBCONTRACT", {}, jest.fn());
+    const unsub = subscribe(horizon, "CBCONTRACT", {}, vi.fn());
     unsub();
     unsub();
     // closeStream called once per real invocation; second unsub is a no-op
@@ -524,7 +525,7 @@ describe("subscribe — reconnection", () => {
     const { horizon, triggerError } = makeMockHorizon();
     const connectSpy = (horizon as any).contractEvents as jest.Mock;
 
-    subscribe(horizon, "CBCONTRACT", {}, jest.fn());
+    subscribe(horizon, "CBCONTRACT", {}, vi.fn());
     expect(connectSpy).toHaveBeenCalledTimes(1);
 
     triggerError(new Error("stream dropped"));
@@ -538,7 +539,7 @@ describe("subscribe — reconnection", () => {
     const { horizon, triggerError } = makeMockHorizon();
     const connectSpy = (horizon as any).contractEvents as jest.Mock;
 
-    const unsub = subscribe(horizon, "CBCONTRACT", {}, jest.fn());
+    const unsub = subscribe(horizon, "CBCONTRACT", {}, vi.fn());
     unsub();
 
     triggerError(new Error("stream dropped"));
@@ -550,16 +551,16 @@ describe("subscribe — reconnection", () => {
 
   it("calls onError callback on stream error", () => {
     const { horizon, triggerError } = makeMockHorizon();
-    const onError = jest.fn();
+    const onError = vi.fn();
 
-    subscribe(horizon, "CBCONTRACT", {}, jest.fn(), onError);
+    subscribe(horizon, "CBCONTRACT", {}, vi.fn(), onError);
     triggerError(new Error("dropped"));
 
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
   });
 
   it("back-off doubles on successive errors", () => {
-    const connectSpy = jest.fn();
+    const connectSpy = vi.fn();
     let errorCb: ((e: unknown) => void) | null = null;
 
     const fakeHorizon = {
@@ -569,14 +570,14 @@ describe("subscribe — reconnection", () => {
             stream: (cbs: any) => {
               connectSpy();
               errorCb = cbs.onerror;
-              return jest.fn();
+              return vi.fn();
             },
           }),
         }),
       }),
     } as any;
 
-    subscribe(fakeHorizon, "CB", {}, jest.fn());
+    subscribe(fakeHorizon, "CB", {}, vi.fn());
     expect(connectSpy).toHaveBeenCalledTimes(1);
 
     // First error → back-off 500 ms
@@ -594,9 +595,9 @@ describe("subscribe — reconnection", () => {
 
   it("reconnects when the initial connect throws", () => {
     const { horizon } = makeMockHorizon({ throwOnConnect: true });
-    const onError = jest.fn();
+    const onError = vi.fn();
 
-    subscribe(horizon, "CBCONTRACT", {}, jest.fn(), onError);
+    subscribe(horizon, "CBCONTRACT", {}, vi.fn(), onError);
 
     expect(onError).toHaveBeenCalled();
     jest.advanceTimersByTime(600);

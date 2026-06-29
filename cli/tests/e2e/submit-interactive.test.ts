@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 /**
  * Tests for `iln submit` interactive prompt mode (#229).
  * Prompter is injected so no real terminal I/O occurs.
@@ -32,11 +33,11 @@ function makeResult(): SubmitResult {
 
 describe("iln submit — interactive mode", () => {
   it("calls prompter when no flags are supplied", async () => {
-    const prompter = jest.fn().mockResolvedValue(MOCK_PROMPT_ANSWERS);
-    const submitter = jest.fn().mockResolvedValue(makeResult());
+    const prompter = vi.fn().mockResolvedValue(MOCK_PROMPT_ANSWERS);
+    const submitter = vi.fn().mockResolvedValue(makeResult());
     const cmd = makeSubmitCommand(prompter, submitter);
 
-    jest.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "log").mockImplementation(() => {});
 
     await cmd.parseAsync([], { from: "user" });
 
@@ -46,11 +47,11 @@ describe("iln submit — interactive mode", () => {
   });
 
   it("passes all prompt answers to submitter", async () => {
-    const prompter = jest.fn().mockResolvedValue(MOCK_PROMPT_ANSWERS);
-    const submitter = jest.fn().mockResolvedValue(makeResult());
+    const prompter = vi.fn().mockResolvedValue(MOCK_PROMPT_ANSWERS);
+    const submitter = vi.fn().mockResolvedValue(makeResult());
     const cmd = makeSubmitCommand(prompter, submitter);
 
-    jest.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "log").mockImplementation(() => {});
 
     await cmd.parseAsync([], { from: "user" });
 
@@ -66,12 +67,12 @@ describe("iln submit — interactive mode", () => {
   });
 
   it("prints success message with invoice ID after interactive submit", async () => {
-    const prompter = jest.fn().mockResolvedValue(MOCK_PROMPT_ANSWERS);
-    const submitter = jest.fn().mockResolvedValue(makeResult());
+    const prompter = vi.fn().mockResolvedValue(MOCK_PROMPT_ANSWERS);
+    const submitter = vi.fn().mockResolvedValue(makeResult());
     const cmd = makeSubmitCommand(prompter, submitter);
 
     const logs: string[] = [];
-    jest.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
+    vi.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
 
     await cmd.parseAsync([], { from: "user" });
 
@@ -80,11 +81,11 @@ describe("iln submit — interactive mode", () => {
   });
 
   it("handles prompter rejection gracefully", async () => {
-    const prompter = jest.fn().mockRejectedValue(new Error("User aborted"));
-    const submitter = jest.fn();
+    const prompter = vi.fn().mockRejectedValue(new Error("User aborted"));
+    const submitter = vi.fn();
     const cmd = makeSubmitCommand(prompter, submitter);
-    const exit = jest.spyOn(process, "exit").mockImplementation((() => {}) as never);
-    jest.spyOn(console, "error").mockImplementation(() => {});
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => {}) as never);
+    vi.spyOn(console, "error").mockImplementation(() => {});
 
     await cmd.parseAsync([], { from: "user" });
 

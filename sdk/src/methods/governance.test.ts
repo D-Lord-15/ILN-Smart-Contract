@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   createProposal,
   castVote,
@@ -8,9 +9,9 @@ import {
 import { ProposalAction, ProposalStatus } from "../types/governance.js";
 import { Account, SorobanRpc, scValToNative } from "@stellar/stellar-sdk";
 
-jest.mock("@stellar/stellar-sdk", () => {
-  const actual = jest.requireActual("@stellar/stellar-sdk");
-  return { ...actual, scValToNative: jest.fn() };
+vi.mock("@stellar/stellar-sdk", () => {
+  const actual = vi.importActual("@stellar/stellar-sdk");
+  return { ...actual, scValToNative: vi.fn() };
 });
 
 const PROPOSER = "GA6V6P6Z7U2N4KHTD6Y3Y3V7H2P6XZY3H2P6XZY3H2P6XZY3H2P6XZ";
@@ -22,18 +23,18 @@ const mockScValToNative = scValToNative as unknown as jest.Mock;
 
 describe("governance", () => {
   const mockServer = {
-    simulateTransaction: jest.fn(),
-    sendTransaction: jest.fn(),
-    getTransaction: jest.fn(),
+    simulateTransaction: vi.fn(),
+    sendTransaction: vi.fn(),
+    getTransaction: vi.fn(),
   } as unknown as SorobanRpc.Server;
 
   const account = new Account(PROPOSER, "1");
-  const sign = jest.fn((tx) => tx);
+  const sign = vi.fn((tx) => tx);
 
   beforeEach(() => {
     jest.clearAllMocks();
     // @ts-ignore
-    SorobanRpc.assembleTransaction = jest.fn(() => ({ build: () => ({}) }));
+    SorobanRpc.assembleTransaction = vi.fn(() => ({ build: () => ({}) }));
     // @ts-ignore
     mockServer.simulateTransaction.mockResolvedValue({ result: { retval: {} } });
     // @ts-ignore

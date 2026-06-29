@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   getAllowance,
   buildApproveTransaction,
@@ -10,9 +11,9 @@ import { SorobanRpc, Networks, Account } from "@stellar/stellar-sdk";
 // ---------------------------------------------------------------------------
 
 const mockServer = {
-  simulateTransaction: jest.fn(),
-  getLatestLedger: jest.fn(),
-  prepareTransaction: jest.fn(),
+  simulateTransaction: vi.fn(),
+  getLatestLedger: vi.fn(),
+  prepareTransaction: vi.fn(),
 } as unknown as SorobanRpc.Server;
 
 const MOCK_ACCOUNT = new Account(
@@ -48,11 +49,11 @@ describe("getAllowance", () => {
     });
 
     // We need to test the actual parsing logic, so we mock scValToNative
-    jest.mock("@stellar/stellar-sdk", () => {
-      const actual = jest.requireActual("@stellar/stellar-sdk");
+    vi.mock("@stellar/stellar-sdk", () => {
+      const actual = vi.importActual("@stellar/stellar-sdk");
       return {
         ...actual,
-        scValToNative: jest.fn().mockReturnValue({
+        scValToNative: vi.fn().mockReturnValue({
           amount: "5000000",
           expiration_ledger: 1000,
         }),
