@@ -129,8 +129,9 @@ BREAKING CHANGE: fund_invoice has been renamed to fund in the invoice_liquidity 
 
 Version management for the published TypeScript packages uses
 [Changesets](https://github.com/changesets/changesets). Any PR that changes the
-public surface of a published package (e.g., `@iln/sdk` or `@iln/cli`) must include a
-changeset so the version bump and changelog entry are generated automatically.
+public surface of a published package (today that's `@iln/sdk`, and soon `@iln/cli`)
+must include a changeset so the version bump and changelog entry are generated
+automatically.
 
 ```bash
 # From the repo root, after staging your code change:
@@ -140,7 +141,7 @@ npm run changeset
 The wizard asks which packages changed and whether the bump is **patch**
 (bug fix), **minor** (backwards-compatible feature), or **major** (breaking
 change), then writes a markdown file under `.changeset/`. Commit that file with
-your change. 
+your change.
 
 Example commit message:
 `feat: add Changesets for coordinated SDK and CLI version management`
