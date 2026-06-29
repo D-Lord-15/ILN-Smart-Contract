@@ -9,7 +9,7 @@
     "STELLAR_NETWORK",
     "STELLAR_RPC_URL"
   ],
-  "pipeline": {
+  "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"],
@@ -19,7 +19,8 @@
       "dependsOn": ["build"],
       "outputs": ["coverage/**"],
       "cache": true,
-      "env": ["NODE_ENV"]
+      "env": ["NODE_ENV"],
+      "inputs": ["src/**/*.ts", "tests/**/*.ts", "vitest.config.*"]
     },
     "test:ci": {
       "dependsOn": ["build"],

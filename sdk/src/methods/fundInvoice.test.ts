@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 /**
  * Tests for fundInvoice() — covers:
  *   - pre-approved path (no approval needed)
@@ -16,10 +17,10 @@ import { SorobanRpc, Networks, Account, Keypair } from "@stellar/stellar-sdk";
 // ---------------------------------------------------------------------------
 
 // Mock the allowance utilities so fundInvoice tests are isolated
-jest.mock("../utils/allowance.js", () => ({
-  getAllowance: jest.fn(),
-  buildApproveTransaction: jest.fn(),
-  isAllowanceSufficient: jest.fn(),
+vi.mock("../utils/allowance.js", () => ({
+  getAllowance: vi.fn(),
+  buildApproveTransaction: vi.fn(),
+  isAllowanceSufficient: vi.fn(),
 }));
 
 import {
@@ -58,11 +59,11 @@ const MOCK_INVOICE = {
 
 // Server mock — we stub all calls individually per test
 const mockServer = {
-  getAccount: jest.fn(),
-  simulateTransaction: jest.fn(),
-  getLatestLedger: jest.fn(),
-  prepareTransaction: jest.fn(),
-  sendTransaction: jest.fn(),
+  getAccount: vi.fn(),
+  simulateTransaction: vi.fn(),
+  getLatestLedger: vi.fn(),
+  prepareTransaction: vi.fn(),
+  sendTransaction: vi.fn(),
 } as unknown as SorobanRpc.Server;
 
 // Helper: make getAccount resolve with the LP's fake account data
@@ -72,7 +73,7 @@ function mockAccountLoad(seq = "100") {
 
 // Helper: make simulateTransaction return a fake invoice via retval
 function mockInvoiceSimulation() {
-  const { nativeToScVal, xdr } = jest.requireActual("@stellar/stellar-sdk");
+  const { nativeToScVal, xdr } = vi.importActual("@stellar/stellar-sdk");
   // We mock scValToNative globally in jest setup; here we only need the
   // simulateTransaction response to not be an error.
   (mockServer.simulateTransaction as jest.Mock).mockImplementation(
@@ -101,7 +102,7 @@ let sdkModule: typeof import("@stellar/stellar-sdk");
 
 beforeAll(async () => {
   sdkModule = await import("@stellar/stellar-sdk");
-  scValToNativeSpy = jest.spyOn(sdkModule, "scValToNative");
+  scValToNativeSpy = vi.spyOn(sdkModule, "scValToNative");
 });
 
 afterAll(() => {
@@ -179,7 +180,7 @@ describe("fundInvoice — pre-approved path", () => {
     (mockServer.prepareTransaction as jest.Mock).mockImplementation(
       async (tx) => ({
         ...tx,
-        sign: jest.fn(),
+        sign: vi.fn(),
         toEnvelope: () => ({ toXDR: () => "xdr" }),
       })
     );
@@ -190,9 +191,9 @@ describe("fundInvoice — pre-approved path", () => {
   });
 
   it("returns txHash and effectiveYieldBps without firing approval callbacks", async () => {
-    const onApprovalRequired = jest.fn();
-    const onApprovalSent = jest.fn();
-    const onFunded = jest.fn();
+    const onApprovalRequired = vi.fn();
+    const onApprovalSent = vi.fn();
+    const onFunded = vi.fn();
 
     const result = await fundInvoice(
       mockServer,
@@ -218,7 +219,7 @@ describe("fundInvoice — pre-approved path", () => {
   });
 
   it("calls onFunded with correct effectiveYieldBps", async () => {
-    const onFunded = jest.fn();
+    const onFunded = vi.fn();
     await fundInvoice(
       mockServer,
       CONTRACT_ID,
@@ -255,7 +256,7 @@ describe("fundInvoice — approval-needed path", () => {
     (mockServer.prepareTransaction as jest.Mock).mockImplementation(
       async (tx) => ({
         ...tx,
-        sign: jest.fn(),
+        sign: vi.fn(),
         toEnvelope: () => ({ toXDR: () => "xdr" }),
       })
     );
@@ -267,7 +268,7 @@ describe("fundInvoice — approval-needed path", () => {
   });
 
   it("fires onApprovalRequired with requiredAmount and currentAllowance", async () => {
-    const onApprovalRequired = jest.fn();
+    const onApprovalRequired = vi.fn();
 
     await fundInvoice(
       mockServer,
@@ -285,7 +286,7 @@ describe("fundInvoice — approval-needed path", () => {
   });
 
   it("fires onApprovalSent with the approve tx hash", async () => {
-    const onApprovalSent = jest.fn();
+    const onApprovalSent = vi.fn();
 
     await fundInvoice(
       mockServer,
@@ -398,7 +399,7 @@ describe("fundInvoice — error handling", () => {
       result: { retval: { _stub: true } },
     });
     (mockServer.prepareTransaction as jest.Mock).mockImplementation(
-      async (tx) => ({ ...tx, sign: jest.fn(), toEnvelope: () => ({ toXDR: () => "xdr" }) })
+      async (tx) => ({ ...tx, sign: vi.fn(), toEnvelope: () => ({ toXDR: () => "xdr" }) })
     );
     (mockServer.sendTransaction as jest.Mock).mockResolvedValue({
       status: "ERROR",
@@ -452,7 +453,7 @@ describe("fundInvoice — PartiallyFunded invoice", () => {
       result: { retval: { _stub: true } },
     });
     (mockServer.prepareTransaction as jest.Mock).mockImplementation(
-      async (tx) => ({ ...tx, sign: jest.fn(), toEnvelope: () => ({ toXDR: () => "xdr" }) })
+      async (tx) => ({ ...tx, sign: vi.fn(), toEnvelope: () => ({ toXDR: () => "xdr" }) })
     );
     (mockServer.sendTransaction as jest.Mock).mockResolvedValue({
       status: "PENDING",
@@ -536,7 +537,7 @@ describe("fundInvoice — oracle verification", () => {
       result: { retval: { _stub: true } },
     });
     (mockServer.prepareTransaction as jest.Mock).mockImplementation(
-      async (tx) => ({ ...tx, sign: jest.fn(), toEnvelope: () => ({ toXDR: () => "xdr" }) })
+      async (tx) => ({ ...tx, sign: vi.fn(), toEnvelope: () => ({ toXDR: () => "xdr" }) })
     );
     (mockServer.sendTransaction as jest.Mock).mockResolvedValue({
       status: "PENDING",
@@ -569,7 +570,7 @@ describe("fundInvoice — optional callbacks", () => {
       result: { retval: { _stub: true } },
     });
     (mockServer.prepareTransaction as jest.Mock).mockImplementation(
-      async (tx) => ({ ...tx, sign: jest.fn(), toEnvelope: () => ({ toXDR: () => "xdr" }) })
+      async (tx) => ({ ...tx, sign: vi.fn(), toEnvelope: () => ({ toXDR: () => "xdr" }) })
     );
     (mockServer.sendTransaction as jest.Mock).mockResolvedValue({
       status: "PENDING",

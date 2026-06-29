@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 /**
  * Tests for ILNClient — covers:
  *   - testnet / mainnet / custom factory methods
@@ -12,18 +13,18 @@ import { Networks } from "@stellar/stellar-sdk";
 // Mock SorobanRpc.Server to avoid real network connections in tests
 // ---------------------------------------------------------------------------
 
-jest.mock("@stellar/stellar-sdk", () => {
-  const actual = jest.requireActual("@stellar/stellar-sdk");
+vi.mock("@stellar/stellar-sdk", () => {
+  const actual = vi.importActual("@stellar/stellar-sdk");
   return {
     ...actual,
     SorobanRpc: {
       ...actual.SorobanRpc,
-      Server: jest.fn().mockImplementation(() => ({
-        getAccount: jest.fn(),
-        simulateTransaction: jest.fn(),
-        prepareTransaction: jest.fn(),
-        sendTransaction: jest.fn(),
-        getLatestLedger: jest.fn(),
+      Server: vi.fn().mockImplementation(() => ({
+        getAccount: vi.fn(),
+        simulateTransaction: vi.fn(),
+        prepareTransaction: vi.fn(),
+        sendTransaction: vi.fn(),
+        getLatestLedger: vi.fn(),
       })),
     },
   };
@@ -50,7 +51,7 @@ describe("ILNClient.testnet", () => {
   });
 
   it("accepts an optional signer", () => {
-    const signer = { publicKey: "GAA", signTransaction: jest.fn() };
+    const signer = { publicKey: "GAA", signTransaction: vi.fn() };
     const client = ILNClient.testnet(signer as any);
     expect(client.signer).toBe(signer);
   });
@@ -84,7 +85,7 @@ describe("ILNClient.mainnet", () => {
   });
 
   it("accepts an optional signer", () => {
-    const signer = { publicKey: "GAA", signTransaction: jest.fn() };
+    const signer = { publicKey: "GAA", signTransaction: vi.fn() };
     const client = ILNClient.mainnet(signer as any);
     expect(client.signer).toBe(signer);
   });
@@ -105,7 +106,7 @@ describe("ILNClient.mainnet", () => {
 
 describe("ILNClient.custom", () => {
   it("creates a client with fully custom config", () => {
-    const signer = { publicKey: "GAA", signTransaction: jest.fn() };
+    const signer = { publicKey: "GAA", signTransaction: vi.fn() };
     const client = ILNClient.custom({
       rpcUrl: "http://localhost:8000/soroban/rpc",
       networkPassphrase: "Standalone Network ; February 2017",

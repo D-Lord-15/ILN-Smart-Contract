@@ -1,14 +1,15 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { cancelInvoice } from '../src/methods/cancelInvoice.js';
 import { ILNError } from '../src/errors.js';
 import { Account, SorobanRpc } from '@stellar/stellar-sdk';
 import * as queries from '../src/methods/queries.js';
 
-jest.mock('../src/methods/queries.js');
+vi.mock('../src/methods/queries.js');
 
 describe('cancelInvoice', () => {
-  const mockServer = { simulateTransaction: jest.fn() } as unknown as SorobanRpc.Server;
+  const mockServer = { simulateTransaction: vi.fn() } as unknown as SorobanRpc.Server;
   const mockAccount = new Account('GAFREELANCER', '1');
-  const mockSign = jest.fn((tx) => tx);
+  const mockSign = vi.fn((tx) => tx);
 
   beforeEach(() => {
     jest.clearAllMocks();

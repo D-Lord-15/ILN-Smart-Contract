@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 /**
  * Tests for FreighterSigner — covers:
  *   - Installation detection (WalletNotInstalled)
@@ -24,10 +25,10 @@ interface MockFreighter {
 
 function createMockFreighter(overrides: Partial<MockFreighter> = {}): MockFreighter {
   return {
-    isConnected: jest.fn().mockResolvedValue(true),
-    getPublicKey: jest.fn().mockResolvedValue("GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN"),
-    getNetwork: jest.fn().mockResolvedValue("TESTNET"),
-    signTransaction: jest.fn().mockResolvedValue("AAAASIGNEDXDR=="),
+    isConnected: vi.fn().mockResolvedValue(true),
+    getPublicKey: vi.fn().mockResolvedValue("GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN"),
+    getNetwork: vi.fn().mockResolvedValue("TESTNET"),
+    signTransaction: vi.fn().mockResolvedValue("AAAASIGNEDXDR=="),
     ...overrides,
   };
 }
@@ -46,7 +47,7 @@ function uninstallFreighter(): void {
 
 function makeMockServer(opts: { fail?: boolean } = {}): SorobanRpc.Server {
   return {
-    prepareTransaction: jest.fn().mockImplementation(async (tx: any) => {
+    prepareTransaction: vi.fn().mockImplementation(async (tx: any) => {
       if (opts.fail) {
         return { error: "simulation error", _parsed: true };
       }
@@ -156,7 +157,7 @@ describe("FreighterSigner — connect", () => {
 
 describe("FreighterSigner — connect / NotConnected", () => {
   it("throws NotConnected when isConnected returns false", async () => {
-    const mock = createMockFreighter({ isConnected: jest.fn().mockResolvedValue(false) });
+    const mock = createMockFreighter({ isConnected: vi.fn().mockResolvedValue(false) });
     installFreighter(mock);
 
     const signer = new FreighterSigner({ networkPassphrase: Networks.TESTNET });
@@ -172,7 +173,7 @@ describe("FreighterSigner — connect / NotConnected", () => {
 
 describe("FreighterSigner — connect / UserRejected", () => {
   it("throws UserRejected when getPublicKey returns empty string", async () => {
-    const mock = createMockFreighter({ getPublicKey: jest.fn().mockResolvedValue("") });
+    const mock = createMockFreighter({ getPublicKey: vi.fn().mockResolvedValue("") });
     installFreighter(mock);
 
     const signer = new FreighterSigner({ networkPassphrase: Networks.TESTNET });
@@ -188,7 +189,7 @@ describe("FreighterSigner — connect / UserRejected", () => {
 
 describe("FreighterSigner — connect / NetworkMismatch", () => {
   it("throws NetworkMismatch when wallet is on mainnet but SDK expects testnet", async () => {
-    const mock = createMockFreighter({ getNetwork: jest.fn().mockResolvedValue("PUBLIC") });
+    const mock = createMockFreighter({ getNetwork: vi.fn().mockResolvedValue("PUBLIC") });
     installFreighter(mock);
 
     const signer = new FreighterSigner({ networkPassphrase: Networks.TESTNET });
@@ -198,7 +199,7 @@ describe("FreighterSigner — connect / NetworkMismatch", () => {
   });
 
   it("throws NetworkMismatch when wallet is on testnet but SDK expects mainnet", async () => {
-    const mock = createMockFreighter({ getNetwork: jest.fn().mockResolvedValue("TESTNET") });
+    const mock = createMockFreighter({ getNetwork: vi.fn().mockResolvedValue("TESTNET") });
     installFreighter(mock);
 
     const signer = new FreighterSigner({ networkPassphrase: Networks.PUBLIC });
@@ -209,7 +210,7 @@ describe("FreighterSigner — connect / NetworkMismatch", () => {
 
   it("skips network check when getNetwork throws (older Freighter versions)", async () => {
     const mock = createMockFreighter({
-      getNetwork: jest.fn().mockRejectedValue(new Error("not implemented")),
+      getNetwork: vi.fn().mockRejectedValue(new Error("not implemented")),
     });
     installFreighter(mock);
 
@@ -220,7 +221,7 @@ describe("FreighterSigner — connect / NetworkMismatch", () => {
   });
 
   it("skips network check when getNetwork returns unknown network", async () => {
-    const mock = createMockFreighter({ getNetwork: jest.fn().mockResolvedValue("STANDALONE") });
+    const mock = createMockFreighter({ getNetwork: vi.fn().mockResolvedValue("STANDALONE") });
     installFreighter(mock);
 
     const signer = new FreighterSigner({ networkPassphrase: Networks.TESTNET });
@@ -306,7 +307,7 @@ describe("FreighterSigner — signTransaction errors", () => {
 
   it("throws UserRejected when Freighter rejects the signing", async () => {
     const mock = createMockFreighter({
-      signTransaction: jest.fn().mockRejectedValue("User rejected the request"),
+      signTransaction: vi.fn().mockRejectedValue("User rejected the request"),
     });
     installFreighter(mock);
 
@@ -323,7 +324,7 @@ describe("FreighterSigner — signTransaction errors", () => {
 
   it("throws UserRejected when Freighter returns 'denied'", async () => {
     const mock = createMockFreighter({
-      signTransaction: jest.fn().mockRejectedValue("Access denied by user"),
+      signTransaction: vi.fn().mockRejectedValue("Access denied by user"),
     });
     installFreighter(mock);
 
@@ -340,7 +341,7 @@ describe("FreighterSigner — signTransaction errors", () => {
 
   it("throws UserRejected when Freighter returns empty signed XDR", async () => {
     const mock = createMockFreighter({
-      signTransaction: jest.fn().mockResolvedValue(""),
+      signTransaction: vi.fn().mockResolvedValue(""),
     });
     installFreighter(mock);
 
@@ -417,7 +418,7 @@ describe("FreighterSigner — network mapping", () => {
   });
 
   it("maps PUBLIC passphrase to Freighter PUBLIC", async () => {
-    const mock = createMockFreighter({ getNetwork: jest.fn().mockResolvedValue("PUBLIC") });
+    const mock = createMockFreighter({ getNetwork: vi.fn().mockResolvedValue("PUBLIC") });
     installFreighter(mock);
 
     const signer = new FreighterSigner({ networkPassphrase: Networks.PUBLIC });

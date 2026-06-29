@@ -4,4 +4,4 @@ packages:
   - 'indexer'
   - 'notifications'
   - 'tests/e2e'
-  - 'packages/eslint-config'
+  - 'packages/*'

@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { KeypairSigner } from "./KeypairSigner.js";
 import { Keypair, SorobanRpc, Networks, TransactionBuilder, Account, BASE_FEE, Operation, Asset } from "@stellar/stellar-sdk";
 
@@ -38,7 +39,7 @@ const MOCK_SIGNED_XDR = "AAAASIGNEDXDR==";
 
 function makeMockServer(opts: { fail?: boolean } = {}): SorobanRpc.Server {
   return {
-    prepareTransaction: jest.fn().mockImplementation(async (tx) => {
+    prepareTransaction: vi.fn().mockImplementation(async (tx) => {
       if (opts.fail) {
         return { error: "contract trap", _parsed: true };
       }
@@ -72,7 +73,7 @@ describe("KeypairSigner — constructor", () => {
     const originalEnv = process.env["NODE_ENV"];
     process.env["NODE_ENV"] = "production";
 
-    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     new KeypairSigner(EXAMPLE_SECRET);
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining("well-known example")
@@ -87,7 +88,7 @@ describe("KeypairSigner — constructor", () => {
     delete process.env["NODE_ENV"];
     delete process.env["JEST_WORKER_ID"];
 
-    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     new KeypairSigner(TEST_SECRET);
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining("plain string is risky")
@@ -101,7 +102,7 @@ describe("KeypairSigner — constructor", () => {
     const originalEnv = process.env["NODE_ENV"];
     process.env["NODE_ENV"] = "test";
 
-    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     new KeypairSigner(TEST_SECRET);
     expect(warn).not.toHaveBeenCalled();
 
@@ -115,7 +116,7 @@ describe("KeypairSigner — constructor", () => {
     process.env["JEST_WORKER_ID"] = "1";
     delete process.env["NODE_ENV"];
 
-    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     new KeypairSigner(TEST_SECRET);
     expect(warn).not.toHaveBeenCalled();
 
@@ -129,7 +130,7 @@ describe("KeypairSigner — constructor", () => {
     const originalEnv = process.env["NODE_ENV"];
     process.env["NODE_ENV"] = "production";
 
-    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     new KeypairSigner(TEST_KP); // Keypair object, not string
     expect(warn).not.toHaveBeenCalled();
 
@@ -162,7 +163,7 @@ describe("KeypairSigner.fromEnv", () => {
     const originalEnv = process.env["NODE_ENV"];
     process.env["NODE_ENV"] = "production";
 
-    const warn = jest.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     KeypairSigner.fromEnv("TEST_LP_SECRET2");
     expect(warn).not.toHaveBeenCalled();
 
@@ -250,7 +251,7 @@ describe("KeypairSigner.signTransaction — simulation failure", () => {
   it("propagates errors thrown by prepareTransaction", async () => {
     const signer = new KeypairSigner(TEST_KP);
     const server = {
-      prepareTransaction: jest.fn().mockRejectedValue(new Error("RPC timeout")),
+      prepareTransaction: vi.fn().mockRejectedValue(new Error("RPC timeout")),
     } as unknown as SorobanRpc.Server;
 
     await expect(

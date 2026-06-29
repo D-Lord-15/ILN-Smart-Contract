@@ -2,46 +2,29 @@ name: CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ "main" ]
 
 jobs:
-  # Pre-flight check for external Stellar testnet availability. Emits a warning
-  # when the network is unavailable and sets the `healthy` job output. This
-  # allows downstream integration tests to be skipped gracefully.
-  testnet-health:
-    runs-on: ubuntu-latest
-    outputs:
-      healthy: ${{ steps.check.outputs.healthy }}
-    steps:
-      - name: Check Stellar Horizon testnet
-        id: check
-        run: |
-          set -e
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://horizon-testnet.stellar.org/ || echo "000")
-          if [ "$STATUS" = "200" ]; then
-            echo "healthy=true" >> $GITHUB_OUTPUT
-          else
-            echo "healthy=false" >> $GITHUB_OUTPUT
-            echo "::warning::Stellar Horizon testnet unreachable (status $STATUS). Integration tests will be skipped."
-          fi
-        shell: bash
-
-  # TypeScript workspace tests using Turborepo for caching and parallel execution
   typescript-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Setup Turborepo cache
         uses: actions/cache@v4
@@ -51,14 +34,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-turbo-
 
+      - name: Run lint (Turbo)
+        run: pnpm run lint
+
       - name: Run typecheck (Turbo)
-        run: npm run typecheck
+        run: pnpm run typecheck
 
       - name: Run build (Turbo)
-        run: npm run build
+        run: pnpm run build
 
       - name: Run tests (Turbo)
-        run: npm run test:ci
+        run: pnpm run test:ci
 
       - name: Upload coverage reports
         uses: actions/upload-artifact@v4
@@ -70,18 +56,10 @@ jobs:
             notifications/coverage/
             cli/coverage/
 
-  # Unit / workspace tests that do not require the external testnet.
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          override: true
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -95,13 +73,8 @@ jobs:
         run: |
           cargo test --workspace --lib
 
-  # Integration tests that require the Stellar testnet. This job depends on the
-  # `testnet-health` check and will be skipped (not failed) when the testnet is
-  # unavailable.
   integration:
-    needs: testnet-health
     runs-on: ubuntu-latest
-    if: needs.testnet-health.outputs.healthy == 'true'
     steps:
       - uses: actions/checkout@v4
 
@@ -228,7 +201,6 @@ jobs:
           name: coverage-report
           path: coverage/cobertura.xml
 
-  # Snyk vulnerability scanning for npm packages across all monorepo packages.
   snyk:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
