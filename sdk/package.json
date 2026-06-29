@@ -18,6 +18,9 @@
     "test": "jest --coverage",
     "test:ci": "jest --coverage --ci",
     "test:integration": "jest --config jest.integration.config.cjs",
+    "lint": "echo 'No linter configured for SDK'",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist coverage node_modules/.cache",
     "docs": "typedoc --out docs src/index.ts"
   },
   "dependencies": {
