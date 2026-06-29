@@ -8,8 +8,12 @@
 //! 3. Unverified payer + require_oracle_verification=false → succeeds (flag not set).
 
 use super::*;
-use crate::test::{setup, DISCOUNT_RATE, DUE_DATE_OFFSET, INVOICE_AMOUNT};
-use soroban_sdk::{contract, contractimpl, testutils::{Address as _, Ledger as _}, Address, Env};
+use crate::test::{setup, INVOICE_AMOUNT};
+use soroban_sdk::{
+    contract, contractimpl,
+    testutils::{Address as _, Ledger as _},
+    Address, Env,
+};
 
 // ----------------------------------------------------------------
 // Mock oracle: always returns verified = true with a fresh timestamp.
@@ -34,7 +38,6 @@ impl MockVerifiedOracle {
 #[contract]
 struct MockUnverifiedOracle;
 
-#[contractimpl]
 impl MockUnverifiedOracle {
     pub fn get_payer_data(env: Env, _payer: Address) -> OracleVerificationResponse {
         OracleVerificationResponse {
@@ -50,10 +53,7 @@ impl MockUnverifiedOracle {
 
 fn make_invoice(t: &crate::test::TestEnv) -> u64 {
     let now = t.env.ledger().timestamp();
-    t.contract
-        .submit_invoice(        &ReferralCode::None,
-    )
-        .unwrap()
+    t.contract.submit_invoice(&ReferralCode::None).unwrap()
 }
 
 // ----------------------------------------------------------------

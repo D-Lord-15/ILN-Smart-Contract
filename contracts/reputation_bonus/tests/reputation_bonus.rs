@@ -6,7 +6,7 @@ use reputation_bonus::rate_logic::calculate_effective_rate;
 use reputation_bonus::{ReputationBonusContract, ReputationBonusContractClient};
 use soroban_sdk::{
     testutils::{Address as _, Events as _},
-    Address, Env, Event, Symbol,
+    Address, Env, Symbol,
 };
 
 #[test]

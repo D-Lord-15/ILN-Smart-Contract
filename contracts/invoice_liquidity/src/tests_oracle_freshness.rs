@@ -131,7 +131,7 @@ fn test_stale_oracle_fails() {
     t.contract.set_max_oracle_age(&max_age).unwrap();
 
     let current_seq = t.env.ledger().sequence(); // 100
-    // Oracle timestamp is older than max_age (age = 20 ≥ 10).
+                                                 // Oracle timestamp is older than max_age (age = 20 ≥ 10).
     register_oracle_with_timestamp(&t, current_seq - 20);
 
     let invoice_id = make_invoice(&t);
@@ -157,7 +157,7 @@ fn test_boundary_one_before_limit_passes() {
     t.contract.set_max_oracle_age(&max_age).unwrap();
 
     let current_seq = t.env.ledger().sequence(); // 100
-    // age = 9 < 10 → should pass.
+                                                 // age = 9 < 10 → should pass.
     register_oracle_with_timestamp(&t, current_seq - 9);
 
     let invoice_id = make_invoice(&t);
@@ -180,7 +180,7 @@ fn test_boundary_exactly_at_limit_fails() {
     t.contract.set_max_oracle_age(&max_age).unwrap();
 
     let current_seq = t.env.ledger().sequence(); // 100
-    // age = 10 = max_age → should fail.
+                                                 // age = 10 = max_age → should fail.
     register_oracle_with_timestamp(&t, current_seq - 10);
 
     let invoice_id = make_invoice(&t);

@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{BytesN};
+use soroban_sdk::BytesN;
 
 #[test]
 fn test_submit_invoice_without_referral_does_not_increment_stats() {

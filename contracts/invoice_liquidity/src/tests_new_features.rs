@@ -96,8 +96,7 @@ fn test_contract_stats_increments_on_submit() {
     let t = setup();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    t.contract.submit_invoice(        &ReferralCode::None,
-    );
+    t.contract.submit_invoice(&ReferralCode::None);
 
     let stats = t.contract.get_contract_stats();
     assert_eq!(stats.total_invoices, 1);
@@ -110,8 +109,7 @@ fn test_contract_stats_increments_on_fund() {
     let t = setup();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.contract.submit_invoice(        &ReferralCode::None,
-    );
+    let invoice_id = t.contract.submit_invoice(&ReferralCode::None);
 
     t.contract
         .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &false);
@@ -128,8 +126,7 @@ fn test_contract_stats_increments_on_mark_paid() {
     let t = setup();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.contract.submit_invoice(        &ReferralCode::None,
-    );
+    let invoice_id = t.contract.submit_invoice(&ReferralCode::None);
 
     t.contract
         .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &false);
@@ -150,8 +147,7 @@ fn test_contract_stats_multiple_invoices() {
 
     // Submit 3 invoices
     for _i in 0..3 {
-        t.contract.submit_invoice(        &ReferralCode::None,
-    );
+        t.contract.submit_invoice(&ReferralCode::None);
     }
 
     let stats = t.contract.get_contract_stats();
@@ -175,8 +171,7 @@ fn test_contract_stats_tracks_token_volumes_and_oracle_normalization() {
     let t = setup();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.contract.submit_invoice(        &ReferralCode::None,
-    );
+    let invoice_id = t.contract.submit_invoice(&ReferralCode::None);
 
     t.contract
         .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &false);
@@ -216,8 +211,7 @@ fn test_pause_blocks_submit_invoice() {
     t.contract.pause();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let result = t.contract.try_submit_invoice(try_        &ReferralCode::None,
-    );
+    let result = t.contract.try_submit_invoice(try_ & ReferralCode::None);
 
     assert!(result.is_err());
     assert_eq!(result, Err(Ok(ContractError::ContractPaused)));
@@ -228,8 +222,7 @@ fn test_pause_blocks_fund_invoice() {
     let t = setup();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.contract.submit_invoice(        &ReferralCode::None,
-    );
+    let invoice_id = t.contract.submit_invoice(&ReferralCode::None);
 
     t.contract.pause();
 
@@ -246,8 +239,7 @@ fn test_pause_blocks_mark_paid() {
     let t = setup();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.contract.submit_invoice(        &ReferralCode::None,
-    );
+    let invoice_id = t.contract.submit_invoice(&ReferralCode::None);
 
     t.contract
         .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &false);
@@ -264,8 +256,7 @@ fn test_pause_blocks_cancel_invoice() {
     let t = setup();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.contract.submit_invoice(        &ReferralCode::None,
-    );
+    let invoice_id = t.contract.submit_invoice(&ReferralCode::None);
 
     t.contract.pause();
 
@@ -280,8 +271,7 @@ fn test_pause_blocks_claim_default() {
     let t = setup();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.contract.submit_invoice(        &ReferralCode::None,
-    );
+    let invoice_id = t.contract.submit_invoice(&ReferralCode::None);
 
     t.contract
         .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &false);
@@ -307,8 +297,7 @@ fn test_unpause_restores_functionality() {
     t.contract.unpause();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let result = t.contract.try_submit_invoice(try_        &ReferralCode::None,
-    );
+    let result = t.contract.try_submit_invoice(try_ & ReferralCode::None);
 
     assert!(result.is_ok());
 }
@@ -344,8 +333,7 @@ fn test_get_contract_stats_works_when_paused() {
     let t = setup();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    t.contract.submit_invoice(        &ReferralCode::None,
-    );
+    t.contract.submit_invoice(&ReferralCode::None);
 
     t.contract.pause();
 
@@ -365,8 +353,7 @@ fn test_due_date_too_soon_rejected() {
     let now = t.env.ledger().timestamp();
     let too_soon = now + (12 * 60 * 60); // 12 hours - less than 24 hours
 
-    let result = t.contract.try_submit_invoice(try_        &ReferralCode::None,
-    );
+    let result = t.contract.try_submit_invoice(try_ & ReferralCode::None);
 
     assert!(result.is_err());
     assert_eq!(result, Err(Ok(ContractError::DueDateTooSoon)));
@@ -379,8 +366,7 @@ fn test_due_date_exactly_24_hours_accepted() {
     let now = t.env.ledger().timestamp();
     let exactly_24h = now + (24 * 60 * 60);
 
-    let result = t.contract.try_submit_invoice(try_        &ReferralCode::None,
-    );
+    let result = t.contract.try_submit_invoice(try_ & ReferralCode::None);
 
     assert!(result.is_ok());
 }
@@ -392,8 +378,7 @@ fn test_due_date_too_far_rejected() {
     let now = t.env.ledger().timestamp();
     let too_far = now + (366 * 24 * 60 * 60); // 366 days - more than 365 days
 
-    let result = t.contract.try_submit_invoice(try_        &ReferralCode::None,
-    );
+    let result = t.contract.try_submit_invoice(try_ & ReferralCode::None);
 
     assert!(result.is_err());
     assert_eq!(result, Err(Ok(ContractError::DueDateTooFar)));
@@ -406,8 +391,7 @@ fn test_due_date_exactly_365_days_accepted() {
     let now = t.env.ledger().timestamp();
     let exactly_365d = now + (365 * 24 * 60 * 60);
 
-    let result = t.contract.try_submit_invoice(try_        &ReferralCode::None,
-    );
+    let result = t.contract.try_submit_invoice(try_ & ReferralCode::None);
 
     assert!(result.is_ok());
 }
@@ -419,8 +403,7 @@ fn test_due_date_in_past_rejected() {
     let now = t.env.ledger().timestamp();
     let past = now - 1;
 
-    let result = t.contract.try_submit_invoice(try_        &ReferralCode::None,
-    );
+    let result = t.contract.try_submit_invoice(try_ & ReferralCode::None);
 
     assert!(result.is_err());
     assert_eq!(result, Err(Ok(ContractError::InvalidDueDate)));
@@ -432,8 +415,7 @@ fn test_due_date_equal_to_now_rejected() {
 
     let now = t.env.ledger().timestamp();
 
-    let result = t.contract.try_submit_invoice(try_        &ReferralCode::None,
-    );
+    let result = t.contract.try_submit_invoice(try_ & ReferralCode::None);
 
     assert!(result.is_err());
     assert_eq!(result, Err(Ok(ContractError::InvalidDueDate)));

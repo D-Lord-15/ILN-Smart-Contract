@@ -115,8 +115,7 @@ fn test_mark_paid_updates_top_payers_heap() {
     assert_eq!(t.contract.payer_score(&t.payer), 50);
     assert_eq!(t.contract.get_top_payers(&10).len(), 0);
 
-    let id = t.contract.submit_invoice(        &ReferralCode::None,
-    );
+    let id = t.contract.submit_invoice(&ReferralCode::None);
     t.contract.fund_invoice(&t.funder, &id, &amount, &false);
     t.contract.mark_paid(&id, &amount);
 
