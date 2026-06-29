@@ -1,0 +1,6 @@
+packages:
+  - 'sdk'
+  - 'cli'
+  - 'indexer'
+  - 'notifications'
+  - 'tests/e2e'
