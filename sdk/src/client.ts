@@ -83,7 +83,7 @@ export class ILNClient {
   /** Deployed invoice-liquidity contract address. */
   readonly contractId: string;
   /** Optional signer for authenticated methods. */
-  readonly signer?: ISigner;
+  readonly signer?: ISigner | undefined;
 
   // Cached imports (lazy-loaded for tree-shaking)
   private _getReputation?: typeof import("./methods/reputation.js").getReputation;

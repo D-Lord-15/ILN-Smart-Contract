@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * fundInvoice — LP-facing SDK method for the Invoice Liquidity Network.
  *

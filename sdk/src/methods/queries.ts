@@ -172,25 +172,5 @@ export async function listInvoicesByLP(
   }
 
   const rawArr = scValToNative(sim.result.retval) as Record<string, unknown>[];
-  return rawArr.map(raw => {
-    const dueDate = Number(raw["due_date"]);
-    const discountRate = Number(raw["discount_rate"]);
-    return {
-      id: BigInt(String(raw["id"])),
-      freelancer: String(raw["freelancer"]),
-      payer: String(raw["payer"]),
-      token: String(raw["token"]),
-      amount: BigInt(String(raw["amount"])),
-      dueDate,
-      discountRate,
-      status: ((raw["status"] as Record<string, unknown>)?.tag || String(raw["status"])) as InvoiceState,
-      funder: raw["funder"] ? String(raw["funder"]) : undefined,
-      fundedAt: raw["funded_at"] ? Number(raw["funded_at"]) : undefined,
-      amountFunded: BigInt(String(raw["amount_funded"])),
-      amountPaid: BigInt(String(raw["amount_paid"])),
-      referralCode: raw["referral_code"] ? Buffer.from(raw["referral_code"] as unknown).toString('hex') : undefined,
-      submitterReputation: Number(raw["submitter_reputation"]),
-      effectiveYieldBps: computeEffectiveYieldBps(discountRate, dueDate),
-    };
-  });
+  return rawArr.map(raw => decodeInvoice(raw as Record<string, unknown>));
 }

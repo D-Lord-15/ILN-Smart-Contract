@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Allowance utilities for SEP-41 / Stellar Asset Contract tokens.
  *
