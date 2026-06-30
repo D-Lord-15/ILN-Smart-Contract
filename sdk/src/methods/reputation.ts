@@ -19,6 +19,7 @@ import {
 import { retry } from "../utils/retry.js";
 import { decodeReputationScore, type ReputationProfile } from "../utils/xdrDecoder.js";
 
+
 // ---------------------------------------------------------------------------
 // G-address validation
 // ---------------------------------------------------------------------------
@@ -99,3 +100,5 @@ export async function getReputation(
   const raw = scValToNative(sim.result.retval) as Record<string, unknown>;
   return decodeReputationScore(raw, address);
 }
+
+export type { ReputationProfile };

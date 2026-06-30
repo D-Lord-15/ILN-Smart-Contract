@@ -84,8 +84,8 @@ export async function cancelInvoice(
   
   // Submit
   const sendResult = await retry(() => server.sendTransaction(signedTx));
-  if (sendResult.errorResultXdr) {
-    throw new Error(`Transaction failed: ${sendResult.errorResultXdr}`);
+  if (sendResult.errorResult) {
+    throw new Error(`Transaction failed: ${sendResult.errorResult}`);
   }
 
   // Wait for completion

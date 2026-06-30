@@ -17,6 +17,7 @@ import {
 import { retry } from "../utils/retry.js";
 import { decodeContractStats, type ContractStats } from "../utils/xdrDecoder.js";
 
+
 // ---------------------------------------------------------------------------
 // getContractStats
 // ---------------------------------------------------------------------------
@@ -83,3 +84,5 @@ export async function getContractStats(
   const raw = scValToNative(sim.result.retval) as Record<string, unknown>;
   return decodeContractStats(raw);
 }
+
+export type { ContractStats };

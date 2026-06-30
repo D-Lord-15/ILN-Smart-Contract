@@ -48,8 +48,8 @@ export async function cancelInvoice(
   const assembledTx = SorobanRpc.assembleTransaction(tx, sim).build();
   const signedTx = await signTransaction(assembledTx);
   const sendResult = await server.sendTransaction(signedTx);
-  if (sendResult.errorResultXdr) {
-    throw new Error(`Transaction failed: ${sendResult.errorResultXdr}`);
+  if (sendResult.errorResult) {
+    throw new Error(`Transaction failed: ${sendResult.errorResult}`);
   }
   return { txHash: sendResult.hash };
 }

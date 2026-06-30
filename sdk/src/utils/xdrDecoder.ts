@@ -6,8 +6,8 @@
  * decoder functions for all contract return types.
  */
 
-import type { Invoice, InvoiceStatus } from "../types/invoice.js";
-import type { Proposal, ProposalAction, ProposalStatus } from "../types/governance.js";
+import type { Invoice, InvoiceState as InvoiceStatus } from "@invoice-liquidity/types";
+import type { GovernanceProposal as Proposal, ProposalAction, ProposalStatus } from "@invoice-liquidity/types";
 
 // ---------------------------------------------------------------------------
 // Invoice decoder
@@ -39,11 +39,11 @@ export function decodeInvoice(raw: Record<string, unknown>): Invoice {
     dueDate,
     discountRate,
     status: parseInvoiceStatus(raw["status"]),
-    funder: raw["funder"] ? String(raw["funder"]) : undefined,
-    fundedAt: raw["funded_at"] ? Number(raw["funded_at"]) : undefined,
+    funder: raw["funder"] ? String(raw["funder"]) : "",
+    fundedAt: raw["funded_at"] ? Number(raw["funded_at"]) : 0,
     amountFunded: BigInt(String(raw["amount_funded"])),
     amountPaid: BigInt(String(raw["amount_paid"])),
-    referralCode: raw["referral_code"] ? Buffer.from(raw["referral_code"] as any).toString('hex') : undefined,
+    referralCode: raw["referral_code"] ? Buffer.from(raw["referral_code"] as any).toString("hex") : "",
     submitterReputation: Number(raw["submitter_reputation"]),
     effectiveYieldBps: computeEffectiveYieldBps(discountRate, dueDate),
   };

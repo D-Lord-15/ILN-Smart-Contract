@@ -39,6 +39,7 @@
     }
   ],
   "dependencies": {
+    "@invoice-liquidity/types": "workspace:*",
     "@stellar/stellar-sdk": "^12.3.0"
   },
   "devDependencies": {
