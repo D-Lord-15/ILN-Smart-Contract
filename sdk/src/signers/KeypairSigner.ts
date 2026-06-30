@@ -50,7 +50,7 @@ function warnIfHardcodedSecret(secret: string): void {
 
   // Well-known example keys used in docs / tutorials
   const knownExamples = new Set([
-    "SCZANGBA5RLAZ7IQVXSRQD5KXJLJPNWZPWHSB4TWJNSC2DL5CGFJ6Y2",
+    "SBQM45DNQRUNKDBPTXCAT7CRQLJHOD2NVEP2EKUND7HM7GFCBFTAY2EZ",
     "SDASDASDASDASDASDASDASDASDASDASDASDASDASDASDASDASDA",
   ]);
 
