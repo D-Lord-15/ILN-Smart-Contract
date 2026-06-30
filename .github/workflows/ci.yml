@@ -43,6 +43,9 @@ jobs:
       - name: Run build (Turbo)
         run: pnpm run build
 
+      - name: Check SDK bundle size budget
+        run: pnpm --filter @iln/sdk exec size-limit
+
       - name: Run tests (Turbo)
         run: pnpm run test:ci
 
