@@ -2322,6 +2322,7 @@ fn normalize_xlm_amount(amount: i128) -> i128 {
 }
 
 /// Check if a token address is the USDC address
+#[allow(dead_code)]
 fn is_usdc_token(env: &Env, token: &Address) -> bool {
     if let Some(config) = crate::storage::get_config(env) {
         token == &config.usdc_sac_address
