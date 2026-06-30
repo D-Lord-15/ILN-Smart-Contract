@@ -47,13 +47,14 @@ interface HorizonContractEvent {
 // XDR / ScVal decoding helpers
 // ---------------------------------------------------------------------------
 
+import { xdr, scValToNative } from "@stellar/stellar-sdk";
+
 /**
  * Decode a base-64 XDR ScVal and convert it to a plain JS value via
  * `scValToNative` from the Stellar SDK.
  */
 function decodeScVal(base64Xdr: string): unknown {
   try {
-    const { xdr, scValToNative } = require("@stellar/stellar-sdk");
     const scVal = xdr.ScVal.fromXDR(base64Xdr, "base64");
     return scValToNative(scVal);
   } catch {
