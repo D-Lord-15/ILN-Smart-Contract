@@ -31,6 +31,7 @@ import {
   buildApproveTransaction,
   isAllowanceSufficient,
 } from "../utils/allowance.js";
+import { retry } from "../utils/retry.js";
 
 // ---------------------------------------------------------------------------
 // computeEffectiveYieldBps (exported for consumers and tests)
@@ -83,7 +84,7 @@ async function fetchInvoice(
     .setTimeout(30)
     .build();
 
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
 
   if (SorobanRpc.Api.isSimulationError(sim)) {
     throw new Error(`get_invoice simulation failed: ${sim.error}`);
@@ -148,7 +149,7 @@ async function verifyOracle(
     .setTimeout(30)
     .build();
 
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
 
   if (SorobanRpc.Api.isSimulationError(sim)) {
     throw new Error(`Oracle verification failed: ${sim.error}`);
@@ -226,7 +227,7 @@ export async function fundInvoice(
 
   // 1. Load the LP's on-chain account (for sequence numbers)
   const lpAddress = lpKeypair.publicKey();
-  const accountData = await server.getAccount(lpAddress);
+  const accountData = await retry(() => server.getAccount(lpAddress));
   let sequence = accountData.sequence;
 
   const makeAccount = (seq: string) => new Account(lpAddress, seq);
@@ -257,7 +258,7 @@ export async function fundInvoice(
   }
 
   // 4. Allowance check
-  const ledgerInfo = await server.getLatestLedger();
+  const ledgerInfo = await retry(() => server.getLatestLedger());
   const currentLedger = ledgerInfo.sequence;
 
   const allowance = await getAllowance(
@@ -319,12 +320,12 @@ export async function fundInvoice(
     .setTimeout(30)
     .build();
 
-  const preparedFundTx = await server.prepareTransaction(fundTx);
+  const preparedFundTx = await retry(() => server.prepareTransaction(fundTx));
   (preparedFundTx as any).sign(lpKeypair);
 
-  const fundSendResult = await server.sendTransaction(
+  const fundSendResult = await retry(() => server.sendTransaction(
     preparedFundTx as any
-  );
+  ));
 
   if (fundSendResult.status === "ERROR") {
     throw new Error(

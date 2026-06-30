@@ -16,6 +16,7 @@ import {
   type ProposalFilter,
   type CreateProposalResult,
 } from "../types/governance.js";
+import { retry } from "../utils/retry.js";
 
 /**
  * Build, simulate, sign and submit a governance transaction, polling until the
@@ -36,23 +37,23 @@ async function sendGovernanceCall(
     .setTimeout(30)
     .build();
 
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
   if (SorobanRpc.Api.isSimulationError(sim)) {
     throw ILNError.fromError(sim.error);
   }
 
   const assembledTx = SorobanRpc.assembleTransaction(tx, sim).build();
   const signedTx = await signTransaction(assembledTx);
-  const sendResult = await server.sendTransaction(signedTx);
+  const sendResult = await retry(() => server.sendTransaction(signedTx));
   if (sendResult.errorResultXdr) {
     throw new Error(`Transaction failed: ${sendResult.errorResultXdr}`);
   }
 
-  let status = await server.getTransaction(sendResult.hash);
+  let status = await retry(() => server.getTransaction(sendResult.hash));
   let retries = 0;
   while (status.status === SorobanRpc.Api.GetTransactionStatus.NOT_FOUND && retries < 15) {
     await new Promise(r => setTimeout(r, 2000));
-    status = await server.getTransaction(sendResult.hash);
+    status = await retry(() => server.getTransaction(sendResult.hash));
     retries++;
   }
   if (status.status === SorobanRpc.Api.GetTransactionStatus.FAILED) {
@@ -214,7 +215,7 @@ export async function getProposal(
     .setTimeout(30)
     .build();
 
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
   if (SorobanRpc.Api.isSimulationError(sim)) {
     throw ILNError.fromError(sim.error);
   }
@@ -246,7 +247,7 @@ export async function listProposals(
     .setTimeout(30)
     .build();
 
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
   if (SorobanRpc.Api.isSimulationError(sim)) {
     throw ILNError.fromError(sim.error);
   }

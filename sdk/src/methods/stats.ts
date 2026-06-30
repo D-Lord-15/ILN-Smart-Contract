@@ -14,6 +14,7 @@ import {
   scValToNative,
   Networks,
 } from "@stellar/stellar-sdk";
+import { retry } from "../utils/retry.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -87,7 +88,7 @@ export async function getContractStats(
     .setTimeout(30)
     .build();
 
-  const sim = await server.simulateTransaction(simTx);
+  const sim = await retry(() => server.simulateTransaction(simTx));
 
   if (SorobanRpc.Api.isSimulationError(sim)) {
     throw new Error(`get_contract_stats simulation failed: ${sim.error}`);

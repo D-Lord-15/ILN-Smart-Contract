@@ -10,6 +10,7 @@ import {
 import type { Invoice } from "../types/invoice.js";
 import { ILNError } from "../errors.js";
 import { computeEffectiveYieldBps } from "./fundInvoice.js";
+import { retry } from "../utils/retry.js";
 
 /**
  * Fetch a single invoice by its ID.
@@ -48,7 +49,7 @@ export async function getInvoice(
     .setTimeout(30)
     .build();
 
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
 
   if (SorobanRpc.Api.isSimulationError(sim)) {
     if (String(sim.error).includes("NotFound") || String(sim.error).includes("Error(Contract, 1)")) {
@@ -124,7 +125,7 @@ export async function listInvoicesBySubmitter(
     .setTimeout(30)
     .build();
 
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
 
   if (SorobanRpc.Api.isSimulationError(sim)) {
     throw ILNError.fromError(sim.error);
@@ -198,7 +199,7 @@ export async function listInvoicesByLP(
     .setTimeout(30)
     .build();
 
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
 
   if (SorobanRpc.Api.isSimulationError(sim)) {
     throw ILNError.fromError(sim.error);

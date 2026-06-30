@@ -16,6 +16,7 @@ import {
   Address,
   Networks,
 } from "@stellar/stellar-sdk";
+import { retry } from "../utils/retry.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -106,7 +107,7 @@ export async function getReputation(
     .setTimeout(30)
     .build();
 
-  const sim = await server.simulateTransaction(simTx);
+  const sim = await retry(() => server.simulateTransaction(simTx));
 
   if (SorobanRpc.Api.isSimulationError(sim)) {
     throw new Error(`get_reputation simulation failed: ${sim.error}`);
