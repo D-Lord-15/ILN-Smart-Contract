@@ -1,3 +1,4 @@
+export { initializeSchema } from '../db/schema.js';
 import type Database from 'better-sqlite3';
 
 export function initializeSchema(db: Database.Database): void {
@@ -73,5 +74,8 @@ export function initializeSchema(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_reputation_timestamp ON reputation_updates(timestamp);
     CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
     CREATE INDEX IF NOT EXISTS idx_stats_history_date ON stats_history(date);
+    CREATE INDEX IF NOT EXISTS idx_invoices_freelancer ON invoices(freelancer);
+    CREATE INDEX IF NOT EXISTS idx_invoices_payer ON invoices(payer);
+    CREATE INDEX IF NOT EXISTS idx_invoices_funder ON invoices(funder);
   `);
 }

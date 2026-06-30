@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { WebhookDeliveryService, type HttpClient } from '../src/delivery/webhookDelivery';
+import { DeliveryHistoryStore } from '../src/delivery/deliveryHistory';
 
 function makeService(http: HttpClient, now?: () => number) {
   return new WebhookDeliveryService({ http, now });
@@ -50,5 +51,101 @@ describe('WebhookDeliveryService', () => {
     const res = await svc.deliver(endpoint, {});
     expect(res.ok).toBe(false);
     expect(res.status).toBe(0);
+  });
+
+  it('logs when deliverWithRetry is called without a retry queue', async () => {
+    const http = vi.fn(async () => ({ status: 200 }));
+    const logger = vi.fn();
+    const svc = new WebhookDeliveryService({ http, logger });
+    await svc.deliverWithRetry('webhook_1', endpoint, {
+      event: 'invoice.paid',
+      invoiceId: 1,
+      data: {},
+      timestamp: new Date().toISOString(),
+    });
+    expect(logger).toHaveBeenCalledWith('retryQueue not configured');
+  });
+
+  it('records retry success and failure outcomes', async () => {
+    const http = vi.fn(async (url: string, init: any) => {
+      const payload = JSON.parse(init.body);
+      return { status: payload.event === 'invoice.paid' ? 200 : 500 };
+    });
+    const retryQueue = {
+      enqueue: vi.fn(() => ({ id: 1, attempts: 0 })),
+      recordSuccess: vi.fn(),
+      recordFailure: vi.fn(),
+      recordSkipped: vi.fn(),
+    };
+    const logger = vi.fn();
+    const svc = new WebhookDeliveryService({ http, retryQueue: retryQueue as any, logger });
+
+    await svc.deliverWithRetry('webhook_1', endpoint, {
+      event: 'invoice.paid',
+      invoiceId: 1,
+      data: {},
+      timestamp: new Date().toISOString(),
+    });
+    expect(retryQueue.enqueue).toHaveBeenCalledTimes(1);
+    expect(retryQueue.recordSuccess).toHaveBeenCalledWith(1);
+
+    await svc.deliverWithRetry('webhook_1', endpoint, {
+      event: 'invoice.funded',
+      invoiceId: 2,
+      data: {},
+      timestamp: new Date().toISOString(),
+    });
+    expect(retryQueue.recordFailure).toHaveBeenCalledWith(1, 'HTTP 500');
+    expect(logger).toHaveBeenCalledWith('webhook_delivered webhook_id=webhook_1 event=invoice.paid');
+  });
+
+  it('records skipped retries when the circuit is open', async () => {
+    const http = vi.fn(async () => ({ status: 500 }));
+    const retryQueue = {
+      enqueue: vi.fn(() => ({ id: 1, attempts: 0 })),
+      recordSuccess: vi.fn(),
+      recordFailure: vi.fn(),
+      recordSkipped: vi.fn(),
+    };
+    const logger = vi.fn();
+    const svc = new WebhookDeliveryService({ http, retryQueue: retryQueue as any, logger });
+
+    for (let i = 0; i < 5; i++) {
+      await svc.deliver(endpoint, {
+        event: 'invoice.paid',
+        invoiceId: i,
+        data: {},
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    await svc.deliverWithRetry('webhook_1', endpoint, {
+      event: 'invoice.paid',
+      invoiceId: 99,
+      data: {},
+      timestamp: new Date().toISOString(),
+    });
+
+    expect(retryQueue.recordSkipped).toHaveBeenCalledWith(1, 'circuit_open');
+    expect(logger).toHaveBeenCalledWith('webhook_skipped webhook_id=webhook_1 reason=circuit_open');
+  });
+
+  it('records delivery history when a history store is configured', async () => {
+    const http = vi.fn(async () => ({ status: 200 }));
+    const historyStore = new DeliveryHistoryStore();
+    const addSpy = vi.spyOn(historyStore, 'add');
+    const svc = new WebhookDeliveryService({
+      http,
+      historyStore,
+    });
+
+    await svc.deliver(endpoint, {
+      event: 'invoice.paid',
+      invoiceId: 7,
+      data: { token: 'USDC' },
+      timestamp: new Date().toISOString(),
+    }, 'invoice.paid');
+
+    expect(addSpy).toHaveBeenCalled();
   });
 });

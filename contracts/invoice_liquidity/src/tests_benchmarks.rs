@@ -78,8 +78,7 @@ fn benchmark_submit_invoice() {
     let due_date = bench.env.ledger().timestamp() + 86_400;
 
     measure(&bench.env, "submit_invoice", || {
-        bench.contract.submit_invoice(        &ReferralCode::None,
-    );
+        bench.contract.submit_invoice(&ReferralCode::None);
     });
 }
 
@@ -87,11 +86,12 @@ fn benchmark_submit_invoice() {
 fn benchmark_fund_invoice() {
     let bench = setup_benchmark_env();
     let due_date = bench.env.ledger().timestamp() + 86_400;
-    let id = bench.contract.submit_invoice(        &ReferralCode::None,
-    );
+    let id = bench.contract.submit_invoice(&ReferralCode::None);
 
     measure(&bench.env, "fund_invoice", || {
-        bench.contract.fund_invoice(&bench.lp, &id, &BENCH_INVOICE_AMOUNT, &false);
+        bench
+            .contract
+            .fund_invoice(&bench.lp, &id, &BENCH_INVOICE_AMOUNT, &false);
     });
 }
 
@@ -99,16 +99,13 @@ fn benchmark_fund_invoice() {
 fn benchmark_mark_paid() {
     let bench = setup_benchmark_env();
     let due_date = bench.env.ledger().timestamp() + 86_400;
-    let id = bench.contract.submit_invoice(        &ReferralCode::None,
-    );
+    let id = bench.contract.submit_invoice(&ReferralCode::None);
     bench
         .contract
         .fund_invoice(&bench.lp, &id, &BENCH_INVOICE_AMOUNT, &false);
 
     measure(&bench.env, "mark_paid", || {
-        bench
-            .contract
-            .mark_paid(&id, &BENCH_INVOICE_AMOUNT);
+        bench.contract.mark_paid(&id, &BENCH_INVOICE_AMOUNT);
     });
 }
 
@@ -120,19 +117,17 @@ fn benchmark_all_functions_summary() {
     let due_date = bench.env.ledger().timestamp() + 86_400;
 
     results.push(measure(&bench.env, "submit_invoice", || {
-        bench.contract.submit_invoice(        &ReferralCode::None,
-    );
+        bench.contract.submit_invoice(&ReferralCode::None);
     }));
 
-    let id = bench.contract.submit_invoice(        &ReferralCode::None,
-    );
+    let id = bench.contract.submit_invoice(&ReferralCode::None);
     results.push(measure(&bench.env, "fund_invoice", || {
-        bench.contract.fund_invoice(&bench.lp, &id, &BENCH_INVOICE_AMOUNT, &false);
-    }));
-    results.push(measure(&bench.env, "mark_paid", || {
         bench
             .contract
-            .mark_paid(&id, &BENCH_INVOICE_AMOUNT);
+            .fund_invoice(&bench.lp, &id, &BENCH_INVOICE_AMOUNT, &false);
+    }));
+    results.push(measure(&bench.env, "mark_paid", || {
+        bench.contract.mark_paid(&id, &BENCH_INVOICE_AMOUNT);
     }));
 
     std::println!("\n| Function       | CPU Instructions | Memory (bytes) |");

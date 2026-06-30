@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { transferLPPosition } from "./transferLPPosition.js";
 import { ILNError } from "../errors.js";
 import { Account, SorobanRpc } from "@stellar/stellar-sdk";
@@ -9,13 +10,13 @@ const PASS = "Test SDF Network ; September 2015";
 
 describe("transferLPPosition", () => {
   const mockServer = {
-    simulateTransaction: jest.fn(),
-    sendTransaction: jest.fn(),
-    getTransaction: jest.fn(),
+    simulateTransaction: vi.fn(),
+    sendTransaction: vi.fn(),
+    getTransaction: vi.fn(),
   } as unknown as SorobanRpc.Server;
 
   const account = new Account(CURRENT_LP, "1");
-  const sign = jest.fn((tx) => tx);
+  const sign = vi.fn((tx) => tx);
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -25,7 +26,7 @@ describe("transferLPPosition", () => {
     // @ts-ignore
     mockServer.simulateTransaction.mockResolvedValue({ result: { retval: {} } });
     // @ts-ignore
-    SorobanRpc.assembleTransaction = jest.fn(() => ({ build: () => ({}) }));
+    SorobanRpc.assembleTransaction = vi.fn(() => ({ build: () => ({}) }));
     // @ts-ignore
     mockServer.sendTransaction.mockResolvedValue({ status: "PENDING", hash: "txABC" });
     // @ts-ignore

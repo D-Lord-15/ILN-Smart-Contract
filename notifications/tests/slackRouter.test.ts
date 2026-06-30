@@ -1,13 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import express from 'express';
 import { createSlackRouter } from '../src/api/slack';
 
 function makeApp() {
   const store = new Map<string, any>();
+  const httpClient = vi.fn(async () => ({ ok: false, status: 500 }));
   const app = express();
   app.use(express.json());
-  app.use(createSlackRouter(store));
-  return { app, store };
+  app.use(createSlackRouter(store, { httpClient }));
+  return { app, store, httpClient };
 }
 
 async function request(app: express.Express, method: string, path: string, body?: any) {
@@ -93,7 +94,7 @@ describe('Slack router', () => {
   });
 
   it('notifies matching subscriptions', async () => {
-    const { app, store } = makeApp();
+    const { app, store, httpClient } = makeApp();
     store.set('slk_1', { id: 'slk_1', url: 'https://hooks.slack.com/a', eventTypes: ['invoice.submitted'] });
     store.set('slk_2', { id: 'slk_2', url: 'https://hooks.slack.com/b', eventTypes: ['invoice.paid'] });
 
@@ -107,5 +108,6 @@ describe('Slack router', () => {
     expect(res.status).toBe(200);
     expect(res.body.delivered).toBe(0);
     expect(res.body.total).toBe(1);
+    expect(httpClient).toHaveBeenCalledTimes(1);
   });
 });

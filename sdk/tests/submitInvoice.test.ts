@@ -1,16 +1,17 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { submitInvoice } from '../src/methods/submitInvoice.js';
 import { ILNError } from '../src/errors.js';
 import { Account, SorobanRpc, Transaction } from '@stellar/stellar-sdk';
 
 describe('submitInvoice', () => {
   const mockServer = {
-    simulateTransaction: jest.fn(),
-    sendTransaction: jest.fn(),
-    getTransaction: jest.fn(),
+    simulateTransaction: vi.fn(),
+    sendTransaction: vi.fn(),
+    getTransaction: vi.fn(),
   } as unknown as SorobanRpc.Server;
 
   const mockAccount = new Account('GA6V6P6Z7U2N4KHTD6Y3Y3V7H2P6XZY3H2P6XZY3H2P6XZY3H2P6XZ', '1');
-  const mockSignTransaction = jest.fn((tx) => tx);
+  const mockSignTransaction = vi.fn((tx) => tx);
   const contractAddress = 'CA6V6P6Z7U2N4KHTD6Y3Y3V7H2P6XZY3H2P6XZY3H2P6XZY3H2P6XZ';
   const networkPassphrase = 'Test SDF Network ; September 2015';
   
@@ -44,7 +45,7 @@ describe('submitInvoice', () => {
     });
 
     // @ts-ignore
-    SorobanRpc.assembleTransaction = jest.fn(() => ({ build: () => ({}) }));
+    SorobanRpc.assembleTransaction = vi.fn(() => ({ build: () => ({}) }));
     
     // @ts-ignore
     mockServer.sendTransaction.mockResolvedValue({ status: 'PENDING', hash: 'tx123' });

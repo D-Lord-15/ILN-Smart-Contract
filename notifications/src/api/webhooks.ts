@@ -36,10 +36,14 @@ async function validateWebhookUrl(url: string, opts?: WebhookDeliveryOptions): P
 export function createWebhooksRouter(
   store: SubscriptionStore,
   delivery: WebhookDeliveryService,
-  opts?: WebhookDeliveryOptions,
+  optsOrHistoryStore?: WebhookDeliveryOptions | DeliveryHistoryStore,
   historyStore?: DeliveryHistoryStore,
 ): Router {
   const router = Router();
+  const resolvedHistoryStore = isDeliveryHistoryStore(optsOrHistoryStore)
+    ? optsOrHistoryStore
+    : historyStore;
+  const opts = isDeliveryHistoryStore(optsOrHistoryStore) ? undefined : optsOrHistoryStore;
 
   function requireAuth(req: any, res: any, subId: string): boolean {
     const sub = store.get(subId);
@@ -165,17 +169,27 @@ export function createWebhooksRouter(
     res.status(ok ? 204 : 404).end();
   });
 
-  if (historyStore) {
+  if (resolvedHistoryStore) {
     router.get('/webhooks/:id/deliveries', (req, res) => {
+      const sub = store.get(req.params.id);
+      if (!sub) {
+        res.status(404).json({ error: 'not_found' });
+        return;
+      }
+
       if (!requireAuth(req, res, req.params.id)) return;
 
       const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
       const pageSize = Math.min(100, Math.max(1, parseInt(req.query.pageSize as string, 10) || 20));
 
-      const result = historyStore.listByWebhook(req.params.id, page, pageSize);
+      const result = resolvedHistoryStore.listByWebhook(sub.endpointId, page, pageSize);
       res.json(result);
     });
   }
 
   return router;
+}
+
+function isDeliveryHistoryStore(value: unknown): value is DeliveryHistoryStore {
+  return typeof value === 'object' && value !== null && 'listByWebhook' in value;
 }

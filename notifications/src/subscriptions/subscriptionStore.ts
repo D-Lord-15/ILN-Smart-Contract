@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3';
+import Database from 'better-sqlite3';
 
 export interface Subscription {
   id: string;
@@ -17,7 +17,7 @@ export interface SubscriptionInput {
 }
 
 export class SubscriptionStore {
-  constructor(private readonly db: Database.Database) {
+  constructor(private readonly db: Database.Database = new Database(':memory:')) {
     this.initSchema();
   }
 
