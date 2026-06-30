@@ -7,6 +7,7 @@
  */
 import { Contract, SorobanRpc, xdr } from "@stellar/stellar-sdk";
 import type { ISigner as Signer } from "../signers/ISigner.js";
+import { retry } from "../utils/retry.js";
 
 export interface DisputeInvoiceParams {
   /** Soroban RPC server instance. */
@@ -86,19 +87,20 @@ export async function disputeInvoice(
     xdr.ScVal.scvBytes(hashBytes)
   );
 
-  const account = await rpc.getAccount(signer.publicKey);
-  const built = await rpc.prepareTransaction(
-        new (await import("@stellar/stellar-sdk")).TransactionBuilder(account, {
+  const account = await retry(() => rpc.getAccount(signer.publicKey));
+  const { TransactionBuilder } = await import("@stellar/stellar-sdk");
+  const built = await retry(() => rpc.prepareTransaction(
+    new TransactionBuilder(account, {
       fee: String(fee),
       networkPassphrase: (await rpc.getNetwork()).passphrase,
     })
       .addOperation(operation)
       .setTimeout(30)
       .build()
-  );
+  ));
 
   const signed = await signer.signTransaction(built, rpc);
-  const response = await rpc.sendTransaction(signed);
+  const response = await retry(() => rpc.sendTransaction(signed));
 
   return { txHash: response.hash, evidenceHash };
 }

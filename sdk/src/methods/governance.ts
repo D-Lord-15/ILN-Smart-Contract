@@ -16,6 +16,8 @@ import {
   type ProposalFilter,
   type CreateProposalResult,
 } from "../types/governance.js";
+import { retry } from "../utils/retry.js";
+import { decodeGovernanceProposal } from "../utils/xdrDecoder.js";
 
 /**
  * Build, simulate, sign and submit a governance transaction, polling until the
@@ -36,23 +38,23 @@ async function sendGovernanceCall(
     .setTimeout(30)
     .build();
 
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
   if (SorobanRpc.Api.isSimulationError(sim)) {
     throw ILNError.fromError(sim.error);
   }
 
   const assembledTx = SorobanRpc.assembleTransaction(tx, sim).build();
   const signedTx = await signTransaction(assembledTx);
-  const sendResult = await server.sendTransaction(signedTx);
+  const sendResult = await retry(() => server.sendTransaction(signedTx));
   if (sendResult.errorResult) {
     throw new Error(`Transaction failed: ${sendResult.errorResult}`);
   }
 
-  let status = await server.getTransaction(sendResult.hash);
+  let status = await retry(() => server.getTransaction(sendResult.hash));
   let retries = 0;
   while (status.status === SorobanRpc.Api.GetTransactionStatus.NOT_FOUND && retries < 15) {
     await new Promise(r => setTimeout(r, 2000));
-    status = await server.getTransaction(sendResult.hash);
+    status = await retry(() => server.getTransaction(sendResult.hash));
     retries++;
   }
   if (status.status === SorobanRpc.Api.GetTransactionStatus.FAILED) {
@@ -214,7 +216,7 @@ export async function getProposal(
     .setTimeout(30)
     .build();
 
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
   if (SorobanRpc.Api.isSimulationError(sim)) {
     throw ILNError.fromError(sim.error);
   }
@@ -222,7 +224,8 @@ export async function getProposal(
     throw new ILNError(`Proposal ${id} not found`);
   }
 
-  return parseProposal(scValToNative(sim.result.retval) as Record<string, unknown>);
+  const raw = scValToNative(sim.result.retval) as Record<string, unknown>;
+  return decodeGovernanceProposal(raw);
 }
 
 /**
@@ -246,7 +249,7 @@ export async function listProposals(
     .setTimeout(30)
     .build();
 
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
   if (SorobanRpc.Api.isSimulationError(sim)) {
     throw ILNError.fromError(sim.error);
   }
@@ -255,7 +258,7 @@ export async function listProposals(
   }
 
   const rawArr = scValToNative(sim.result.retval) as Record<string, unknown>[];
-  let proposals = rawArr.map(parseProposal);
+  let proposals = rawArr.map(raw => decodeGovernanceProposal(raw as Record<string, unknown>));
 
   if (filter?.status) {
     proposals = proposals.filter(p => p.status === filter.status);

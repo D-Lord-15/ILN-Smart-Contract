@@ -17,7 +17,11 @@
 //! 7. Stale but require_oracle_verification=false           → succeeds (check skipped).
 
 use super::*;
-use crate::test::{setup, DISCOUNT_RATE, DUE_DATE_OFFSET, INVOICE_AMOUNT};
+use crate::test::setup;
+
+const INVOICE_AMOUNT: i128 = 1_000_000_000;
+const DISCOUNT_RATE: u32 = 300;
+const DUE_DATE_OFFSET: u64 = 60 * 60 * 24 * 30;
 use soroban_sdk::{
     contract, contractimpl,
     testutils::{Address as _, Ledger as _},
@@ -131,7 +135,7 @@ fn test_stale_oracle_fails() {
     t.contract.set_max_oracle_age(&max_age).unwrap();
 
     let current_seq = t.env.ledger().sequence(); // 100
-    // Oracle timestamp is older than max_age (age = 20 ≥ 10).
+                                                 // Oracle timestamp is older than max_age (age = 20 ≥ 10).
     register_oracle_with_timestamp(&t, current_seq - 20);
 
     let invoice_id = make_invoice(&t);
@@ -157,7 +161,7 @@ fn test_boundary_one_before_limit_passes() {
     t.contract.set_max_oracle_age(&max_age).unwrap();
 
     let current_seq = t.env.ledger().sequence(); // 100
-    // age = 9 < 10 → should pass.
+                                                 // age = 9 < 10 → should pass.
     register_oracle_with_timestamp(&t, current_seq - 9);
 
     let invoice_id = make_invoice(&t);
@@ -180,7 +184,7 @@ fn test_boundary_exactly_at_limit_fails() {
     t.contract.set_max_oracle_age(&max_age).unwrap();
 
     let current_seq = t.env.ledger().sequence(); // 100
-    // age = 10 = max_age → should fail.
+                                                 // age = 10 = max_age → should fail.
     register_oracle_with_timestamp(&t, current_seq - 10);
 
     let invoice_id = make_invoice(&t);

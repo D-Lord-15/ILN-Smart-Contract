@@ -9,7 +9,28 @@ This SDK allows freelancers, liquidity providers, and integrators to interact se
 > with complete, testnet-ready examples for both Node.js (keypair) and the
 > browser (Freighter).
 
+> 📖 **Terminology:** See the [Protocol Glossary](../docs/glossary.md) for definitions of invoice factoring, basis points, yield, and other ILN-specific terms.
+
 > 📋 **Release History:** See [CHANGELOG.md](./CHANGELOG.md) for version history and breaking changes.
+
+## Bundle Size
+
+The SDK bundle is checked in CI on every pull request. `@stellar/stellar-sdk` is a
+peer-style runtime dependency (not bundled into `dist/`); the budgets below apply
+to the compiled SDK output only.
+
+| Bundle | Gzipped size | Budget |
+| ------ | ------------ | ------ |
+| ESM (`dist/index.mjs`) | ~31 KB | 50 KB |
+| CJS (`dist/index.js`) | ~33 KB | 60 KB |
+
+Measure the exact current sizes locally:
+
+```bash
+npm run size
+```
+
+The script rebuilds the SDK and fails if either bundle exceeds its gzip budget.
 
 ## Installation
 
