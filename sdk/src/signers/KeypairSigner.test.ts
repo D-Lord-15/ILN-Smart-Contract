@@ -7,7 +7,7 @@ import { Keypair, SorobanRpc, Networks, TransactionBuilder, Account, BASE_FEE, O
 // ---------------------------------------------------------------------------
 
 // Well-known test secret — triggers the "example key" warning path
-const EXAMPLE_SECRET = "SCZANGBA5RLAZ7IQVXSRQD5KXJLJPNWZPWHSB4TWJNSC2DL5CGFJ6Y2";
+const EXAMPLE_SECRET = "SBQM45DNQRUNKDBPTXCAT7CRQLJHOD2NVEP2EKUND7HM7GFCBFTAY2EZ";
 
 // A random test keypair (generated once — deterministic in tests)
 const TEST_KP = Keypair.random();
@@ -31,23 +31,9 @@ function buildTestTx(sourceKp: Keypair = TEST_KP) {
     .build();
 }
 
-// ---------------------------------------------------------------------------
-// Mock server
-// ---------------------------------------------------------------------------
+import { makeMockServer } from "@iln/test-utils";
 
 const MOCK_SIGNED_XDR = "AAAASIGNEDXDR==";
-
-function makeMockServer(opts: { fail?: boolean } = {}): SorobanRpc.Server {
-  return {
-    prepareTransaction: vi.fn().mockImplementation(async (tx) => {
-      if (opts.fail) {
-        return { error: "contract trap", _parsed: true };
-      }
-      // Return the tx as-is (already has sign + toEnvelope)
-      return tx;
-    }),
-  } as unknown as SorobanRpc.Server;
-}
 
 // ---------------------------------------------------------------------------
 // Constructor
@@ -71,7 +57,9 @@ describe("KeypairSigner — constructor", () => {
 
   it("emits a console.warn for a well-known example key outside test env", () => {
     const originalEnv = process.env["NODE_ENV"];
+    const originalVitest = process.env["VITEST"];
     process.env["NODE_ENV"] = "production";
+    delete process.env["VITEST"];
 
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     new KeypairSigner(EXAMPLE_SECRET);
@@ -81,12 +69,15 @@ describe("KeypairSigner — constructor", () => {
 
     warn.mockRestore();
     process.env["NODE_ENV"] = originalEnv;
+    if (originalVitest !== undefined) process.env["VITEST"] = originalVitest;
   });
 
   it("emits a generic console.warn for a non-example secret outside test env", () => {
     const originalEnv = process.env["NODE_ENV"];
+    const originalVitest = process.env["VITEST"];
     delete process.env["NODE_ENV"];
     delete process.env["JEST_WORKER_ID"];
+    delete process.env["VITEST"];
 
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     new KeypairSigner(TEST_SECRET);
@@ -96,6 +87,7 @@ describe("KeypairSigner — constructor", () => {
 
     warn.mockRestore();
     process.env["NODE_ENV"] = originalEnv ?? "test";
+    if (originalVitest !== undefined) process.env["VITEST"] = originalVitest;
   });
 
   it("does NOT warn when NODE_ENV=test", () => {
