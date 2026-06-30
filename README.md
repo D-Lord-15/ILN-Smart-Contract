@@ -224,6 +224,7 @@ cargo build --target wasm32v1-none --release
 | [Local Development Guide](docs/local-development.md) | Docker Stellar node, scripts, and workflow |
 | [SDK Integration Guide](docs/sdk-integration.md) | TypeScript / Stellar SDK examples (testnet) |
 | [SDK Usage Guide](sdk/README.md) | Complete NPM package usage guide for @iln/sdk |
+| [FAQ](docs/faq.md) | Frequently asked questions for users and developers |
 
 ### Architecture & security
 

@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Env, BytesN};
+use soroban_sdk::{contracttype, Address, BytesN, Env};
 
 use crate::config::Config;
 use crate::invoice::{AppealRecord, Invoice, LpFundRequest, ReputationScore};
