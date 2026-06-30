@@ -4,33 +4,7 @@ The official TypeScript SDK for the Invoice Liquidity Network (ILN) smart contra
 
 This SDK allows freelancers, liquidity providers, and integrators to interact seamlessly with the ILN protocol. It provides a typed, easy-to-use interface over the raw Soroban RPC calls.
 
-> 📘 **New to ILN?** The [SDK Integration Guide](../docs/sdk-integration.md)
-> walks through every flow — freelancer, LP, payer, governance, and analytics —
-> with complete, testnet-ready examples for both Node.js (keypair) and the
-> browser (Freighter).
-
-> 📖 **Terminology:** See the [Protocol Glossary](../docs/glossary.md) for definitions of invoice factoring, basis points, yield, and other ILN-specific terms.
-
-> 📋 **Release History:** See [CHANGELOG.md](./CHANGELOG.md) for version history and breaking changes.
-
-## Bundle Size
-
-The SDK bundle is checked in CI on every pull request. `@stellar/stellar-sdk` is a
-peer-style runtime dependency (not bundled into `dist/`); the budgets below apply
-to the compiled SDK output only.
-
-| Bundle | Gzipped size | Budget |
-| ------ | ------------ | ------ |
-| ESM (`dist/index.mjs`) | ~31 KB | 50 KB |
-| CJS (`dist/index.js`) | ~33 KB | 60 KB |
-
-Measure the exact current sizes locally:
-
-```bash
-npm run size
-```
-
-The script rebuilds the SDK and fails if either bundle exceeds its gzip budget.
+New to the protocol vocabulary? See the ILN [Glossary](../docs/glossary.md) for definitions of terms such as invoice factoring, LP, SAC, XDR, and effective yield.
 
 ## Installation
 
