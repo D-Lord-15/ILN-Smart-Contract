@@ -68,7 +68,7 @@ export async function submitInvoice(
   let refArg = nativeToScVal(undefined);
   if (params.referralCode) {
     const refBuffer = Buffer.from(params.referralCode, 'hex');
-    refArg = nativeToScVal(refBuffer, { type: "bytes", size: 32 });
+    refArg = nativeToScVal(refBuffer, { type: "bytes" });
   }
 
   const op = contract.call(
@@ -103,8 +103,8 @@ export async function submitInvoice(
   
   // Submit
   const sendResult = await server.sendTransaction(signedTx);
-  if (sendResult.errorResultXdr) {
-    throw new Error(`Transaction failed: ${sendResult.errorResultXdr}`);
+  if (sendResult.errorResult) {
+    throw new Error(`Transaction failed: ${sendResult.errorResult}`);
   }
 
   // Wait for completion

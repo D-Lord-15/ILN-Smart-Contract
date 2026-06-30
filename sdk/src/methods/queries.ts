@@ -7,7 +7,7 @@ import {
   nativeToScVal,
   Account,
 } from "@stellar/stellar-sdk";
-import type { Invoice } from "../types/invoice.js";
+import type { Invoice, InvoiceState } from "@invoice-liquidity/types";
 import { ILNError } from "../errors.js";
 import { computeEffectiveYieldBps } from "./fundInvoice.js";
 
@@ -72,7 +72,7 @@ export async function getInvoice(
     amount: BigInt(String(raw["amount"])),
     dueDate,
     discountRate,
-    status: (raw["status"] as unknown)?.tag || String(raw["status"]) as unknown, // handle scval enum
+    status: ((raw["status"] as Record<string, unknown>)?.tag || String(raw["status"])) as InvoiceState, // handle scval enum
     funder: raw["funder"] ? String(raw["funder"]) : undefined,
     fundedAt: raw["funded_at"] ? Number(raw["funded_at"]) : undefined,
     amountFunded: BigInt(String(raw["amount_funded"])),
@@ -145,7 +145,7 @@ export async function listInvoicesBySubmitter(
       amount: BigInt(String(raw["amount"])),
       dueDate,
       discountRate,
-      status: (raw["status"] as unknown)?.tag || String(raw["status"]) as unknown,
+      status: ((raw["status"] as Record<string, unknown>)?.tag || String(raw["status"])) as InvoiceState,
       funder: raw["funder"] ? String(raw["funder"]) : undefined,
       fundedAt: raw["funded_at"] ? Number(raw["funded_at"]) : undefined,
       amountFunded: BigInt(String(raw["amount_funded"])),
@@ -219,7 +219,7 @@ export async function listInvoicesByLP(
       amount: BigInt(String(raw["amount"])),
       dueDate,
       discountRate,
-      status: (raw["status"] as unknown)?.tag || String(raw["status"]) as unknown,
+      status: ((raw["status"] as Record<string, unknown>)?.tag || String(raw["status"])) as InvoiceState,
       funder: raw["funder"] ? String(raw["funder"]) : undefined,
       fundedAt: raw["funded_at"] ? Number(raw["funded_at"]) : undefined,
       amountFunded: BigInt(String(raw["amount_funded"])),

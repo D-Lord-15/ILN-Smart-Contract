@@ -78,8 +78,8 @@ export async function markPaid(
   const signedTx = await signTransaction(assembledTx);
   const sendResult = await server.sendTransaction(signedTx);
   
-  if (sendResult.errorResultXdr) {
-    throw new Error(`Transaction failed: ${sendResult.errorResultXdr}`);
+  if (sendResult.errorResult) {
+    throw new Error(`Transaction failed: ${sendResult.errorResult}`);
   }
 
   // Poll for completion

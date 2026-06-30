@@ -44,8 +44,8 @@ async function sendGovernanceCall(
   const assembledTx = SorobanRpc.assembleTransaction(tx, sim).build();
   const signedTx = await signTransaction(assembledTx);
   const sendResult = await server.sendTransaction(signedTx);
-  if (sendResult.errorResultXdr) {
-    throw new Error(`Transaction failed: ${sendResult.errorResultXdr}`);
+  if (sendResult.errorResult) {
+    throw new Error(`Transaction failed: ${sendResult.errorResult}`);
   }
 
   let status = await server.getTransaction(sendResult.hash);
@@ -116,7 +116,7 @@ export async function createProposal(
     nativeToScVal(sourceAccount.accountId(), { type: "address" }),
     nativeToScVal(action, { type: "u32" }),
     nativeToScVal(proposedValue, { type: "i128" }),
-    nativeToScVal(Buffer.from(descriptionHash, "hex"), { type: "bytes", size: 32 })
+    nativeToScVal(Buffer.from(descriptionHash, "hex"), { type: "bytes" })
   );
 
   const { txHash, returnValue } = await sendGovernanceCall(

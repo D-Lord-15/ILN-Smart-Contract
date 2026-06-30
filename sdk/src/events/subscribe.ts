@@ -30,7 +30,7 @@ const BACKOFF_FACTOR = 2;
 // Raw Horizon contract-event record (simplified)
 // ---------------------------------------------------------------------------
 
-interface HorizonContractEvent {
+interface any {
   type: string;
   /** Array of base-64 XDR ScVal strings representing the topics. */
   topic: string[];
@@ -80,14 +80,14 @@ function extractEventType(topics: string[]): string | null {
  * Returns `null` when the event cannot be decoded or is not a known ILN type.
  */
 export function parseContractEvent(
-  raw: HorizonContractEvent
+  raw: any
 ): ILNEvent | null {
   const eventType = extractEventType(raw.topic);
   if (!eventType) return null;
 
   // Decode the topics (beyond the first which is the type) and the value
-  const topics = raw.topic.slice(1).map(decodeScVal);
-  const value = decodeScVal(raw.value);
+  const topics = (raw.topic as string[]).slice(1).map(decodeScVal);
+  const value = decodeScVal((raw.value as string));
   const body = (typeof value === "object" && value !== null ? value : {}) as Record<string, unknown>;
 
   const big = (v: unknown): bigint => {
@@ -100,6 +100,8 @@ export function parseContractEvent(
   switch (eventType as ILNEventType) {
     case "submitted":
       return {
+        timestamp: num(body["timestamp"] ?? (raw.ledgerClosedAt as string)),
+        txHash: (raw.txHash as string) || "",
         type: "submitted",
         invoiceId: big(topics[0]),
         freelancer: str(topics[1]),
@@ -109,11 +111,13 @@ export function parseContractEvent(
         dueDate: big(body["due_date"]),
         discountRate: num(body["discount_rate"]),
         status: str(body["status"]),
-        timestamp: big(body["timestamp"]),
+        
       };
 
     case "funded":
       return {
+        timestamp: num(body["timestamp"] ?? (raw.ledgerClosedAt as string)),
+        txHash: (raw.txHash as string) || "",
         type: "funded",
         invoiceId: big(topics[0]),
         funder: str(topics[1]),
@@ -129,11 +133,13 @@ export function parseContractEvent(
         status: str(body["status"]),
         lp: str(body["lp"]),
         effectiveYieldBps: num(body["effective_yield_bps"]),
-        timestamp: big(body["timestamp"]),
+        
       };
 
     case "paid":
       return {
+        timestamp: num(body["timestamp"] ?? (raw.ledgerClosedAt as string)),
+        txHash: (raw.txHash as string) || "",
         type: "paid",
         invoiceId: big(topics[0]),
         payer: str(topics[1]),
@@ -150,6 +156,8 @@ export function parseContractEvent(
 
     case "partially_paid":
       return {
+        timestamp: num(body["timestamp"] ?? (raw.ledgerClosedAt as string)),
+        txHash: (raw.txHash as string) || "",
         type: "partially_paid",
         invoiceId: big(topics[0]),
         payer: str(topics[1]),
@@ -160,6 +168,8 @@ export function parseContractEvent(
 
     case "defaulted":
       return {
+        timestamp: num(body["timestamp"] ?? (raw.ledgerClosedAt as string)),
+        txHash: (raw.txHash as string) || "",
         type: "defaulted",
         invoiceId: big(topics[0]),
         funder: str(topics[1]),
@@ -173,9 +183,10 @@ export function parseContractEvent(
         status: str(body["status"]),
       };
 
-    case "default_appealed":
     case "appealed":
       return {
+        timestamp: num(body["timestamp"] ?? (raw.ledgerClosedAt as string)),
+        txHash: (raw.txHash as string) || "",
         type: "appealed",
         invoiceId: big(topics[0]),
         payer: str(topics[1]),
@@ -185,6 +196,8 @@ export function parseContractEvent(
 
     case "appeal_resolved":
       return {
+        timestamp: num(body["timestamp"] ?? (raw.ledgerClosedAt as string)),
+        txHash: (raw.txHash as string) || "",
         type: "appeal_resolved",
         invoiceId: big(topics[0]),
         payer: str(topics[1]),
@@ -194,6 +207,8 @@ export function parseContractEvent(
 
     case "disputed":
       return {
+        timestamp: num(body["timestamp"] ?? (raw.ledgerClosedAt as string)),
+        txHash: (raw.txHash as string) || "",
         type: "disputed",
         invoiceId: big(topics[0]),
         payer: str(topics[1]),
@@ -203,6 +218,8 @@ export function parseContractEvent(
 
     case "dispute_resolved":
       return {
+        timestamp: num(body["timestamp"] ?? (raw.ledgerClosedAt as string)),
+        txHash: (raw.txHash as string) || "",
         type: "dispute_resolved",
         invoiceId: big(topics[0]),
         resolutionHash: str(topics[1]),
@@ -212,16 +229,25 @@ export function parseContractEvent(
 
     case "token_added":
       return {
+        timestamp: num(body["timestamp"] ?? (raw.ledgerClosedAt as string)),
+        txHash: (raw.txHash as string) || "",
         type: "token_added",
         token: str(topics[0]),
         decimals: num(body["decimals"]),
       };
 
     case "token_removed":
-      return { type: "token_removed", token: str(topics[0]) };
+      return {
+        timestamp: num(body["timestamp"] ?? (raw.ledgerClosedAt as string)),
+        txHash: (raw.txHash as string) || "",
+        type: "token_removed",
+        token: str(topics[1]),
+      } as unknown as ILNEvent;
 
     case "parameter_updated":
       return {
+        timestamp: num(body["timestamp"] ?? (raw.ledgerClosedAt as string)),
+        txHash: (raw.txHash as string) || "",
         type: "parameter_updated",
         paramName: str(topics[0]),
         oldValue: big(body["old_value"]),
@@ -231,6 +257,8 @@ export function parseContractEvent(
 
     case "transferred":
       return {
+        timestamp: num(body["timestamp"] ?? (raw.ledgerClosedAt as string)),
+        txHash: (raw.txHash as string) || "",
         type: "transferred",
         invoiceId: big(topics[0]),
         oldFreelancer: str(body["old_freelancer"]),
@@ -240,6 +268,8 @@ export function parseContractEvent(
 
     case "cancelled":
       return {
+        timestamp: num(body["timestamp"] ?? (raw.ledgerClosedAt as string)),
+        txHash: (raw.txHash as string) || "",
         type: "cancelled",
         invoiceId: big(topics[0]),
         freelancer: str(body["freelancer"]),
@@ -247,29 +277,35 @@ export function parseContractEvent(
       };
 
     case "paused":
-      return { type: "paused", timestamp: big(body["timestamp"]) };
+      return { type: "paused", timestamp: num(body["timestamp"]) };
 
     case "unpaused":
-      return { type: "unpaused", timestamp: big(body["timestamp"]) };
+      return { type: "unpaused", timestamp: num(body["timestamp"]) };
 
     case "upgraded":
       return {
+        timestamp: num(body["timestamp"] ?? (raw.ledgerClosedAt as string)),
+        txHash: (raw.txHash as string) || "",
         type: "upgraded",
         admin: str(topics[0]),
         newWasmHash: str(body["new_wasm_hash"]),
-        timestamp: big(body["timestamp"]),
+        
       };
 
     case "admin_changed":
       return {
+        timestamp: num(body["timestamp"] ?? (raw.ledgerClosedAt as string)),
+        txHash: (raw.txHash as string) || "",
         type: "admin_changed",
         oldAdmin: str(body["old_admin"]),
         newAdmin: str(body["new_admin"]),
-        timestamp: big(body["timestamp"]),
+        
       };
 
     case "fund_requested":
       return {
+        timestamp: num(body["timestamp"] ?? (raw.ledgerClosedAt as string)),
+        txHash: (raw.txHash as string) || "",
         type: "fund_requested",
         invoiceId: big(topics[0]),
         lp: str(topics[1]),
@@ -278,6 +314,8 @@ export function parseContractEvent(
 
     case "fund_queue_resolved":
       return {
+        timestamp: num(body["timestamp"] ?? (raw.ledgerClosedAt as string)),
+        txHash: (raw.txHash as string) || "",
         type: "fund_queue_resolved",
         invoiceId: big(topics[0]),
         approvedLp: str(topics[1]),
@@ -368,7 +406,7 @@ export function subscribe(
         .limit(200);
 
       closeStream = builder.stream({
-        onmessage(raw: HorizonContractEvent) {
+        onmessage(raw: any) {
           if (stopped) return;
           try {
             const event = parseContractEvent(raw);
