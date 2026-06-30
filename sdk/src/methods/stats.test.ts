@@ -14,10 +14,8 @@ import { SorobanRpc, Address } from "@stellar/stellar-sdk";
 // vi.mock — patch scValToNative only
 // ---------------------------------------------------------------------------
 
-vi.mock("@stellar/stellar-sdk", () => {
-  const actual = vi.importActual(
-    "@stellar/stellar-sdk"
-  ) as typeof import("@stellar/stellar-sdk");
+vi.mock("@stellar/stellar-sdk", async () => {
+  const actual = await vi.importActual<typeof import("@stellar/stellar-sdk")>("@stellar/stellar-sdk");
   return {
     ...actual,
     scValToNative: vi.fn().mockImplementation(actual.scValToNative),
@@ -25,7 +23,7 @@ vi.mock("@stellar/stellar-sdk", () => {
 });
 
 import { scValToNative } from "@stellar/stellar-sdk";
-const mockScValToNative = scValToNative as jest.Mock;
+const mockScValToNative = scValToNative as vi.Mock;
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -40,7 +38,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 // ---------------------------------------------------------------------------
@@ -172,7 +170,7 @@ describe("getContractStats — RPC errors", () => {
 
   it("propagates RPC connection errors", async () => {
     const server = {
-      simulateTransaction: jest
+      simulateTransaction: vi
         .fn()
         .mockRejectedValue(new Error("fetch failed")),
     } as unknown as SorobanRpc.Server;
