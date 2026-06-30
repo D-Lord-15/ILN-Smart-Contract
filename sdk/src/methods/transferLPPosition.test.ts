@@ -11,7 +11,7 @@ vi.mock("@stellar/stellar-sdk", async () => {
     ...actual,
     SorobanRpc: {
       ...(actual.SorobanRpc as object),
-      Api: (actual.SorobanRpc as any).Api,
+      Api: (actual.SorobanRpc as unknown).Api,
       assembleTransaction: vi.fn(() => ({ build: () => ({}) })),
     },
   };
@@ -37,13 +37,13 @@ describe("transferLPPosition", () => {
   });
 
   it("transfers the position successfully", async () => {
-    // @ts-ignore
+    // @ts-expect-error mock
     mockServer.simulateTransaction.mockResolvedValue({ result: { retval: {} } });
-    // @ts-ignore
+    // @ts-expect-error mock
 
-    // @ts-ignore
+    // @ts-expect-error mock
     mockServer.sendTransaction.mockResolvedValue({ status: "PENDING", hash: "txABC" });
-    // @ts-ignore
+    // @ts-expect-error mock
     mockServer.getTransaction.mockResolvedValue({ status: SorobanRpc.Api.GetTransactionStatus.SUCCESS });
 
     const res = await transferLPPosition(mockServer, CONTRACT, 7n, NEW_LP, account, sign, PASS);

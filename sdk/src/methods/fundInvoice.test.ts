@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from "vitest";
 /**
  * Tests for fundInvoice() — covers:
  *   - pre-approved path (no approval needed)
@@ -18,7 +18,7 @@ vi.mock("@stellar/stellar-sdk", async () => {
   const actual = await vi.importActual<typeof import("@stellar/stellar-sdk")>("@stellar/stellar-sdk");
   class MockTransaction {
     sign = vi.fn();
-    constructor(_xdr: string, _network: string) {}
+    constructor() {}
   }
   return {
     ...actual,
@@ -58,7 +58,6 @@ const mockIsAllowanceSufficient = isAllowanceSufficient as vi.MockedFunction<
 
 const LP_SECRET = "SAQFWOYMQZD3ZQ2GMY7IXITDC7IDYMZYVEKB5LOXTMT2MCPDEUUXEN2E";
 const LP_KEYPAIR = Keypair.fromSecret(LP_SECRET);
-const LP_PUBLIC = LP_KEYPAIR.publicKey();
 const CONTRACT_ID = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4";
 const TOKEN_ID = "CAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABDQF";
 
@@ -84,15 +83,6 @@ const mockServer = {
 // Helper: make getAccount resolve with the LP's fake account data
 function mockAccountLoad(seq = "100") {
   (mockServer.getAccount as vi.Mock).mockResolvedValue({ sequence: seq });
-}
-
-// Helper: make simulateTransaction return a fake invoice via retval
-function mockInvoiceSimulation() {
-  (mockServer.simulateTransaction as vi.Mock).mockImplementation(
-    async (_tx) => ({
-      result: { retval: { _stub: true } },
-    })
-  );
 }
 
 // scValToNative mock reference

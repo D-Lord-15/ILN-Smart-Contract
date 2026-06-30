@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect} from 'vitest';
 /**
  * Tests for ILNClient — covers:
  *   - testnet / mainnet / custom factory methods
@@ -27,7 +27,7 @@ vi.mock("@stellar/stellar-sdk", async () => {
     SorobanRpc: {
       ...(actual.SorobanRpc as object),
       Server: mockServer,
-      Api: (actual.SorobanRpc as any)?.Api,
+      Api: (actual.SorobanRpc as unknown)?.Api,
     },
   };
 });
@@ -38,6 +38,7 @@ vi.mock("@stellar/stellar-sdk", async () => {
 
 describe("ILNClient.testnet", () => {
   it("creates a client with testnet defaults", () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const client = ILNClient.testnet();
 
     expect(client.networkPassphrase).toBe(Networks.TESTNET);
@@ -46,7 +47,7 @@ describe("ILNClient.testnet", () => {
   });
 
   it("uses the testnet RPC URL", () => {
-    const client = ILNClient.testnet();
+    ILNClient.testnet();
     // We can't inspect rpc.serverUrl directly in v12, but the constructor
     // receives the correct URL.
     expect(TESTNET_RPC_URL).toContain("testnet");
@@ -54,7 +55,7 @@ describe("ILNClient.testnet", () => {
 
   it("accepts an optional signer", () => {
     const signer = { publicKey: "GAA", signTransaction: vi.fn() };
-    const client = ILNClient.testnet(signer as any);
+    const client = ILNClient.testnet(signer as unknown);
     expect(client.signer).toBe(signer);
   });
 
@@ -88,7 +89,7 @@ describe("ILNClient.mainnet", () => {
 
   it("accepts an optional signer", () => {
     const signer = { publicKey: "GAA", signTransaction: vi.fn() };
-    const client = ILNClient.mainnet(signer as any);
+    const client = ILNClient.mainnet(signer as unknown);
     expect(client.signer).toBe(signer);
   });
 
@@ -113,7 +114,7 @@ describe("ILNClient.custom", () => {
       rpcUrl: "https://soroban-testnet.stellar.org",
       networkPassphrase: "Standalone Network ; February 2017",
       contractId: "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4",
-      signer: signer as any,
+      signer: signer as unknown,
     });
 
     expect(client.networkPassphrase).toBe(

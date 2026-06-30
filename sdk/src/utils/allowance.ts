@@ -140,7 +140,7 @@ export async function buildApproveTransaction(
     .build();
 
   const preparedTx = await server.prepareTransaction(tx);
-  return (preparedTx as any).toEnvelope().toXDR("base64");
+  return (preparedTx as unknown).toEnvelope().toXDR("base64");
 }
 
 // ---------------------------------------------------------------------------

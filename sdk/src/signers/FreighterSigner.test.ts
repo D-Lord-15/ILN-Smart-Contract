@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, afterEach } from 'vitest';
 /**
  * Tests for FreighterSigner — covers:
  *   - Installation detection (WalletNotInstalled)
@@ -10,7 +10,7 @@ import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
  */
 
 import { FreighterSigner, ILNError, ILNErrorCode } from "./FreighterSigner.js";
-import { Networks, SorobanRpc, TransactionBuilder, Account, BASE_FEE, Operation, Asset, Keypair } from "@stellar/stellar-sdk";
+import { Networks, TransactionBuilder, Account, BASE_FEE, Operation, Asset, Keypair } from "@stellar/stellar-sdk";
 
 // ---------------------------------------------------------------------------
 // Mock Freighter API
@@ -21,11 +21,11 @@ import { createMockFreighter, makeMockServer } from "@iln/test-utils";
 type MockFreighter = ReturnType<typeof createMockFreighter>;
 
 function installFreighter(mock: MockFreighter): void {
-  (global as any).window = { freighterApi: mock };
+  (global as unknown).window = { freighterApi: mock };
 }
 
 function uninstallFreighter(): void {
-  delete (global as any).window;
+  delete (global as unknown).window;
 }
 
 function buildTestTx(kp: Keypair = Keypair.random()) {

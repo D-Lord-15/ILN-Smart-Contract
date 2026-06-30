@@ -45,7 +45,7 @@ export class ILNError extends Error {
   static InvalidTransfer = class InvalidTransfer extends ILNError { constructor(msg = "Invalid transfer") { super(msg, 39); } };
   static InsufficientAmount = class InsufficientAmount extends ILNError { constructor(msg = "Insufficient amount") { super(msg, 999); } };
 
-  static fromError(error: any): Error {
+  static fromError(error: unknown): Error {
     const errorString = String(error);
     const match = errorString.match(/Error\(Contract, (\d+)\)/);
     if (match) {

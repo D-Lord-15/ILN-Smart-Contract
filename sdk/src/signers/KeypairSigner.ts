@@ -139,9 +139,9 @@ export class KeypairSigner implements ISigner {
     // Step 1: simulate → get footprint
     const preparedTx = await server.prepareTransaction(tx);
 
-    if (SorobanRpc.Api.isSimulationError(preparedTx as any)) {
+    if (SorobanRpc.Api.isSimulationError(preparedTx as Record<string, unknown>)) {
       throw new Error(
-        `Soroban simulation failed: ${(preparedTx as any).error}`
+        `Soroban simulation failed: ${(preparedTx as Record<string, unknown>).error}`
       );
     }
 

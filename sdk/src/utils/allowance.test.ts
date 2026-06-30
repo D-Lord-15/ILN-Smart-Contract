@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach} from 'vitest';
 import {
   getAllowance,
   buildApproveTransaction,
@@ -35,9 +35,6 @@ describe("getAllowance", () => {
   };
 
   it("returns amount and expirationLedger from struct retval", async () => {
-    const mockScVal = {
-      toXDR: () => Buffer.alloc(0),
-    };
     (mockServer.simulateTransaction as vi.Mock).mockResolvedValue({
       result: {
         retval: {
@@ -145,7 +142,7 @@ describe("buildApproveTransaction", () => {
 
     const mockPreparedTx = {
       toEnvelope: () => ({
-        toXDR: (_fmt: string) => "AAAABASE64XDR",
+        toXDR: () => "AAAABASE64XDR",
       }),
     };
     (mockServer.prepareTransaction as vi.Mock).mockResolvedValue(
@@ -174,10 +171,9 @@ describe("buildApproveTransaction", () => {
     });
 
     // Capture what prepareTransaction received to verify expiry ledger
-    let capturedTx: any;
+
     (mockServer.prepareTransaction as vi.Mock).mockImplementation(
-      async (tx) => {
-        capturedTx = tx;
+      async () => {
         return { toEnvelope: () => ({ toXDR: () => "xdr" }) };
       }
     );

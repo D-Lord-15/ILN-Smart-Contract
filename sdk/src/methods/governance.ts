@@ -70,18 +70,18 @@ async function sendGovernanceCall(
 /** Normalise a raw contract proposal record into a {@link Proposal}. */
 function parseProposal(raw: Record<string, unknown>): Proposal {
   const statusTag =
-    (raw["status"] as any)?.tag ?? String(raw["status"]);
+    (raw["status"] as unknown)?.tag ?? String(raw["status"]);
   return {
     id: BigInt(String(raw["id"])),
     action: Number(raw["action"]) as ProposalAction,
     proposedValue: BigInt(String(raw["proposed_value"] ?? 0)),
     descriptionHash: raw["description_hash"]
-      ? Buffer.from(raw["description_hash"] as any).toString("hex")
+      ? Buffer.from(raw["description_hash"] as unknown).toString("hex")
       : "",
     proposer: String(raw["proposer"]),
     votesFor: BigInt(String(raw["votes_for"] ?? 0)),
     votesAgainst: BigInt(String(raw["votes_against"] ?? 0)),
-    status: (ProposalStatus as any)[statusTag] ?? (statusTag as ProposalStatus),
+    status: (ProposalStatus as unknown)[statusTag] ?? (statusTag as ProposalStatus),
     votingEndsAt: Number(raw["voting_ends_at"] ?? 0),
   };
 }

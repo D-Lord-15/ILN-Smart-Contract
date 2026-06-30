@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach} from 'vitest';
 /**
  * Tests for getContractStats().
  *
@@ -7,7 +7,6 @@ import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
  */
 
 import { getContractStats } from "./stats.js";
-import type { ContractStats } from "./stats.js";
 import { SorobanRpc, Address } from "@stellar/stellar-sdk";
 
 // ---------------------------------------------------------------------------
@@ -45,7 +44,7 @@ beforeEach(() => {
 // Mock server helpers
 // ---------------------------------------------------------------------------
 
-function serverWith(sim: any): SorobanRpc.Server {
+function serverWith(sim: unknown): SorobanRpc.Server {
   return {
     simulateTransaction: vi.fn().mockResolvedValue(sim),
   } as unknown as SorobanRpc.Server;

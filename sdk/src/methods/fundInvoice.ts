@@ -320,11 +320,9 @@ export async function fundInvoice(
     .build();
 
   const preparedFundTx = await server.prepareTransaction(fundTx);
-  (preparedFundTx as any).sign(lpKeypair);
+  (preparedFundTx as Transaction).sign(lpKeypair);
 
-  const fundSendResult = await server.sendTransaction(
-    preparedFundTx as any
-  );
+  const fundSendResult = await server.sendTransaction(preparedFundTx as Transaction);
 
   if (fundSendResult.status === "ERROR") {
     throw new Error(

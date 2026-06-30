@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect} from 'vitest';
 import { KeypairSigner } from "./KeypairSigner.js";
 import { Keypair, SorobanRpc, Networks, TransactionBuilder, Account, BASE_FEE, Operation, Asset } from "@stellar/stellar-sdk";
 
@@ -33,7 +33,6 @@ function buildTestTx(sourceKp: Keypair = TEST_KP) {
 
 import { makeMockServer } from "@iln/test-utils";
 
-const MOCK_SIGNED_XDR = "AAAASIGNEDXDR==";
 
 // ---------------------------------------------------------------------------
 // Constructor

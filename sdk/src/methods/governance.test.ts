@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach} from 'vitest';
 import {
   createProposal,
   castVote,
@@ -33,13 +33,13 @@ describe("governance", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // @ts-ignore
+    // @ts-expect-error mock
 
-    // @ts-ignore
+    // @ts-expect-error mock
     mockServer.simulateTransaction.mockResolvedValue({ result: { retval: {} } });
-    // @ts-ignore
+    // @ts-expect-error mock
     mockServer.sendTransaction.mockResolvedValue({ status: "PENDING", hash: "txGOV" });
-    // @ts-ignore
+    // @ts-expect-error mock
     mockServer.getTransaction.mockResolvedValue({
       status: SorobanRpc.Api.GetTransactionStatus.SUCCESS,
       returnValue: {},

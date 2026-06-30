@@ -362,7 +362,7 @@ export function subscribe(
     try {
       // Horizon's contractEvents() returns an EventSource-like stream.
       // The SDK builder pattern: horizon.contractEvents(contractId).stream(...)
-      const builder = (horizon as any)
+      const builder = (horizon as unknown)
         .contractEvents()
         .forContract(contractId)
         .limit(200);

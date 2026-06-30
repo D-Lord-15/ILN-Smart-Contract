@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach} from 'vitest';
 /**
  * Tests for getReputation().
  *
@@ -50,7 +50,7 @@ beforeEach(() => {
 // Mock server helpers
 // ---------------------------------------------------------------------------
 
-function serverWith(sim: any): SorobanRpc.Server {
+function serverWith(sim: unknown): SorobanRpc.Server {
   return {
     simulateTransaction: vi.fn().mockResolvedValue(sim),
   } as unknown as SorobanRpc.Server;
