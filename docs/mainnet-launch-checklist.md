@@ -8,11 +8,11 @@ Status legend: `Not started`, `In progress`, `Blocked`, `Complete`.
 
 | Item | Description | Owner | Status | Link |
 |------|-------------|-------|--------|------|
-| External security audit | Complete an external audit of all Soroban contracts, deployment scripts, SDK transaction builders, indexer APIs, and notifications webhooks. | Security lead | In progress | [#298](https://github.com/Invoice-Liquidity-Network/ILN-Smart-Contract/issues/298) |
+| External security audit | Complete an external audit of all Soroban contracts, deployment scripts, SDK transaction builders, indexer APIs, and notifications webhooks. | Security lead | Complete | [#298](https://github.com/Invoice-Liquidity-Network/ILN-Smart-Contract/issues/298) |
 | Coverage thresholds met | Enforce and publish coverage thresholds for contracts, SDK, indexer, and notifications before launch. | QA lead | In progress | [CI workflow](../.github/workflows/ci.yml) |
 | Fuzz tests run | Run the `iln_fuzz` crate and contract property suites against launch candidates and archive results. | Contracts lead | In progress | [contracts/fuzz](../contracts/fuzz) |
 | Threat model reviewed | Review protocol threats, update mitigations, and record unresolved accepted risks. | Security lead | In progress | [Threat Model](threat-model.md) |
-| Security policy complete | Publish component-specific reporting, response, safe-harbor, and severity guidance. | Security lead | In progress | [#299](https://github.com/Invoice-Liquidity-Network/ILN-Smart-Contract/issues/299) |
+| Security policy complete | Publish component-specific reporting, response, safe-harbor, and severity guidance. | Security lead | Complete | [#299](https://github.com/Invoice-Liquidity-Network/ILN-Smart-Contract/issues/299) |
 
 ## Contracts
 
@@ -38,8 +38,8 @@ Status legend: `Not started`, `In progress`, `Blocked`, `Complete`.
 
 | Item | Description | Owner | Status | Link |
 |------|-------------|-------|--------|------|
-| Local development guide complete | Verify a fresh-machine local setup path for contracts, Docker, SDK, CLI, indexer, and notifications. | Docs lead | In progress | [#300](https://github.com/Invoice-Liquidity-Network/ILN-Smart-Contract/issues/300) |
-| Glossary complete | Publish protocol terminology for DeFi, invoice factoring, Stellar, and ILN-specific terms. | Docs lead | In progress | [#301](https://github.com/Invoice-Liquidity-Network/ILN-Smart-Contract/issues/301) |
+| Local development guide complete | Verify a fresh-machine local setup path for contracts, Docker, SDK, CLI, indexer, and notifications. | Docs lead | Complete | [#300](https://github.com/Invoice-Liquidity-Network/ILN-Smart-Contract/issues/300) |
+| Glossary complete | Publish protocol terminology for DeFi, invoice factoring, Stellar, and ILN-specific terms. | Docs lead | Complete | [#301](https://github.com/Invoice-Liquidity-Network/ILN-Smart-Contract/issues/301) |
 | SDK guide complete | Confirm SDK examples match current contract IDs, methods, and error handling. | SDK lead | In progress | [SDK Integration](sdk-integration.md) |
 | Security docs linked | Link security policy from root, docs index, and release checklist. | Docs lead | In progress | [Security Policy](security.md) |
 | User-facing launch notes | Prepare final mainnet usage, known limitations, and migration notes. | Release lead | Not started | [CHANGELOG](../CHANGELOG.md) |
