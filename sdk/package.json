@@ -24,6 +24,7 @@
     "docs": "typedoc --out docs src/index.ts"
   },
   "dependencies": {
+    "@invoice-liquidity/types": "workspace:*",
     "@stellar/stellar-sdk": "^12.3.0"
   },
   "devDependencies": {
