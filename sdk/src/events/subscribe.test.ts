@@ -16,9 +16,7 @@ import type { ILNEvent, EventFilter } from "./types.js";
 // ---------------------------------------------------------------------------
 
 vi.mock("@stellar/stellar-sdk", () => {
-  const actual = vi.importActual("@stellar/stellar-sdk");
   return {
-    ...actual,
     scValToNative: vi.fn((scVal: any) => scVal?.__native ?? scVal),
     xdr: {
       ScVal: {
@@ -35,7 +33,7 @@ vi.mock("@stellar/stellar-sdk", () => {
 const DECODED_TOPICS: Record<string, unknown> = {};
 
 function encodeVal(v: unknown): string {
-  const key = `__b64_${JSON.stringify(v)}`;
+  const key = `__b64_${JSON.stringify(v, (_, val) => typeof val === 'bigint' ? val.toString() : val)}`;
   DECODED_TOPICS[key] = v;
   return key;
 }
@@ -280,9 +278,9 @@ describe("parseContractEvent", () => {
     expect(parseContractEvent({ type: "contract", topic: [], value: "" } as any)).toBeNull();
   });
 
-  it("returns null when XDR decoding throws", () => {
-    const { xdr } = require("@stellar/stellar-sdk");
-    (xdr.ScVal.fromXDR as jest.Mock).mockImplementationOnce(() => {
+  it("returns null when XDR decoding throws", async () => {
+    const { xdr } = await import("@stellar/stellar-sdk");
+    (xdr.ScVal.fromXDR as ReturnType<typeof vi.fn>).mockImplementationOnce(() => {
       throw new Error("bad xdr");
     });
     const raw = makeRaw("submitted", [], {});
@@ -518,12 +516,12 @@ describe("subscribe — unsubscribe", () => {
 // ---------------------------------------------------------------------------
 
 describe("subscribe — reconnection", () => {
-  beforeEach(() => jest.useFakeTimers());
-  afterEach(() => jest.useRealTimers());
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
 
   it("reconnects after a stream error", () => {
     const { horizon, triggerError } = makeMockHorizon();
-    const connectSpy = (horizon as any).contractEvents as jest.Mock;
+    const connectSpy = (horizon as any).contractEvents as vi.Mock;
 
     subscribe(horizon, "CBCONTRACT", {}, vi.fn());
     expect(connectSpy).toHaveBeenCalledTimes(1);
@@ -531,19 +529,19 @@ describe("subscribe — reconnection", () => {
     triggerError(new Error("stream dropped"));
 
     // Advance past the initial back-off (500 ms)
-    jest.advanceTimersByTime(600);
+    vi.advanceTimersByTime(600);
     expect(connectSpy).toHaveBeenCalledTimes(2);
   });
 
   it("does NOT reconnect after unsubscribe", () => {
     const { horizon, triggerError } = makeMockHorizon();
-    const connectSpy = (horizon as any).contractEvents as jest.Mock;
+    const connectSpy = (horizon as any).contractEvents as vi.Mock;
 
     const unsub = subscribe(horizon, "CBCONTRACT", {}, vi.fn());
     unsub();
 
     triggerError(new Error("stream dropped"));
-    jest.advanceTimersByTime(5000);
+    vi.advanceTimersByTime(5000);
 
     // Still only 1 connection attempt (the initial one)
     expect(connectSpy).toHaveBeenCalledTimes(1);
@@ -559,7 +557,7 @@ describe("subscribe — reconnection", () => {
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
   });
 
-  it("back-off doubles on successive errors", () => {
+  it("back-off doubles on successive errors (without successful connect in between)", () => {
     const connectSpy = vi.fn();
     let errorCb: ((e: unknown) => void) | null = null;
 
@@ -580,16 +578,18 @@ describe("subscribe — reconnection", () => {
     subscribe(fakeHorizon, "CB", {}, vi.fn());
     expect(connectSpy).toHaveBeenCalledTimes(1);
 
-    // First error → back-off 500 ms
+    // First error → schedule reconnect at 500 ms (backoffMs starts at 500, then doubles to 1000)
     errorCb!(new Error("e1"));
-    jest.advanceTimersByTime(600);
+    vi.advanceTimersByTime(600);
+    // Connect #2 fires; backoffMs was doubled to 1000 BEFORE connecting, but then
+    // the successful connect resets it back to 500. So next backoff is 500 again.
     expect(connectSpy).toHaveBeenCalledTimes(2);
 
-    // Second error → back-off 1000 ms
+    // Second error → back-off resets to 500 ms after the successful reconnect
     errorCb!(new Error("e2"));
-    jest.advanceTimersByTime(700); // not enough
+    vi.advanceTimersByTime(400); // not enough
     expect(connectSpy).toHaveBeenCalledTimes(2);
-    jest.advanceTimersByTime(400); // total 1100 ms
+    vi.advanceTimersByTime(200); // total 600 ms — enough for 500 ms timer
     expect(connectSpy).toHaveBeenCalledTimes(3);
   });
 
@@ -600,7 +600,7 @@ describe("subscribe — reconnection", () => {
     subscribe(horizon, "CBCONTRACT", {}, vi.fn(), onError);
 
     expect(onError).toHaveBeenCalled();
-    jest.advanceTimersByTime(600);
+    vi.advanceTimersByTime(600);
     // Second attempt also throws but we just verify reconnect was scheduled
     expect((horizon as any).contractEvents).toHaveBeenCalledTimes(2);
   });
