@@ -15,34 +15,7 @@ import {
   Networks,
 } from "@stellar/stellar-sdk";
 import { retry } from "../utils/retry.js";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-/**
- * Protocol-wide statistics returned by `get_contract_stats()`.
- *
- * Mirrors `ContractStats` in the Rust contract.
- */
-export interface ContractStats {
-  /** Total number of invoices ever created. */
-  totalInvoices: bigint;
-  /** Cumulative number of fully-funded invoices. */
-  totalFunded: bigint;
-  /** Cumulative number of paid invoices. */
-  totalPaid: bigint;
-  /** Total USDC volume (in stroops, 6 decimals). */
-  totalVolumeUsdc: bigint;
-  /** Total EURC volume (in stroops, 6 decimals). */
-  totalVolumeEurc: bigint;
-  /** Total XLM volume (in stroops, 7 decimals). */
-  totalVolumeXlm: bigint;
-  /** Per-token volume map: token address → volume. */
-  volumeByToken: Record<string, bigint>;
-  /** Total volume normalized to USD (depends on oracle price feed). */
-  totalVolumeUsdNormalized: bigint;
-}
+import { decodeContractStats, type ContractStats } from "../utils/xdrDecoder.js";
 
 // ---------------------------------------------------------------------------
 // getContractStats
@@ -108,26 +81,5 @@ export async function getContractStats(
   }
 
   const raw = scValToNative(sim.result.retval) as Record<string, unknown>;
-
-  // Parse per-token volumes: the contract returns a Vec<(Address, i128)>
-  const volumeByToken: Record<string, bigint> = {};
-  const rawTokenVolumes = raw["token_volumes"] as Array<[string, string]> | undefined;
-  if (Array.isArray(rawTokenVolumes)) {
-    for (const [token, volume] of rawTokenVolumes) {
-      volumeByToken[token] = BigInt(volume);
-    }
-  }
-
-  return {
-    totalInvoices: BigInt(String(raw["total_invoices"] ?? "0")),
-    totalFunded: BigInt(String(raw["total_funded"] ?? "0")),
-    totalPaid: BigInt(String(raw["total_paid"] ?? "0")),
-    totalVolumeUsdc: BigInt(String(raw["total_volume_usdc"] ?? "0")),
-    totalVolumeEurc: BigInt(String(raw["total_volume_eurc"] ?? "0")),
-    totalVolumeXlm: BigInt(String(raw["total_volume_xlm"] ?? "0")),
-    volumeByToken,
-    totalVolumeUsdNormalized: BigInt(
-      String(raw["total_volume_usd_normalized"] ?? "0")
-    ),
-  };
+  return decodeContractStats(raw);
 }

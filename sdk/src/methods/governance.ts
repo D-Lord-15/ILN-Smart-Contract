@@ -17,6 +17,7 @@ import {
   type CreateProposalResult,
 } from "../types/governance.js";
 import { retry } from "../utils/retry.js";
+import { decodeGovernanceProposal } from "../utils/xdrDecoder.js";
 
 /**
  * Build, simulate, sign and submit a governance transaction, polling until the
@@ -223,7 +224,8 @@ export async function getProposal(
     throw new ILNError(`Proposal ${id} not found`);
   }
 
-  return parseProposal(scValToNative(sim.result.retval) as Record<string, unknown>);
+  const raw = scValToNative(sim.result.retval) as Record<string, unknown>;
+  return decodeGovernanceProposal(raw);
 }
 
 /**
@@ -256,7 +258,7 @@ export async function listProposals(
   }
 
   const rawArr = scValToNative(sim.result.retval) as Record<string, unknown>[];
-  let proposals = rawArr.map(parseProposal);
+  let proposals = rawArr.map(raw => decodeGovernanceProposal(raw as Record<string, unknown>));
 
   if (filter?.status) {
     proposals = proposals.filter(p => p.status === filter.status);
