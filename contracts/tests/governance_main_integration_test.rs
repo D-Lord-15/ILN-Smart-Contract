@@ -151,7 +151,15 @@ fn test_update_max_discount_via_governance_takes_effect() {
     // Before the proposal: discount_rate=2_000 (20 %) is below the default
     // maximum of 5_000 (50 %) so submission succeeds.
     let due_date = LEDGER_TIMESTAMP + DUE_DATE_OFFSET;
-    let result_before = t.iln.try_submit_invoice(try_ & ReferralCode::None);
+    let result_before = t.iln.try_submit_invoice(
+        &t.freelancer,
+        &t.payer,
+        &INVOICE_AMOUNT,
+        &due_date,
+        &DISCOUNT_RATE,
+        &t.payment_token_addr,
+        &ReferralCode::None,
+    );
     assert!(
         result_before.is_ok(),
         "submission with rate=2000 should succeed before governance change"
@@ -172,7 +180,15 @@ fn test_update_max_discount_via_governance_takes_effect() {
 
     // After execution: discount_rate=2_000 now exceeds the new maximum of 1_000.
     let due_date_2 = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let result_after = t.iln.try_submit_invoice(try_ & ReferralCode::None);
+    let result_after = t.iln.try_submit_invoice(
+        &t.freelancer,
+        &t.payer,
+        &INVOICE_AMOUNT,
+        &due_date_2,
+        &DISCOUNT_RATE,
+        &t.payment_token_addr,
+        &ReferralCode::None,
+    );
     assert_eq!(
         result_after,
         Err(Ok(ContractError::InvalidDiscountRate)),
@@ -180,7 +196,15 @@ fn test_update_max_discount_via_governance_takes_effect() {
     );
 
     // A submission at the new limit (1 000) still succeeds.
-    let result_at_limit = t.iln.try_submit_invoice(try_ & ReferralCode::None);
+    let result_at_limit = t.iln.try_submit_invoice(
+        &t.freelancer,
+        &t.payer,
+        &INVOICE_AMOUNT,
+        &due_date_2,
+        &1_000,
+        &t.payment_token_addr,
+        &ReferralCode::None,
+    );
     assert!(
         result_at_limit.is_ok(),
         "submission with rate==new_max (1000) must still succeed"

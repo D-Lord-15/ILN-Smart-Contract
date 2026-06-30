@@ -17,7 +17,11 @@
 //! 7. Stale but require_oracle_verification=false           → succeeds (check skipped).
 
 use super::*;
-use crate::test::{setup, DISCOUNT_RATE, DUE_DATE_OFFSET, INVOICE_AMOUNT};
+use crate::test::setup;
+
+const INVOICE_AMOUNT: i128 = 1_000_000_000;
+const DISCOUNT_RATE: u32 = 300;
+const DUE_DATE_OFFSET: u64 = 60 * 60 * 24 * 30;
 use soroban_sdk::{
     contract, contractimpl,
     testutils::{Address as _, Ledger as _},

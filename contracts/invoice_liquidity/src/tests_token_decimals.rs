@@ -255,7 +255,7 @@ fn test_6dec_minimum_fails_for_7_decimal_token() {
     let due_date = env.ledger().timestamp() + DUE_DATE_OFFSET;
 
     // 1_000_000 is ≥ the old hard-coded USDC floor but < 1 XLM (10_000_000)
-    let result = contract.try_submit_invoice(try_ & ReferralCode::None);
+    let result = contract.try_submit_invoice(&ReferralCode::None);
     assert_eq!(
         result,
         Err(Ok(ContractError::InvalidAmount)),

@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 use crate::test::setup;
+use crate::ReferralCode;
 use soroban_sdk::{testutils::Address as _, token::StellarAssetClient, Address};
 
 #[test]
@@ -20,7 +21,7 @@ fn test_list_invoices_by_lp_pagination() {
     for i in 0..5 {
         let id = t.contract.submit_invoice(&ReferralCode::None);
         t.contract
-            .fund_invoice(&lp, &id, &(1_000_000_000 + i as i128, &false));
+            .fund_invoice(&lp, &id, &(1_000_000_000 + i as i128), &false);
     }
 
     // Page 0, size 2

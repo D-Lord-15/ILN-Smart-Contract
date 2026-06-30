@@ -622,7 +622,10 @@ fn test_undelegate_votes_emits_votes_undelegated_event() {
     t.contract.delegate_votes(&t.voter_a, &t.voter_b);
     t.contract.undelegate_votes(&t.voter_a);
     let events = t.env.events().all();
-    assert!(!events.is_empty(), "VotesUndelegated event should be emitted");
+    assert!(
+        !events.is_empty(),
+        "VotesUndelegated event should be emitted"
+    );
 }
 
 #[test]
@@ -1039,7 +1042,10 @@ fn test_create_proposal_emits_proposal_created_event() {
         &100_i128,
     );
     let events = t.env.events().all();
-    assert!(!events.is_empty(), "ProposalCreated event should be emitted");
+    assert!(
+        !events.is_empty(),
+        "ProposalCreated event should be emitted"
+    );
 }
 
 /// Voting window is set to VOTING_PERIOD_SECS (259_200 s) from creation time.

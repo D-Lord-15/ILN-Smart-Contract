@@ -8,7 +8,9 @@
 //! 3. Unverified payer + require_oracle_verification=false → succeeds (flag not set).
 
 use super::*;
-use crate::test::{setup, INVOICE_AMOUNT};
+use crate::test::setup;
+
+const INVOICE_AMOUNT: i128 = 1_000_000_000;
 use soroban_sdk::{
     contract, contractimpl,
     testutils::{Address as _, Ledger as _},

@@ -35,7 +35,18 @@ fn assert_lifecycle_for_token(
     amount: i128,
 ) {
     // 1. Submit
-    let invoice_id = ctx.contract.submit_invoice(&ReferralCode::None);
+    let invoice_id = ctx
+        .contract
+        .submit_invoice(
+            &ctx.submitter,
+            &ctx.payer,
+            &amount,
+            &due_date(ctx),
+            &DISCOUNT_RATE,
+            &token.address,
+            &ReferralCode::None,
+        )
+        .unwrap();
 
     let invoice = ctx.contract.get_invoice(&invoice_id);
     assert_eq!(
@@ -114,7 +125,15 @@ fn test_integration_submit_unapproved_token_fails() {
     let unapproved_id = ctx.env.register_stellar_asset_contract_v2(unapproved_admin);
     let unapproved_address = unapproved_id.address();
 
-    let result = ctx.contract.try_submit_invoice(try_ & ReferralCode::None);
+    let result = ctx.contract.try_submit_invoice(
+        &ctx.submitter,
+        &ctx.payer,
+        &INVOICE_AMOUNT,
+        &due_date(ctx),
+        &DISCOUNT_RATE,
+        &unapproved_address,
+        &ReferralCode::None,
+    );
 
     assert_eq!(result, Err(Ok(ContractError::Unauthorized)));
 }
@@ -124,7 +143,18 @@ fn test_integration_fund_removed_token_fails() {
     let ctx = setup();
 
     // Submit invoice with EURC (currently approved)
-    let invoice_id = ctx.contract.submit_invoice(&ReferralCode::None);
+    let invoice_id = ctx
+        .contract
+        .submit_invoice(
+            &ctx.submitter,
+            &ctx.payer,
+            &INVOICE_AMOUNT,
+            &due_date(ctx),
+            &DISCOUNT_RATE,
+            &ctx.eurc.address,
+            &ReferralCode::None,
+        )
+        .unwrap();
 
     // Admin removes EURC from approved list
     ctx.contract.remove_token(&ctx.eurc.address);
