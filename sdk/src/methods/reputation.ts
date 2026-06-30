@@ -16,6 +16,7 @@ import {
   Address,
   Networks,
 } from "@stellar/stellar-sdk";
+import type { ReputationScore as ReputationProfile } from "@invoice-liquidity/types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,18 +28,6 @@ import {
  * Mirrors `ReputationProfile` in the Rust contract (`invoice.rs`).
  * Unknown addresses return every field as zero.
  */
-export interface ReputationProfile {
-  /** Stellar G… address that was queried. */
-  address: string;
-  /** Current reputation score (0–100). */
-  score: number;
-  /** Total invoices submitted by this address. */
-  invoicesSubmitted: number;
-  /** Total invoices paid by this address (as payer). */
-  invoicesPaid: number;
-  /** Total invoices defaulted by this address. */
-  invoicesDefaulted: number;
-}
 
 // ---------------------------------------------------------------------------
 // G-address validation
@@ -133,3 +122,5 @@ export async function getReputation(
     invoicesDefaulted: Number(raw["invoices_defaulted"] ?? 0),
   };
 }
+
+export type { ReputationProfile };

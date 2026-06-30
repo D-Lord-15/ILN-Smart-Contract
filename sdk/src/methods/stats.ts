@@ -14,6 +14,7 @@ import {
   scValToNative,
   Networks,
 } from "@stellar/stellar-sdk";
+import type { ContractStats } from "@invoice-liquidity/types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -24,24 +25,6 @@ import {
  *
  * Mirrors `ContractStats` in the Rust contract.
  */
-export interface ContractStats {
-  /** Total number of invoices ever created. */
-  totalInvoices: bigint;
-  /** Cumulative number of fully-funded invoices. */
-  totalFunded: bigint;
-  /** Cumulative number of paid invoices. */
-  totalPaid: bigint;
-  /** Total USDC volume (in stroops, 6 decimals). */
-  totalVolumeUsdc: bigint;
-  /** Total EURC volume (in stroops, 6 decimals). */
-  totalVolumeEurc: bigint;
-  /** Total XLM volume (in stroops, 7 decimals). */
-  totalVolumeXlm: bigint;
-  /** Per-token volume map: token address → volume. */
-  volumeByToken: Record<string, bigint>;
-  /** Total volume normalized to USD (depends on oracle price feed). */
-  totalVolumeUsdNormalized: bigint;
-}
 
 // ---------------------------------------------------------------------------
 // getContractStats
@@ -130,3 +113,5 @@ export async function getContractStats(
     ),
   };
 }
+
+export type { ContractStats };
