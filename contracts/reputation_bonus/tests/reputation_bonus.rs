@@ -127,22 +127,19 @@ fn test_governance_setters_and_access_control() {
             old_value: 80,
             new_value: 90,
             updated_by: admin.clone(),
-        }
-        ,
+        },
         ParameterUpdated {
             param_name: Symbol::new(&env, "bonus_bps"),
             old_value: 200,
             new_value: 300,
             updated_by: admin.clone(),
-        }
-        ,
+        },
         ParameterUpdated {
             param_name: Symbol::new(&env, "min_discount_rate_bps"),
             old_value: 100,
             new_value: 150,
             updated_by: admin.clone(),
-        }
-        ,
+        },
     ];
 
     assert_eq!(events.len(), expected.len() as u32);
