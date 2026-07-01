@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach} from 'vitest';
 import {
   createProposal,
   castVote,
@@ -9,17 +9,17 @@ import {
 import { ProposalAction, ProposalStatus } from "../types/governance.js";
 import { Account, SorobanRpc, scValToNative } from "@stellar/stellar-sdk";
 
-vi.mock("@stellar/stellar-sdk", () => {
-  const actual = vi.importActual("@stellar/stellar-sdk");
-  return { ...actual, scValToNative: vi.fn() };
+vi.mock("@stellar/stellar-sdk", async () => {
+  const actual = await vi.importActual("@stellar/stellar-sdk");
+  return { ...actual, scValToNative: vi.fn(), SorobanRpc: { ...actual.SorobanRpc, assembleTransaction: vi.fn(() => ({ build: () => ({}) })) } };
 });
 
-const PROPOSER = "GA6V6P6Z7U2N4KHTD6Y3Y3V7H2P6XZY3H2P6XZY3H2P6XZY3H2P6XZ";
-const CONTRACT = "CA6V6P6Z7U2N4KHTD6Y3Y3V7H2P6XZY3H2P6XZY3H2P6XZY3H2P6XZ";
+const PROPOSER = "GBR7RT4MZTLKK2JNZPOSWVY74VFDR4HVR24QZNH2WONHPQFJZPKHWOTP";
+const CONTRACT = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4";
 const PASS = "Test SDF Network ; September 2015";
 const HASH32 = "ab".repeat(32);
 
-const mockScValToNative = scValToNative as unknown as jest.Mock;
+const mockScValToNative = scValToNative as unknown as vi.Mock;
 
 describe("governance", () => {
   const mockServer = {
@@ -32,14 +32,14 @@ describe("governance", () => {
   const sign = vi.fn((tx) => tx);
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    // @ts-ignore
-    SorobanRpc.assembleTransaction = vi.fn(() => ({ build: () => ({}) }));
-    // @ts-ignore
+    vi.clearAllMocks();
+    // @ts-expect-error mock
+
+    // @ts-expect-error mock
     mockServer.simulateTransaction.mockResolvedValue({ result: { retval: {} } });
-    // @ts-ignore
+    // @ts-expect-error mock
     mockServer.sendTransaction.mockResolvedValue({ status: "PENDING", hash: "txGOV" });
-    // @ts-ignore
+    // @ts-expect-error mock
     mockServer.getTransaction.mockResolvedValue({
       status: SorobanRpc.Api.GetTransactionStatus.SUCCESS,
       returnValue: {},

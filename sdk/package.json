@@ -21,16 +21,34 @@
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist coverage node_modules/.cache",
-    "docs": "typedoc --out docs src/index.ts"
+    "docs": "typedoc --out docs src/index.ts",
+    "size": "pnpm run build && size-limit"
   },
+  "size-limit": [
+    {
+      "name": "ESM bundle",
+      "path": "dist/index.mjs",
+      "limit": "50 KB",
+      "import": "@size-limit/file"
+    },
+    {
+      "name": "CJS bundle",
+      "path": "dist/index.js",
+      "limit": "60 KB",
+      "import": "@size-limit/file"
+    }
+  ],
   "dependencies": {
+    "@invoice-liquidity/types": "workspace:*",
     "@stellar/stellar-sdk": "^12.3.0"
   },
   "devDependencies": {
     "@iln/test-utils": "workspace:*",
     "@types/node": "^20.0.0",
     "@vitest/coverage-v8": "^1.6.1",
+    "@size-limit/file": "^11.1.6",
     "git-cliff": "^2.2.1",
+    "size-limit": "^11.1.6",
     "tsup": "^8.0.2",
     "typedoc": "^0.25.12",
     "typescript": "^5.4.0",

@@ -83,7 +83,7 @@ export class ILNClient {
   /** Deployed invoice-liquidity contract address. */
   readonly contractId: string;
   /** Optional signer for authenticated methods. */
-  readonly signer?: ISigner;
+  readonly signer?: ISigner | undefined;
 
   // Cached imports (lazy-loaded for tree-shaking)
   private _getReputation?: typeof import("./methods/reputation.js").getReputation;
@@ -124,7 +124,7 @@ export class ILNClient {
         // the latest testnet CI/CD deployment. Update here when redeploying.
         // TODO: replace with actual testnet contract ID once deployed
         "CD2Q6M76VFLHNHDNROENMX7PJ5OBYBMVPM73S4M6XAJXN3NKCBJQPLUC",
-      signer,
+      ...(signer ? { signer } : {}),
     });
   }
 
@@ -152,7 +152,7 @@ export class ILNClient {
         options?.contractId ??
         // TODO: replace with actual mainnet contract ID after mainnet deployment
         "",
-      signer,
+      ...(signer ? { signer } : {}),
     });
   }
 

@@ -16,29 +16,9 @@ import {
   Address,
   Networks,
 } from "@stellar/stellar-sdk";
+import { retry } from "../utils/retry.js";
+import { decodeReputationScore, type ReputationProfile } from "../utils/xdrDecoder.js";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-/**
- * An address's on-chain reputation profile.
- *
- * Mirrors `ReputationProfile` in the Rust contract (`invoice.rs`).
- * Unknown addresses return every field as zero.
- */
-export interface ReputationProfile {
-  /** Stellar G… address that was queried. */
-  address: string;
-  /** Current reputation score (0–100). */
-  score: number;
-  /** Total invoices submitted by this address. */
-  invoicesSubmitted: number;
-  /** Total invoices paid by this address (as payer). */
-  invoicesPaid: number;
-  /** Total invoices defaulted by this address. */
-  invoicesDefaulted: number;
-}
 
 // ---------------------------------------------------------------------------
 // G-address validation
@@ -106,7 +86,7 @@ export async function getReputation(
     .setTimeout(30)
     .build();
 
-  const sim = await server.simulateTransaction(simTx);
+  const sim = await retry(() => server.simulateTransaction(simTx));
 
   if (SorobanRpc.Api.isSimulationError(sim)) {
     throw new Error(`get_reputation simulation failed: ${sim.error}`);
@@ -114,22 +94,11 @@ export async function getReputation(
 
   // The contract returns a zeroed ReputationProfile for unknown addresses
   if (!sim.result?.retval) {
-    return {
-      address,
-      score: 0,
-      invoicesSubmitted: 0,
-      invoicesPaid: 0,
-      invoicesDefaulted: 0,
-    };
+    return decodeReputationScore({}, address);
   }
 
   const raw = scValToNative(sim.result.retval) as Record<string, unknown>;
-
-  return {
-    address: String(raw["address"] ?? address),
-    score: Number(raw["score"] ?? 0),
-    invoicesSubmitted: Number(raw["invoices_submitted"] ?? 0),
-    invoicesPaid: Number(raw["invoices_paid"] ?? 0),
-    invoicesDefaulted: Number(raw["invoices_defaulted"] ?? 0),
-  };
+  return decodeReputationScore(raw, address);
 }
+
+export type { ReputationProfile };

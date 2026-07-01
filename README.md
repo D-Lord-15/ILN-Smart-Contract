@@ -5,6 +5,7 @@
 Soroban smart contracts for the **Invoice Liquidity Network (ILN)** — a two-sided protocol on [Stellar](https://stellar.org) that connects invoice holders (freelancers, SMEs) with liquidity providers (LPs). Contracts act as trustless escrow: funds are held on-chain, payment terms are enforced by code, and settlement follows a strict state machine.
 
 > **New here?** Start with the [Developer Quickstart](docs/developer-quickstart.md), then read [Architecture](docs/Architecture.md) for the full money flow.
+For the full documentation map, see [Documentation Index](docs/index.md) and [Glossary](docs/glossary.md).
 
 ---
 
@@ -59,6 +60,8 @@ All contracts compile to Soroban WASM (`wasm32v1-none`) and are tested natively 
 | [First Invoice Tutorial](docs/tutorials/first-invoice.md) | Hands-on walkthrough: submit, fund, settle, and query an invoice on testnet |
 | [Local Development Guide](docs/local-development.md) | Docker setup, local Stellar node, deploying contracts locally, running tests |
 | [Developer Quickstart](docs/developer-quickstart.md) | Rust toolchain setup, building, testing, and deploying to testnet |
+| [Documentation Index](docs/index.md) | Complete map of protocol, integration, operations, and contributor docs |
+| [Glossary](docs/glossary.md) | Definitions for protocol, DeFi, invoice factoring, and Stellar terms |
 | [SDK Integration Guide](docs/sdk-integration.md) | TypeScript examples for every contract interaction |
 | [Architecture](docs/Architecture.md) | System design, money flow, and security model |
 | [Contract ABI](docs/contract-abi.md) | Function signatures and error codes |
@@ -222,8 +225,11 @@ cargo build --target wasm32v1-none --release
 |----------|-------------|
 | [Developer Quickstart](docs/developer-quickstart.md) | Toolchain, build, test, and testnet deploy |
 | [Local Development Guide](docs/local-development.md) | Docker Stellar node, scripts, and workflow |
+| [Documentation Index](docs/index.md) | Full documentation map |
+| [Glossary](docs/glossary.md) | Protocol and Stellar terminology |
 | [SDK Integration Guide](docs/sdk-integration.md) | TypeScript / Stellar SDK examples (testnet) |
 | [SDK Usage Guide](sdk/README.md) | Complete NPM package usage guide for @iln/sdk |
+| [FAQ](docs/faq.md) | Frequently asked questions for users and developers |
 
 ### Architecture & security
 
@@ -231,9 +237,11 @@ cargo build --target wasm32v1-none --release
 |----------|-------------|
 | [Architecture](docs/Architecture.md) | Actors, money flow, state machine, deployment |
 | [Threat Model](docs/threat-model.md) | Security assumptions, risks, and mitigations |
+| [Security Policy](docs/security.md) | Reporting process, severity, safe harbor, and component-specific vulnerability classes |
 | [Access Control](docs/access-control.md) | Roles, auth requirements, and admin functions |
 | [Storage Layout](docs/storage-layout.md) | On-chain keys and data structures |
 | [Upgrade Guide](docs/upgrade-guide.md) | Contract upgrade process and safeguards |
+| [Mainnet Launch Checklist](docs/mainnet-launch-checklist.md) | Launch readiness owners, statuses, and sign-off |
 | [Architecture Decision Records](docs/adr/README.md) | ADR index (Soroban choice, governance timelock, etc.) |
 
 ### Contract reference
