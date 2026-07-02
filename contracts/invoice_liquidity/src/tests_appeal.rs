@@ -56,7 +56,7 @@ fn setup_appeal() -> AppealTestEnv {
     token_admin.mint(&funder, &(INVOICE_AMOUNT * 10));
     token_admin.mint(&payer, &(INVOICE_AMOUNT * 10));
 
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let contract = InvoiceLiquidityContractClient::new(&env, &contract_id);
     token_admin.mint(&contract.address, &(INVOICE_AMOUNT * 100));
 
@@ -88,16 +88,10 @@ fn setup_appeal() -> AppealTestEnv {
 fn make_defaulted_invoice(t: &AppealTestEnv) -> u64 {
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
 
-    let id = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &INVOICE_AMOUNT,
-        &due_date,
-        &DISCOUNT_RATE,
-        &t.token.address,
-    );
+    let id = t.contract.submit_invoice(&ReferralCode::None);
 
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
 
     // Advance time past due_date.
     let mut ledger = t.env.ledger().get();
@@ -139,7 +133,7 @@ fn test_appeal_default_emits_event() {
     t.contract.appeal_default(&id, &hash);
 
     // Verify the DefaultAppealed event was emitted.
-    let events = t.env.events().all().filter_by_contract(&t.contract.address);
+    let events = t.env.events().all();
     let _last = events.events().last().expect("Expected an event");
     // The last event topics should contain "default_appealed".
     // We check the invoice is in Appealed state as a proxy.
@@ -219,14 +213,7 @@ fn test_appeal_non_defaulted_invoice_fails() {
     let t = setup_appeal();
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
 
-    let id = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &INVOICE_AMOUNT,
-        &due_date,
-        &DISCOUNT_RATE,
-        &t.token.address,
-    );
+    let id = t.contract.submit_invoice(&ReferralCode::None);
 
     // Invoice is still Pending — cannot appeal.
     let result = t.contract.try_appeal_default(&id, &evidence_hash(&t.env));

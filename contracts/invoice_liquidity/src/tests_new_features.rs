@@ -47,7 +47,7 @@ fn setup() -> TestEnv {
     token_admin.mint(&funder, &(INVOICE_AMOUNT * 10));
     token_admin.mint(&payer, &(INVOICE_AMOUNT * 10));
 
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let contract = InvoiceLiquidityContractClient::new(&env, &contract_id);
     token_admin.mint(&contract.address, &(INVOICE_AMOUNT * 100));
 
@@ -96,14 +96,7 @@ fn test_contract_stats_increments_on_submit() {
     let t = setup();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &INVOICE_AMOUNT,
-        &due_date,
-        &DISCOUNT_RATE,
-        &t.token.address,
-    );
+    t.contract.submit_invoice(&ReferralCode::None);
 
     let stats = t.contract.get_contract_stats();
     assert_eq!(stats.total_invoices, 1);
@@ -116,17 +109,10 @@ fn test_contract_stats_increments_on_fund() {
     let t = setup();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &INVOICE_AMOUNT,
-        &due_date,
-        &DISCOUNT_RATE,
-        &t.token.address,
-    );
+    let invoice_id = t.contract.submit_invoice(&ReferralCode::None);
 
     t.contract
-        .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT);
+        .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &false);
 
     let stats = t.contract.get_contract_stats();
     assert_eq!(stats.total_invoices, 1);
@@ -140,17 +126,10 @@ fn test_contract_stats_increments_on_mark_paid() {
     let t = setup();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &INVOICE_AMOUNT,
-        &due_date,
-        &DISCOUNT_RATE,
-        &t.token.address,
-    );
+    let invoice_id = t.contract.submit_invoice(&ReferralCode::None);
 
     t.contract
-        .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT);
+        .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &false);
     t.contract.mark_paid(&invoice_id, &INVOICE_AMOUNT);
 
     let stats = t.contract.get_contract_stats();
@@ -168,14 +147,7 @@ fn test_contract_stats_multiple_invoices() {
 
     // Submit 3 invoices
     for _i in 0..3 {
-        t.contract.submit_invoice(
-            &t.freelancer,
-            &t.payer,
-            &INVOICE_AMOUNT,
-            &due_date,
-            &DISCOUNT_RATE,
-            &t.token.address,
-        );
+        t.contract.submit_invoice(&ReferralCode::None);
     }
 
     let stats = t.contract.get_contract_stats();
@@ -199,17 +171,10 @@ fn test_contract_stats_tracks_token_volumes_and_oracle_normalization() {
     let t = setup();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &INVOICE_AMOUNT,
-        &due_date,
-        &DISCOUNT_RATE,
-        &t.token.address,
-    );
+    let invoice_id = t.contract.submit_invoice(&ReferralCode::None);
 
     t.contract
-        .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT);
+        .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &false);
     t.contract.mark_paid(&invoice_id, &INVOICE_AMOUNT);
 
     let stats = t.contract.get_contract_stats();
@@ -221,7 +186,7 @@ fn test_contract_stats_tracks_token_volumes_and_oracle_normalization() {
     assert_eq!(volume_entry.1, INVOICE_AMOUNT);
     assert_eq!(stats.total_volume_usd_normalized, 0);
 
-    let oracle_id = t.env.register(MockPriceOracle, ());
+    let oracle_id = t.env.register_contract(None, MockPriceOracle);
     t.env.as_contract(&t.contract.address, || {
         let mut config = crate::storage::get_config(&t.env).unwrap();
         config.price_oracle = Some(oracle_id.clone());
@@ -246,14 +211,7 @@ fn test_pause_blocks_submit_invoice() {
     t.contract.pause();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let result = t.contract.try_submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &INVOICE_AMOUNT,
-        &due_date,
-        &DISCOUNT_RATE,
-        &t.token.address,
-    );
+    let result = t.contract.try_submit_invoice(&ReferralCode::None);
 
     assert!(result.is_err());
     assert_eq!(result, Err(Ok(ContractError::ContractPaused)));
@@ -264,14 +222,7 @@ fn test_pause_blocks_fund_invoice() {
     let t = setup();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &INVOICE_AMOUNT,
-        &due_date,
-        &DISCOUNT_RATE,
-        &t.token.address,
-    );
+    let invoice_id = t.contract.submit_invoice(&ReferralCode::None);
 
     t.contract.pause();
 
@@ -288,17 +239,10 @@ fn test_pause_blocks_mark_paid() {
     let t = setup();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &INVOICE_AMOUNT,
-        &due_date,
-        &DISCOUNT_RATE,
-        &t.token.address,
-    );
+    let invoice_id = t.contract.submit_invoice(&ReferralCode::None);
 
     t.contract
-        .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT);
+        .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &false);
     t.contract.pause();
 
     let result = t.contract.try_mark_paid(&invoice_id, &INVOICE_AMOUNT);
@@ -312,14 +256,7 @@ fn test_pause_blocks_cancel_invoice() {
     let t = setup();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &INVOICE_AMOUNT,
-        &due_date,
-        &DISCOUNT_RATE,
-        &t.token.address,
-    );
+    let invoice_id = t.contract.submit_invoice(&ReferralCode::None);
 
     t.contract.pause();
 
@@ -334,17 +271,10 @@ fn test_pause_blocks_claim_default() {
     let t = setup();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &INVOICE_AMOUNT,
-        &due_date,
-        &DISCOUNT_RATE,
-        &t.token.address,
-    );
+    let invoice_id = t.contract.submit_invoice(&ReferralCode::None);
 
     t.contract
-        .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT);
+        .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &false);
 
     // Advance time past due date
     let mut ledger = t.env.ledger().get();
@@ -367,14 +297,7 @@ fn test_unpause_restores_functionality() {
     t.contract.unpause();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let result = t.contract.try_submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &INVOICE_AMOUNT,
-        &due_date,
-        &DISCOUNT_RATE,
-        &t.token.address,
-    );
+    let result = t.contract.try_submit_invoice(&ReferralCode::None);
 
     assert!(result.is_ok());
 }
@@ -410,14 +333,7 @@ fn test_get_contract_stats_works_when_paused() {
     let t = setup();
 
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &INVOICE_AMOUNT,
-        &due_date,
-        &DISCOUNT_RATE,
-        &t.token.address,
-    );
+    t.contract.submit_invoice(&ReferralCode::None);
 
     t.contract.pause();
 
@@ -437,14 +353,7 @@ fn test_due_date_too_soon_rejected() {
     let now = t.env.ledger().timestamp();
     let too_soon = now + (12 * 60 * 60); // 12 hours - less than 24 hours
 
-    let result = t.contract.try_submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &INVOICE_AMOUNT,
-        &too_soon,
-        &DISCOUNT_RATE,
-        &t.token.address,
-    );
+    let result = t.contract.try_submit_invoice(&ReferralCode::None);
 
     assert!(result.is_err());
     assert_eq!(result, Err(Ok(ContractError::DueDateTooSoon)));
@@ -457,14 +366,7 @@ fn test_due_date_exactly_24_hours_accepted() {
     let now = t.env.ledger().timestamp();
     let exactly_24h = now + (24 * 60 * 60);
 
-    let result = t.contract.try_submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &INVOICE_AMOUNT,
-        &exactly_24h,
-        &DISCOUNT_RATE,
-        &t.token.address,
-    );
+    let result = t.contract.try_submit_invoice(&ReferralCode::None);
 
     assert!(result.is_ok());
 }
@@ -476,14 +378,7 @@ fn test_due_date_too_far_rejected() {
     let now = t.env.ledger().timestamp();
     let too_far = now + (366 * 24 * 60 * 60); // 366 days - more than 365 days
 
-    let result = t.contract.try_submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &INVOICE_AMOUNT,
-        &too_far,
-        &DISCOUNT_RATE,
-        &t.token.address,
-    );
+    let result = t.contract.try_submit_invoice(&ReferralCode::None);
 
     assert!(result.is_err());
     assert_eq!(result, Err(Ok(ContractError::DueDateTooFar)));
@@ -496,14 +391,7 @@ fn test_due_date_exactly_365_days_accepted() {
     let now = t.env.ledger().timestamp();
     let exactly_365d = now + (365 * 24 * 60 * 60);
 
-    let result = t.contract.try_submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &INVOICE_AMOUNT,
-        &exactly_365d,
-        &DISCOUNT_RATE,
-        &t.token.address,
-    );
+    let result = t.contract.try_submit_invoice(&ReferralCode::None);
 
     assert!(result.is_ok());
 }
@@ -515,14 +403,7 @@ fn test_due_date_in_past_rejected() {
     let now = t.env.ledger().timestamp();
     let past = now - 1;
 
-    let result = t.contract.try_submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &INVOICE_AMOUNT,
-        &past,
-        &DISCOUNT_RATE,
-        &t.token.address,
-    );
+    let result = t.contract.try_submit_invoice(&ReferralCode::None);
 
     assert!(result.is_err());
     assert_eq!(result, Err(Ok(ContractError::InvalidDueDate)));
@@ -534,14 +415,7 @@ fn test_due_date_equal_to_now_rejected() {
 
     let now = t.env.ledger().timestamp();
 
-    let result = t.contract.try_submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &INVOICE_AMOUNT,
-        &now,
-        &DISCOUNT_RATE,
-        &t.token.address,
-    );
+    let result = t.contract.try_submit_invoice(&ReferralCode::None);
 
     assert!(result.is_err());
     assert_eq!(result, Err(Ok(ContractError::InvalidDueDate)));

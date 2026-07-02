@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Env};
+use soroban_sdk::{contracttype, Address, BytesN, Env};
 
 use crate::config::Config;
 use crate::invoice::{AppealRecord, Invoice, LpFundRequest, ReputationScore};
@@ -25,6 +25,8 @@ pub enum DataKey {
     InvoiceFunders(u64),
     ApprovedToken(Address),
     TokenList,
+    /// Decimal precision for each allowlisted token (e.g. 6 for USDC, 7 for XLM).
+    TokenDecimals(Address),
     /// Detailed reputation profile per address (Issue #26).
     Reputation(Address),
     Appeal(u64),
@@ -41,6 +43,8 @@ pub enum DataKey {
     TotalVolumeEurc,
     TotalVolumeXlm,
     TokenVolume(Address),
+    /// Referral counts keyed by fixed-size code
+    ReferralCount(BytesN<32>),
     Dispute(u64),
     SubmitterInvoices(Address),
     LpInvoices(Address),
@@ -297,40 +301,4 @@ pub fn increment_total_paid(env: &Env) {
         .set(&DataKey::TotalPaid, &(current + 1));
 }
 
-pub fn add_volume(
-    env: &Env,
-    token: &Address,
-    amount: i128,
-    usdc_addr: &Address,
-    eurc_addr: &Address,
-    xlm_addr: &Address,
-) {
-    if token == usdc_addr {
-        let current: i128 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::TotalVolumeUsdc)
-            .unwrap_or(0);
-        env.storage()
-            .persistent()
-            .set(&DataKey::TotalVolumeUsdc, &(current + amount));
-    } else if token == eurc_addr {
-        let current: i128 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::TotalVolumeEurc)
-            .unwrap_or(0);
-        env.storage()
-            .persistent()
-            .set(&DataKey::TotalVolumeEurc, &(current + amount));
-    } else if token == xlm_addr {
-        let current: i128 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::TotalVolumeXlm)
-            .unwrap_or(0);
-        env.storage()
-            .persistent()
-            .set(&DataKey::TotalVolumeXlm, &(current + amount));
-    }
-}
+// add_volume moved to invoice.rs where the configured token addresses are available

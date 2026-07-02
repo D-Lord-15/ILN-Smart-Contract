@@ -9,6 +9,7 @@
 use super::*;
 use crate::invoice::{get_reputation, set_reputation, ReputationProfile};
 use soroban_sdk::{
+    contracttype,
     testutils::{Address as _, Ledger},
     token::{Client as TokenClient, StellarAssetClient},
     Address, Env,
@@ -30,6 +31,7 @@ struct TestEnv {
     env: Env,
     contract: InvoiceLiquidityContractClient<'static>,
     contract_id: Address,
+    admin: Address,
     freelancer: Address,
     payer: Address,
     lp: Address,
@@ -64,7 +66,7 @@ fn setup() -> TestEnv {
     usdc.admin_client.mint(&lp, &100_000_000_000);
     xlm.admin_client.mint(&lp, &100_000_000_000);
 
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let contract = InvoiceLiquidityContractClient::new(&env, &contract_id);
     let eurc_address = Address::generate(&env);
     contract.initialize(&admin, &usdc.address, &eurc_address, &xlm.address);
@@ -77,6 +79,7 @@ fn setup() -> TestEnv {
         env,
         contract,
         contract_id,
+        admin,
         freelancer,
         payer,
         lp,
@@ -94,6 +97,7 @@ fn submit(t: &TestEnv, token: &Address) -> u64 {
         &due,
         &DISCOUNT_RATE,
         token,
+        &ReferralCode::None,
     )
 }
 
@@ -104,7 +108,7 @@ fn fund_succeeds_for_allowlisted_token() {
     let t = setup();
     let id = submit(&t, &t.usdc.address);
     // usdc was allowlisted at init → funding works.
-    t.contract.fund_invoice(&t.lp, &id, &AMOUNT);
+    t.contract.fund_invoice(&t.lp, &id, &AMOUNT, &false);
     assert_eq!(t.contract.get_invoice(&id).status, InvoiceStatus::Funded);
 }
 
@@ -122,14 +126,68 @@ fn fund_fails_after_token_removed_from_allowlist() {
 fn add_token_then_fund_succeeds() {
     let t = setup();
     let new_token = register_mock_token(&t.env);
+    new_token.admin_client.mint(&t.admin, &100_000_000_000);
     new_token.admin_client.mint(&t.lp, &100_000_000_000);
-    t.contract.add_token(&new_token.address);
+    t.contract.add_token(&new_token.address, &6_u32); // generic 6-decimal token in governance test
 
     let id = submit(&t, &new_token.address);
-    t.contract.fund_invoice(&t.lp, &id, &AMOUNT);
+    t.contract.fund_invoice(&t.lp, &id, &AMOUNT, &false);
     assert_eq!(t.contract.get_invoice(&id).status, InvoiceStatus::Funded);
 }
+#[contracttype]
+enum FeeTokenDataKey {
+    Balance(Address),
+}
 
+#[contract]
+struct FeeOnTransferToken;
+
+#[contractimpl]
+impl FeeOnTransferToken {
+    pub fn mint(env: Env, to: Address, amount: i128) {
+        let key = FeeTokenDataKey::Balance(to.clone());
+        let balance: i128 = env.storage().persistent().get(&key).unwrap_or(0);
+        env.storage().persistent().set(&key, &(balance + amount));
+    }
+
+    pub fn transfer(env: Env, from: Address, to: Address, amount: i128) {
+        from.require_auth();
+        let key_from = FeeTokenDataKey::Balance(from.clone());
+        let mut from_balance: i128 = env.storage().persistent().get(&key_from).unwrap_or(0);
+        if from_balance < amount {
+            panic!("insufficient balance");
+        }
+        from_balance -= amount;
+        env.storage().persistent().set(&key_from, &from_balance);
+
+        let fee = amount / 100; // 1% fee-on-transfer
+        let received = amount.checked_sub(fee).unwrap_or(0);
+        let key_to = FeeTokenDataKey::Balance(to.clone());
+        let to_balance: i128 = env.storage().persistent().get(&key_to).unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&key_to, &(to_balance + received));
+    }
+
+    pub fn balance(env: Env, who: Address) -> i128 {
+        env.storage()
+            .persistent()
+            .get(&FeeTokenDataKey::Balance(who))
+            .unwrap_or(0)
+    }
+}
+
+#[test]
+fn add_token_rejects_fee_on_transfer_token() {
+    let t = setup();
+    let fee_token_address = t.env.register_contract(None, FeeOnTransferToken);
+    let fee_token_admin = StellarAssetClient::new(&t.env, &fee_token_address);
+
+    fee_token_admin.mint(&t.admin, &100_000_000_000);
+
+    let result = t.contract.try_add_token(&fee_token_address);
+    assert_eq!(result, Err(Ok(ContractError::FeeOnTransferToken)));
+}
 // ── Issue #26: ReputationProfile ─────────────────────────────────────────
 
 #[test]
@@ -185,7 +243,7 @@ fn fund_succeeds_when_payer_reputation_meets_threshold() {
     // Fresh payers have the neutral default score of 50.
     t.contract.set_min_payer_reputation(&40);
     let id = submit(&t, &t.usdc.address);
-    t.contract.fund_invoice(&t.lp, &id, &AMOUNT);
+    t.contract.fund_invoice(&t.lp, &id, &AMOUNT, &false);
     assert_eq!(t.contract.get_invoice(&id).status, InvoiceStatus::Funded);
 }
 
@@ -218,7 +276,7 @@ fn mark_paid_nonexistent_invoice_returns_not_found() {
 fn fund_then_mark_paid_full_lifecycle_still_works() {
     let t = setup();
     let id = submit(&t, &t.usdc.address);
-    t.contract.fund_invoice(&t.lp, &id, &AMOUNT);
+    t.contract.fund_invoice(&t.lp, &id, &AMOUNT, &false);
     t.contract.mark_paid(&id, &AMOUNT);
     assert_eq!(t.contract.get_invoice(&id).status, InvoiceStatus::Paid);
 }

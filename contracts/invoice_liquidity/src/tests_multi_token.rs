@@ -59,8 +59,10 @@ fn setup() -> MultiTokenTestEnv {
     xlm.admin_client.mint(&payer, &100_000_000_000);
     xlm.admin_client.mint(&lp, &100_000_000_000);
 
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let contract = InvoiceLiquidityContractClient::new(&env, &contract_id);
+    contract.initialize(&admin, &usdc.address, &xlm.address);
+    contract.add_token(&eurc.address, &6_u32); // EURC has 6 decimals
     contract.initialize(&admin, &usdc.address, &eurc.address, &xlm.address);
 
     let mut ledger_info = env.ledger().get();
@@ -84,13 +86,7 @@ fn due_date(env: &MultiTokenTestEnv) -> u64 {
 }
 
 fn submit_invoice(env: &MultiTokenTestEnv, token: &MockToken, amount: i128) -> u64 {
-    env.contract.submit_invoice(
-        &env.freelancer,
-        &env.payer,
-        &amount,
-        &due_date(env),
-        &DISCOUNT_RATE,
-        &token.address,
+    env.contract.submit_invoice(        &ReferralCode::None,
     )
 }
 
@@ -115,7 +111,7 @@ fn assert_full_lifecycle_for_token(
     let lp_before = token.client.balance(&env.lp);
     let payer_before = token.client.balance(&env.payer);
 
-    env.contract.fund_invoice(&env.lp, &invoice_id, &amount);
+    env.contract.fund_invoice(&env.lp, &invoice_id, &amount, &false);
 
     let discount = expected_discount(amount);
     assert_eq!(
@@ -124,7 +120,7 @@ fn assert_full_lifecycle_for_token(
         "{token_name} should pay the freelancer in the same token path",
     );
 
-    env.contract.mark_paid(&invoice_id, &INVOICE_AMOUNT);
+    env.contract.mark_paid(&invoice_id, &amount);
 
     assert_eq!(
         token.client.balance(&env.lp) - lp_before,
@@ -166,13 +162,7 @@ fn test_submit_with_unapproved_token_is_rejected() {
     let env = setup();
     let rogue = register_mock_token(&env.env);
 
-    let result = env.contract.try_submit_invoice(
-        &env.freelancer,
-        &env.payer,
-        &1_000_000,
-        &due_date(&env),
-        &DISCOUNT_RATE,
-        &rogue.address,
+    let result = env.contract.try_submit_invoice(try_        &ReferralCode::None,
     );
 
     assert_eq!(result, Err(Ok(ContractError::Unauthorized)));
@@ -187,6 +177,8 @@ fn test_admin_removing_token_mid_flight_does_not_break_existing_invoice_settleme
     env.contract.remove_token(&env.eurc.address);
 
     env.contract.fund_invoice(&env.lp, &invoice_id, &amount);
+    env.contract.mark_paid(&invoice_id, &amount);
+    env.contract.fund_invoice(&env.lp, &invoice_id, &amount, &false);
     env.contract.mark_paid(&invoice_id, &INVOICE_AMOUNT);
 
     let invoice = env.contract.get_invoice(&invoice_id);
@@ -207,11 +199,11 @@ fn test_same_lp_can_settle_invoices_independently_across_different_tokens() {
     let eurc_lp_before = env.eurc.client.balance(&env.lp);
 
     env.contract
-        .fund_invoice(&env.lp, &usdc_invoice, &usdc_amount);
+        .fund_invoice(&env.lp, &usdc_invoice, &usdc_amount, &false);
     env.contract
-        .fund_invoice(&env.lp, &eurc_invoice, &eurc_amount);
+        .fund_invoice(&env.lp, &eurc_invoice, &eurc_amount, &false);
 
-    env.contract.mark_paid(&usdc_invoice, &INVOICE_AMOUNT);
+    env.contract.mark_paid(&usdc_invoice, &usdc_amount);
 
     assert_eq!(
         env.contract.get_invoice(&usdc_invoice).status,
@@ -230,7 +222,7 @@ fn test_same_lp_can_settle_invoices_independently_across_different_tokens() {
         eurc_lp_before - eurc_amount
     );
 
-    env.contract.mark_paid(&eurc_invoice, &INVOICE_AMOUNT);
+    env.contract.mark_paid(&eurc_invoice, &eurc_amount);
 
     assert_eq!(
         env.contract.get_invoice(&eurc_invoice).status,
@@ -257,9 +249,9 @@ fn test_amounts_preserve_precision_for_6_and_7_decimal_token_paths() {
     let xlm_lp_before = env.xlm.client.balance(&env.lp);
 
     env.contract
-        .fund_invoice(&env.lp, &eurc_invoice, &eurc_amount);
+        .fund_invoice(&env.lp, &eurc_invoice, &eurc_amount, &false);
     env.contract
-        .fund_invoice(&env.lp, &xlm_invoice, &xlm_amount);
+        .fund_invoice(&env.lp, &xlm_invoice, &xlm_amount, &false);
 
     assert_eq!(
         env.eurc.client.balance(&env.freelancer) - eurc_freelancer_before,

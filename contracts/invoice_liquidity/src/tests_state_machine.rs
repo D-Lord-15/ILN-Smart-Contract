@@ -67,7 +67,7 @@ fn setup() -> TestEnv {
     token_admin.mint(&payer, &(INVOICE_AMOUNT * 10));
 
     // Deploy and initialize contract
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let contract = InvoiceLiquidityContractClient::new(&env, &contract_id);
     token_admin.mint(&contract.address, &(1000000000 * 100));
 
@@ -93,14 +93,7 @@ fn setup() -> TestEnv {
 /// Helper: submit a standard invoice and return its ID
 fn submit_invoice(t: &TestEnv) -> u64 {
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &INVOICE_AMOUNT,
-        &due_date,
-        &DISCOUNT_RATE,
-        &t.token.address,
-    )
+    t.contract.submit_invoice(&ReferralCode::None)
 }
 
 /// Helper: fast-forward ledger time past the due date
@@ -125,7 +118,8 @@ fn test_cannot_fund_already_funded_invoice() {
     let id = submit_invoice(&t);
 
     // First funding succeeds
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     assert_eq!(
         t.contract.get_invoice(&id).status,
         InvoiceStatus::Funded,
@@ -154,7 +148,8 @@ fn test_cannot_fund_already_paid_invoice() {
     let id = submit_invoice(&t);
 
     // Fund and mark as paid
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     t.contract.mark_paid(&id, &INVOICE_AMOUNT);
     assert_eq!(
         t.contract.get_invoice(&id).status,
@@ -184,7 +179,8 @@ fn test_cannot_fund_defaulted_invoice() {
     let id = submit_invoice(&t);
 
     // Fund the invoice
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
 
     // Advance past due date and claim default
     advance_past_due_date(&t, id);
@@ -245,7 +241,8 @@ fn test_cannot_mark_paid_twice() {
     let id = submit_invoice(&t);
 
     // Fund and mark as paid once
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     t.contract.mark_paid(&id, &INVOICE_AMOUNT);
     assert_eq!(
         t.contract.get_invoice(&id).status,
@@ -275,7 +272,8 @@ fn test_cannot_mark_paid_on_defaulted_invoice() {
     let id = submit_invoice(&t);
 
     // Fund the invoice
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
 
     // Advance past due date and claim default
     advance_past_due_date(&t, id);
@@ -308,7 +306,8 @@ fn test_cannot_transfer_funded_invoice() {
     let id = submit_invoice(&t);
 
     // Fund the invoice
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     assert_eq!(
         t.contract.get_invoice(&id).status,
         InvoiceStatus::Funded,
@@ -369,7 +368,8 @@ fn test_cannot_claim_default_on_paid_invoice() {
     let id = submit_invoice(&t);
 
     // Fund and mark as paid
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     t.contract.mark_paid(&id, &INVOICE_AMOUNT);
     assert_eq!(
         t.contract.get_invoice(&id).status,
@@ -402,7 +402,8 @@ fn test_cannot_claim_default_twice() {
     let id = submit_invoice(&t);
 
     // Fund the invoice
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
 
     // Advance past due date and claim default
     advance_past_due_date(&t, id);
@@ -435,7 +436,8 @@ fn test_cannot_claim_default_before_due_date() {
     let id = submit_invoice(&t);
 
     // Fund the invoice
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     assert_eq!(
         t.contract.get_invoice(&id).status,
         InvoiceStatus::Funded,
@@ -477,7 +479,8 @@ fn test_pending_to_funded_full_funding() {
     assert!(invoice_before.funded_at.is_none());
 
     // Fund the full amount
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
 
     // Verify state transition
     let invoice_after = t.contract.get_invoice(&id);
@@ -485,7 +488,10 @@ fn test_pending_to_funded_full_funding() {
     assert_eq!(invoice_after.amount_funded, INVOICE_AMOUNT);
     assert_eq!(invoice_after.funder, Some(t.funder.clone()));
     assert!(invoice_after.funded_at.is_some());
-    assert_eq!(invoice_after.funded_at.unwrap(), t.env.ledger().timestamp() as u32);
+    assert_eq!(
+        invoice_after.funded_at.unwrap(),
+        t.env.ledger().timestamp() as u32
+    );
 }
 
 // ----------------------------------------------------------------
@@ -508,7 +514,8 @@ fn test_pending_to_partially_funded_to_funded() {
 
     // Fund 40% - transition to PartiallyFunded
     let partial_amount = INVOICE_AMOUNT * 4000 / 10000;
-    t.contract.fund_invoice(&funder1, &id, &partial_amount);
+    t.contract
+        .fund_invoice(&funder1, &id, &partial_amount, &false);
 
     let invoice_partial = t.contract.get_invoice(&id);
     assert_eq!(invoice_partial.status, InvoiceStatus::PartiallyFunded);
@@ -516,7 +523,8 @@ fn test_pending_to_partially_funded_to_funded() {
 
     // Fund remaining 60% - transition to Funded
     let remaining_amount = INVOICE_AMOUNT - partial_amount;
-    t.contract.fund_invoice(&funder2, &id, &remaining_amount);
+    t.contract
+        .fund_invoice(&funder2, &id, &remaining_amount, &false);
 
     let invoice_final = t.contract.get_invoice(&id);
     assert_eq!(invoice_final.status, InvoiceStatus::Funded);
@@ -533,7 +541,8 @@ fn test_funded_to_paid() {
     let id = submit_invoice(&t);
 
     // Fund the invoice first
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
 
     // Verify Funded state
     let invoice_before = t.contract.get_invoice(&id);
@@ -565,7 +574,8 @@ fn test_funded_to_defaulted() {
     let id = submit_invoice(&t);
 
     // Fund the invoice first
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
 
     // Verify Funded state
     let invoice_before = t.contract.get_invoice(&id);
@@ -598,7 +608,8 @@ fn test_all_reachable_states_from_pending() {
     // Test Pending → Funded → Paid
     let t1 = setup();
     let id1 = submit_invoice(&t1);
-    t1.contract.fund_invoice(&t1.funder, &id1, &INVOICE_AMOUNT);
+    t1.contract
+        .fund_invoice(&t1.funder, &id1, &INVOICE_AMOUNT, &false);
     t1.contract.mark_paid(&id1, &INVOICE_AMOUNT);
     assert_eq!(
         t1.contract.get_invoice(&id1).status,
@@ -609,7 +620,8 @@ fn test_all_reachable_states_from_pending() {
     // Test Pending → Funded → Defaulted
     let t2 = setup();
     let id2 = submit_invoice(&t2);
-    t2.contract.fund_invoice(&t2.funder, &id2, &INVOICE_AMOUNT);
+    t2.contract
+        .fund_invoice(&t2.funder, &id2, &INVOICE_AMOUNT, &false);
     advance_past_due_date(&t2, id2);
     t2.contract.claim_default(&t2.funder, &id2);
     assert_eq!(
@@ -628,7 +640,7 @@ fn test_all_reachable_states_from_pending() {
     token_admin.mint(&funder2, &INVOICE_AMOUNT);
 
     t3.contract
-        .fund_invoice(&funder1, &id3, &(INVOICE_AMOUNT * 3000 / 10000));
+        .fund_invoice(&funder1, &id3, &(INVOICE_AMOUNT * 3000 / 10000, &false));
     assert_eq!(
         t3.contract.get_invoice(&id3).status,
         InvoiceStatus::PartiallyFunded,
@@ -636,7 +648,7 @@ fn test_all_reachable_states_from_pending() {
     );
 
     t3.contract
-        .fund_invoice(&funder2, &id3, &(INVOICE_AMOUNT * 7000 / 10000));
+        .fund_invoice(&funder2, &id3, &(INVOICE_AMOUNT * 7000 / 10000, &false));
     assert_eq!(
         t3.contract.get_invoice(&id3).status,
         InvoiceStatus::Funded,
@@ -691,14 +703,14 @@ fn test_state_transition_matrix_validation() {
     // Test Funded → mark_paid works
     let id_funded = submit_invoice(&t);
     t.contract
-        .fund_invoice(&t.funder, &id_funded, &INVOICE_AMOUNT);
+        .fund_invoice(&t.funder, &id_funded, &INVOICE_AMOUNT, &false);
     let result = t.contract.try_mark_paid(&id_funded, &INVOICE_AMOUNT);
     assert!(result.is_ok(), "Mark paid should work on Funded invoice");
 
     // Test Funded → claim_default works (after due date)
     let id_default = submit_invoice(&t);
     t.contract
-        .fund_invoice(&t.funder, &id_default, &INVOICE_AMOUNT);
+        .fund_invoice(&t.funder, &id_default, &INVOICE_AMOUNT, &false);
     advance_past_due_date(&t, id_default);
     let result = t.contract.try_claim_default(&t.funder, &id_default);
     assert!(
@@ -721,7 +733,8 @@ fn test_cannot_mark_paid_on_partially_funded_invoice() {
     token_admin.mint(&funder, &INVOICE_AMOUNT);
 
     // Fund only 50%
-    t.contract.fund_invoice(&funder, &id, &(INVOICE_AMOUNT / 2));
+    t.contract
+        .fund_invoice(&funder, &id, &(INVOICE_AMOUNT / 2, &false));
 
     assert_eq!(
         t.contract.get_invoice(&id).status,
@@ -743,7 +756,8 @@ fn test_cannot_claim_default_on_partially_funded_invoice() {
     token_admin.mint(&funder, &INVOICE_AMOUNT);
 
     // Fund only 50%
-    t.contract.fund_invoice(&funder, &id, &(INVOICE_AMOUNT / 2));
+    t.contract
+        .fund_invoice(&funder, &id, &(INVOICE_AMOUNT / 2, &false));
 
     assert_eq!(
         t.contract.get_invoice(&id).status,
@@ -772,7 +786,7 @@ fn test_overfunding_rejected_preserves_state() {
     token_admin.mint(&funder1, &INVOICE_AMOUNT);
 
     t.contract
-        .fund_invoice(&funder1, &id, &(INVOICE_AMOUNT * 6000 / 10000));
+        .fund_invoice(&funder1, &id, &(INVOICE_AMOUNT * 6000 / 10000, &false));
 
     assert_eq!(
         t.contract.get_invoice(&id).status,
@@ -812,21 +826,21 @@ fn test_exact_multi_party_funding_completion() {
 
     // Fund in three parts: 25%, 35%, 40%
     t.contract
-        .fund_invoice(&funder1, &id, &(INVOICE_AMOUNT * 2500 / 10000));
+        .fund_invoice(&funder1, &id, &(INVOICE_AMOUNT * 2500 / 10000, &false));
     assert_eq!(
         t.contract.get_invoice(&id).status,
         InvoiceStatus::PartiallyFunded
     );
 
     t.contract
-        .fund_invoice(&funder2, &id, &(INVOICE_AMOUNT * 3500 / 10000));
+        .fund_invoice(&funder2, &id, &(INVOICE_AMOUNT * 3500 / 10000, &false));
     assert_eq!(
         t.contract.get_invoice(&id).status,
         InvoiceStatus::PartiallyFunded
     );
 
     t.contract
-        .fund_invoice(&funder3, &id, &(INVOICE_AMOUNT * 4000 / 10000));
+        .fund_invoice(&funder3, &id, &(INVOICE_AMOUNT * 4000 / 10000, &false));
     assert_eq!(
         t.contract.get_invoice(&id).status,
         InvoiceStatus::Funded,

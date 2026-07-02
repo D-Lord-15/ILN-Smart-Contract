@@ -1,50 +1,45 @@
-use soroban_sdk::{contractevent, Address, BytesN, Symbol};
+use soroban_sdk::{contracttype, Address, BytesN, Symbol};
 
-use crate::invoice::InvoiceStatus;
+use crate::invoice::{InvoiceStatus, ReferralCode};
 
 /// Emitted when governance adds a token to the funding allowlist (Issue #19).
-#[contractevent(topics = ["token_added"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct TokenAdded {
-    #[topic]
     pub token: Address,
+    /// Number of decimal places for this token (e.g. 6 for USDC, 7 for XLM).
+    pub decimals: u32,
 }
 
 /// Emitted when governance removes a token from the funding allowlist (Issue #19).
-#[contractevent(topics = ["token_removed"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct TokenRemoved {
-    #[topic]
     pub token: Address,
 }
 
-#[contractevent(topics = ["submitted"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct InvoiceSubmitted {
-    #[topic]
     pub invoice_id: u64,
-    #[topic]
     pub freelancer: Address,
-    #[topic]
     pub payer: Address,
     pub token: Address,
     pub amount: i128,
     pub due_date: u64,
     pub discount_rate: u32,
+    pub referral_code: ReferralCode,
     pub status: InvoiceStatus,
     /// Ledger timestamp when the invoice was submitted.  Included so indexers
     /// can reconstruct the full invoice record from events alone.
     pub timestamp: u64,
 }
 
-#[contractevent(topics = ["updated"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct InvoiceUpdated {
-    #[topic]
     pub invoice_id: u64,
-    #[topic]
     pub freelancer: Address,
-    #[topic]
     pub payer: Address,
     pub token: Address,
     pub amount: i128,
@@ -53,98 +48,73 @@ pub struct InvoiceUpdated {
     pub status: InvoiceStatus,
 }
 
-#[contractevent(topics = ["funded"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct InvoiceFunded {
-    #[topic]
     pub invoice_id: u64,
-
-    #[topic]
     pub funder: Address,
-
     pub freelancer: Address,
     pub payer: Address,
     pub token: Address,
-
     pub fund_amount: i128,
     pub amount_funded: i128,
     pub invoice_amount: i128,
-
     pub due_date: u64,
     pub discount_rate: u32,
-
     pub funded_at: Option<u64>,
     pub status: InvoiceStatus,
-
     // NEW FIELDS
     pub lp: Address,
     pub effective_yield_bps: u32,
     pub timestamp: u64,
 }
 
-#[contractevent(topics = ["paid"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct InvoicePaid {
-    #[topic]
     pub invoice_id: u64,
-
-    #[topic]
     pub payer: Address,
-
-    #[topic]
     pub lp: Address,
-
     pub freelancer: Address,
     pub token: Address,
-
     /// Full amount settled by payer
     pub amount_paid: i128,
-
     /// LP earnings = amount_paid - amount_funded
     pub lp_earned: i128,
-
     /// Total amount distributed to LP
     pub lp_payout: i128,
-
     /// Settlement ledger timestamp
     pub settlement_timestamp: u64,
-
     pub paid_on_time: bool,
     pub status: InvoiceStatus,
 }
 
-#[contractevent(topics = ["partially_paid"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct InvoicePartiallyPaid {
-    #[topic]
     pub invoice_id: u64,
-
-    #[topic]
     pub payer: Address,
-
     pub amount_paid_now: i128,
     pub total_amount_paid: i128,
     pub remaining_amount: i128,
 }
 
-#[contractevent(topics = ["paused"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContractPaused {
     pub timestamp: u64,
 }
 
-#[contractevent(topics = ["unpaused"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContractUnpaused {
     pub timestamp: u64,
 }
 
-#[contractevent(topics = ["defaulted"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct InvoiceDefaulted {
-    #[topic]
     pub invoice_id: u64,
-    #[topic]
     pub funder: Address,
     pub freelancer: Address,
     pub payer: Address,
@@ -156,28 +126,35 @@ pub struct InvoiceDefaulted {
     pub status: InvoiceStatus,
 }
 
-#[contractevent(topics = ["transferred"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct InvoiceTransferred {
-    #[topic]
     pub invoice_id: u64,
     pub old_freelancer: Address,
     pub new_freelancer: Address,
     pub status: InvoiceStatus,
 }
 
-#[contractevent(topics = ["cancelled"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct InvoiceCancelled {
-    #[topic]
     pub invoice_id: u64,
     pub freelancer: Address,
     pub status: InvoiceStatus,
 }
 
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct LPPositionTransferred {
+    pub invoice_id: u64,
+    pub old_lp: Address,
+    pub new_lp: Address,
+    pub status: InvoiceStatus,
+}
+
 /// Emitted whenever the contract admin address is updated.
 /// Provides a permanent on-chain audit trail for admin transitions.
-#[contractevent(topics = ["admin_changed"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct AdminChanged {
     pub old_admin: Address,
@@ -190,21 +167,18 @@ pub struct AdminChanged {
 ///
 /// The `param_name` topic is a stable audit identifier. Keep these strings
 /// unique per parameter so off-chain indexers can reconstruct config history.
-#[contractevent(topics = ["parameter_updated"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct ParameterUpdated {
-    #[topic]
     pub param_name: Symbol,
     pub old_value: i128,
     pub new_value: i128,
-    #[topic]
     pub updated_by: Address,
 }
 
-#[contractevent(topics = ["upgraded"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct ContractUpgraded {
-    #[topic]
     pub admin: Address,
     pub new_wasm_hash: BytesN<32>,
     pub timestamp: u64,
@@ -213,12 +187,10 @@ pub struct ContractUpgraded {
 // ── Issue #36: appeal_default events ──────────────────────────────────────────
 
 /// Emitted when a payer files an appeal against an unfair default marking.
-#[contractevent(topics = ["default_appealed"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct DefaultAppealed {
-    #[topic]
     pub invoice_id: u64,
-    #[topic]
     pub payer: Address,
     /// SHA-256 hash of off-chain evidence provided by the payer.
     pub evidence_hash: BytesN<32>,
@@ -226,12 +198,10 @@ pub struct DefaultAppealed {
 }
 
 /// Emitted when governance resolves a payer's appeal.
-#[contractevent(topics = ["appeal_resolved"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct AppealResolved {
-    #[topic]
     pub invoice_id: u64,
-    #[topic]
     pub payer: Address,
     /// true = appeal upheld (default reversed); false = appeal rejected.
     pub upheld: bool,
@@ -241,12 +211,10 @@ pub struct AppealResolved {
 // ── Dispute events ──────────────────────────────────────────────────────────
 
 /// Emitted when a payer disputes an invoice before settlement.
-#[contractevent(topics = ["disputed"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct InvoiceDisputed {
-    #[topic]
     pub invoice_id: u64,
-    #[topic]
     pub payer: Address,
     /// SHA-256 hash of off-chain dispute evidence.
     pub reason_hash: BytesN<32>,
@@ -254,12 +222,10 @@ pub struct InvoiceDisputed {
 }
 
 /// Emitted when governance resolves a dispute.
-#[contractevent(topics = ["dispute_resolved"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct DisputeResolved {
-    #[topic]
     pub invoice_id: u64,
-    #[topic]
     pub resolution_hash: BytesN<32>, // Optional hash of resolution details
     pub resolution: u32, // Ruling: 1 = Upheld (Payer right), 2 = Rejected (Freelancer right)
     pub resolved_at: u64,
@@ -268,43 +234,37 @@ pub struct DisputeResolved {
 // ── Issue #34: LP priority queue events ───────────────────────────────────────
 
 /// Emitted when an LP registers their intent to fund via the priority queue.
-#[contractevent(topics = ["fund_requested"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct FundRequested {
-    #[topic]
     pub invoice_id: u64,
-    #[topic]
     pub lp: Address,
     /// LP's reputation score at the time of registration.
     pub score: u32,
 }
 
 /// Emitted when the priority queue is resolved and a winning LP is selected.
-#[contractevent(topics = ["fund_queue_resolved"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct FundQueueResolved {
-    #[topic]
     pub invoice_id: u64,
-    #[topic]
     pub approved_lp: Address,
     /// Winning score that secured priority.
     pub score: u32,
 }
 
-#[contractevent(topics = ["expired"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct InvoiceExpired {
-    #[topic]
     pub invoice_id: u64,
     pub freelancer: Address,
     pub status: InvoiceStatus,
 }
 
 /// Emitted when an address's reputation score or counters are updated (Issue #32).
-#[contractevent(topics = ["reputation_updated"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct ReputationUpdated {
-    #[topic]
     pub address: Address,
     pub old_score: u32,
     pub new_score: u32,
@@ -313,10 +273,9 @@ pub struct ReputationUpdated {
     pub invoices_defaulted: u32,
 }
 
-#[contractevent(topics = ["token_changed"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct InvoiceTokenChanged {
-    #[topic]
     pub invoice_id: u64,
     pub old_token: Address,
     pub new_token: Address,

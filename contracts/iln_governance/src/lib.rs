@@ -9,8 +9,8 @@
 
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractevent, contractimpl, contracttype,
-    token::Client as TokenClient, vec, Address, BytesN, Env, IntoVal, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, token::Client as TokenClient, vec,
+    Address, BytesN, Env, IntoVal, Symbol, Vec,
 };
 
 /// Vote receipts only need to outlive the active voting window.
@@ -32,7 +32,7 @@ const MAX_DELEGATION_DEPTH: u32 = 10;
 // ================================================================
 
 #[contracterror]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum GovernanceError {
     AlreadyInitialized = 1,
     ProposalNotFound = 2,
@@ -70,7 +70,10 @@ pub enum GovernanceError {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ProposalAction {
     UpdateFeeRate(u32),
-    AddToken(Address),
+    /// Add a token to the allowlist. The tuple carries the token address and
+    /// its decimal precision (e.g. 6 for USDC, 7 for XLM) — required since
+    /// Issue #23 introduced the token decimals registry.
+    AddToken(Address, u32),
     RemoveToken(Address),
     UpdateMaxDiscountRate(u32),
 }
@@ -114,39 +117,33 @@ pub struct GovernanceProposal {
 // Events
 // ================================================================
 
-#[contractevent(topics = ["vote_cast"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct VoteCast {
-    #[topic]
     pub proposal_id: u64,
-    #[topic]
     pub voter: Address,
     pub support: bool,
     pub weight: i128,
 }
 
 /// Issue #64
-#[contractevent(topics = ["votes_delegated"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct VotesDelegated {
-    #[topic]
     pub delegator: Address,
-    #[topic]
     pub delegate: Address,
 }
 
 /// Issue #64
-#[contractevent(topics = ["votes_undelegated"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct VotesUndelegated {
-    #[topic]
     pub delegator: Address,
 }
 
-#[contractevent(topics = ["proposal_executed"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProposalExecuted {
-    #[topic]
     pub proposal_id: u64,
     pub action_type: ProposalAction,
     pub proposed_value: i128,
@@ -155,23 +152,19 @@ pub struct ProposalExecuted {
 }
 
 /// Issue #68: emitted when the admin vetoes a proposal.
-#[contractevent(topics = ["proposal_vetoed"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProposalVetoed {
-    #[topic]
     pub proposal_id: u64,
-    #[topic]
     pub admin: Address,
     pub reason_hash: BytesN<32>,
 }
 
 /// Emitted when a new governance proposal is created.
-#[contractevent(topics = ["proposal_created"])]
+#[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProposalCreated {
-    #[topic]
     pub proposal_id: u64,
-    #[topic]
     pub proposer: Address,
     pub action_type: ProposalAction,
     pub proposed_value: i128,
@@ -232,9 +225,7 @@ impl GovContract {
         env.storage()
             .instance()
             .set(&StorageKey::GovToken, &gov_token);
-        env.storage()
-            .instance()
-            .set(&StorageKey::Admin, &admin);
+        env.storage().instance().set(&StorageKey::Admin, &admin);
         env.storage()
             .instance()
             .set(&StorageKey::VetoPowerEnabled, &true);
@@ -339,13 +330,16 @@ impl GovContract {
             .instance()
             .set(&StorageKey::ProposalCount, &id);
 
-        env.events().publish_event(&ProposalCreated {
-            proposal_id: id,
-            proposer,
-            action_type,
-            proposed_value,
-            voting_end,
-        });
+        env.events().publish(
+            (Symbol::new(&env, "proposal_created"), id, proposer.clone()),
+            ProposalCreated {
+                proposal_id: id,
+                proposer,
+                action_type,
+                proposed_value,
+                voting_end,
+            },
+        );
 
         Ok(id)
     }
@@ -361,10 +355,7 @@ impl GovContract {
     /// Updates the minimum proposer balance.
     ///
     /// Authorization: the configured ILN contract address must authorize.
-    pub fn set_min_proposal_balance(
-        env: Env,
-        min_balance: i128,
-    ) -> Result<(), GovernanceError> {
+    pub fn set_min_proposal_balance(env: Env, min_balance: i128) -> Result<(), GovernanceError> {
         let iln_contract: Address = env
             .storage()
             .instance()
@@ -434,10 +425,17 @@ impl GovContract {
         let delegator_balance = Self::get_own_balance_for_delegation(&env, &delegator);
         Self::adjust_delegated_to_me(&env, &terminal, delegator_balance);
 
-        env.events().publish_event(&VotesDelegated {
-            delegator,
-            delegate,
-        });
+        env.events().publish(
+            (
+                Symbol::new(&env, "votes_delegated"),
+                delegator.clone(),
+                delegate.clone(),
+            ),
+            VotesDelegated {
+                delegator,
+                delegate,
+            },
+        );
 
         Ok(())
     }
@@ -460,7 +458,10 @@ impl GovContract {
                 .remove(&StorageKey::Delegation(delegator.clone()));
         }
 
-        env.events().publish_event(&VotesUndelegated { delegator });
+        env.events().publish(
+            (Symbol::new(&env, "votes_undelegated"), delegator.clone()),
+            VotesUndelegated { delegator },
+        );
 
         Ok(())
     }
@@ -547,12 +548,15 @@ impl GovContract {
             .persistent()
             .set(&StorageKey::Proposal(proposal_id), &proposal);
 
-        env.events().publish_event(&VoteCast {
-            proposal_id,
-            voter,
-            support,
-            weight,
-        });
+        env.events().publish(
+            (Symbol::new(&env, "vote_cast"), proposal_id, voter.clone()),
+            VoteCast {
+                proposal_id,
+                voter,
+                support,
+                weight,
+            },
+        );
 
         Ok(())
     }
@@ -619,9 +623,7 @@ impl GovContract {
             let quorum = if total_supply <= 0 {
                 0_i128
             } else {
-                total_supply
-                    .saturating_mul(min_quorum_bps as i128)
-                    / 10_000_i128
+                total_supply.saturating_mul(min_quorum_bps as i128) / 10_000_i128
             };
 
             if total_votes < quorum {
@@ -676,7 +678,7 @@ impl GovContract {
                         args,
                     );
                 }
-                ProposalAction::AddToken(token) => {
+                ProposalAction::AddToken(token, _decimals) => {
                     let args: Vec<soroban_sdk::Val> = vec![&env, token.into_val(&env)];
                     env.invoke_contract::<()>(&iln_contract, &Symbol::new(&env, "add_token"), args);
                 }
@@ -703,13 +705,16 @@ impl GovContract {
                 .persistent()
                 .set(&StorageKey::Proposal(proposal_id), &proposal);
 
-            env.events().publish_event(&ProposalExecuted {
-                proposal_id,
-                action_type: proposal.action_type,
-                proposed_value: proposal.proposed_value,
-                votes_for: proposal.votes_for,
-                votes_against: proposal.votes_against,
-            });
+            env.events().publish(
+                (Symbol::new(&env, "proposal_executed"), proposal_id),
+                ProposalExecuted {
+                    proposal_id,
+                    action_type: proposal.action_type,
+                    proposed_value: proposal.proposed_value,
+                    votes_for: proposal.votes_for,
+                    votes_against: proposal.votes_against,
+                },
+            );
 
             return Ok(());
         }
@@ -734,11 +739,7 @@ impl GovContract {
         reason_hash: BytesN<32>,
     ) -> Result<(), GovernanceError> {
         // ── Auth: only admin ──────────────────────────────────────
-        let admin: Address = env
-            .storage()
-            .instance()
-            .get(&StorageKey::Admin)
-            .unwrap();
+        let admin: Address = env.storage().instance().get(&StorageKey::Admin).unwrap();
         admin.require_auth();
 
         // ── Guard: veto power must still be enabled ───────────────
@@ -769,11 +770,18 @@ impl GovContract {
             .persistent()
             .set(&StorageKey::Proposal(proposal_id), &proposal);
 
-        env.events().publish_event(&ProposalVetoed {
-            proposal_id,
-            admin,
-            reason_hash,
-        });
+        env.events().publish(
+            (
+                Symbol::new(&env, "proposal_vetoed"),
+                proposal_id,
+                admin.clone(),
+            ),
+            ProposalVetoed {
+                proposal_id,
+                admin,
+                reason_hash,
+            },
+        );
 
         Ok(())
     }

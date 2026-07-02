@@ -62,7 +62,7 @@ fn setup() -> AuthTestEnv {
         &funder,
     );
 
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let client = InvoiceLiquidityContractClient::new(&env, &contract_id);
 
     mint_with_auth(

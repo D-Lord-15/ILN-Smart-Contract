@@ -19,7 +19,7 @@ fn create_token(env: &Env) -> Address {
 }
 
 fn setup_contract(env: &Env) -> (InvoiceLiquidityContract, Address, Address, Address) {
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let client = InvoiceLiquidityContractClient::new(env, &contract_id);
 
     let admin = Address::generate(env);
@@ -37,7 +37,7 @@ fn setup_contract(env: &Env) -> (InvoiceLiquidityContract, Address, Address, Add
 #[test]
 fn test_init_approves_token() {
     let env = create_env();
-    let client = InvoiceLiquidityContractClient::new(&env, &env.register(InvoiceLiquidityContract, ()));
+    let client = InvoiceLiquidityContractClient::new(&env, &env.register_contract(None, InvoiceLiquidityContract));
 
     let usdc = create_token(&env);
 
@@ -52,7 +52,7 @@ fn test_init_approves_token() {
 #[test]
 fn test_submit_with_valid_token() {
     let env = create_env();
-    let client = InvoiceLiquidityContractClient::new(&env, &env.register(InvoiceLiquidityContract, ()));
+    let client = InvoiceLiquidityContractClient::new(&env, &env.register_contract(None, InvoiceLiquidityContract));
 
     let freelancer = Address::generate(&env);
     let payer = Address::generate(&env);
@@ -62,13 +62,7 @@ fn test_submit_with_valid_token() {
 
     env.ledger().with_mut(|l| l.timestamp = 1000);
 
-    let id = client.submit_invoice(
-        &freelancer,
-        &payer,
-        &1000,
-        &2000,
-        &1000,
-        &token,
+    let id = client.submit_invoice(        &ReferralCode::None,
     ).unwrap();
 
     assert_eq!(id, 1);
@@ -81,7 +75,7 @@ fn test_submit_with_valid_token() {
 #[should_panic(expected = "Unauthorized")]
 fn test_submit_rejects_invalid_token() {
     let env = create_env();
-    let client = InvoiceLiquidityContractClient::new(&env, &env.register(InvoiceLiquidityContract, ()));
+    let client = InvoiceLiquidityContractClient::new(&env, &env.register_contract(None, InvoiceLiquidityContract));
 
     let freelancer = Address::generate(&env);
     let payer = Address::generate(&env);
@@ -93,13 +87,7 @@ fn test_submit_rejects_invalid_token() {
 
     env.ledger().with_mut(|l| l.timestamp = 1000);
 
-    client.submit_invoice(
-        &freelancer,
-        &payer,
-        &1000,
-        &2000,
-        &1000,
-        &fake_token,
+    client.submit_invoice(        &ReferralCode::None,
     ).unwrap();
 }
 
@@ -109,7 +97,7 @@ fn test_submit_rejects_invalid_token() {
 #[test]
 fn test_token_approval_lifecycle() {
     let env = create_env();
-    let client = InvoiceLiquidityContractClient::new(&env, &env.register(InvoiceLiquidityContract, ()));
+    let client = InvoiceLiquidityContractClient::new(&env, &env.register_contract(None, InvoiceLiquidityContract));
 
     let token = create_token(&env);
 
@@ -126,7 +114,7 @@ fn test_token_approval_lifecycle() {
 #[test]
 fn test_fund_and_mark_paid_flow() {
     let env = create_env();
-    let client = InvoiceLiquidityContractClient::new(&env, &env.register(InvoiceLiquidityContract, ()));
+    let client = InvoiceLiquidityContractClient::new(&env, &env.register_contract(None, InvoiceLiquidityContract));
 
     let freelancer = Address::generate(&env);
     let payer = Address::generate(&env);
@@ -137,20 +125,14 @@ fn test_fund_and_mark_paid_flow() {
 
     env.ledger().with_mut(|l| l.timestamp = 1000);
 
-    let id = client.submit_invoice(
-        &freelancer,
-        &payer,
-        &1000,
-        &2000,
-        &1000,
-        &token,
+    let id = client.submit_invoice(        &ReferralCode::None,
     ).unwrap();
 
     // fund invoice
-    client.fund_invoice(&funder, &id, &1000).unwrap();
+    client.fund_invoice(&funder, &id, &1000, &false).unwrap();
 
     // mark as paid
-    client.mark_paid(&id, &INVOICE_AMOUNT).unwrap();
+    client.mark_paid(&id, &1000).unwrap();
 
     let invoice = client.get_invoice(&id).unwrap();
 

@@ -40,7 +40,7 @@ fn tests_lp_funding_details_event() {
     // ------------------------------------------------------------
     // Contract setup
     // ------------------------------------------------------------
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let client = InvoiceLiquidityContractClient::new(&env, &contract_id);
 
     client.initialize(&admin, &token_address, &token_address);
@@ -70,7 +70,7 @@ fn tests_lp_funding_details_event() {
     // ------------------------------------------------------------
     // Fund invoice
     // ------------------------------------------------------------
-    client.fund_invoice(&lp, &invoice_id, &5_000_000i128);
+    client.fund_invoice(&lp, &invoice_id, &5_000_000i128, &false);
 
     // ------------------------------------------------------------
     // Verify event emitted

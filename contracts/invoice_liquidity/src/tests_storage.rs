@@ -34,7 +34,7 @@ fn setup() -> TestEnv {
     token_admin.mint(&funder, &1_000_000_000_000);
     token_admin.mint(&payer, &1_000_000_000_000);
 
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let contract = InvoiceLiquidityContractClient::new(&env, &contract_id);
 
     let xlm_admin = Address::generate(&env);
@@ -60,14 +60,7 @@ fn test_submit_invoice_sets_ttl() {
     let amount = 100_000_000;
     let due_date = t.env.ledger().timestamp() + 86400;
 
-    let id = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &amount,
-        &due_date,
-        &300,
-        &t.token.address,
-    );
+    let id = t.contract.submit_invoice(&ReferralCode::None);
 
     let key = crate::storage::DataKey::Invoice(id);
     let ttl = t.env.as_contract(&t.contract.address, || {
@@ -90,14 +83,7 @@ fn test_fund_invoice_extends_ttl() {
     let amount = 100_000_000;
     let due_date = t.env.ledger().timestamp() + 86400;
 
-    let id = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &amount,
-        &due_date,
-        &300,
-        &t.token.address,
-    );
+    let id = t.contract.submit_invoice(&ReferralCode::None);
 
     let key = crate::storage::DataKey::Invoice(id);
     let initial_ttl = t.env.as_contract(&t.contract.address, || {
@@ -111,7 +97,7 @@ fn test_fund_invoice_extends_ttl() {
     t.env.ledger().set(ledger);
 
     // Call fund_invoice which should refresh the TTL on the entry
-    t.contract.fund_invoice(&t.funder, &id, &amount);
+    t.contract.fund_invoice(&t.funder, &id, &amount, &false);
 
     let updated_ttl = t.env.as_contract(&t.contract.address, || {
         t.env.storage().persistent().get_ttl(&key)
@@ -127,14 +113,7 @@ fn test_data_persistence_after_advancement() {
     let amount = 100_000_000;
     let due_date = t.env.ledger().timestamp() + 86400 * 30; // 30 days
 
-    let id = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &amount,
-        &due_date,
-        &300,
-        &t.token.address,
-    );
+    let id = t.contract.submit_invoice(&ReferralCode::None);
 
     // Advance ledger significantly (e.g., 10,000 ledgers)
     let mut ledger = t.env.ledger().get();
@@ -152,14 +131,7 @@ fn test_data_persistence_after_advancement() {
 fn test_invoice_count_persistence_across_versions() {
     let t = setup();
 
-    t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &100_000_000,
-        &(t.env.ledger().timestamp() + 86400),
-        &300,
-        &t.token.address,
-    );
+    t.contract.submit_invoice(&ReferralCode::None);
 
     assert_eq!(t.contract.get_invoice_count(), 1);
 
@@ -173,14 +145,7 @@ fn test_invoice_count_persistence_across_versions() {
     assert_eq!(t.contract.get_invoice_count(), 1);
 
     // New submission works correctly
-    let next_id = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &200_000_000,
-        &(t.env.ledger().timestamp() + 86400),
-        &300,
-        &t.token.address,
-    );
+    let next_id = t.contract.submit_invoice(&ReferralCode::None);
 
     assert_eq!(next_id, 2);
     assert_eq!(t.contract.get_invoice_count(), 2);
@@ -192,14 +157,7 @@ fn test_storage_ttl_near_boundary() {
     let amount = 100_000_000;
     let due_date = t.env.ledger().timestamp() + 86400;
 
-    let id = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &amount,
-        &due_date,
-        &300,
-        &t.token.address,
-    );
+    let id = t.contract.submit_invoice(&ReferralCode::None);
 
     let key = crate::storage::DataKey::Invoice(id);
     let ttl = t.env.as_contract(&t.contract.address, || {

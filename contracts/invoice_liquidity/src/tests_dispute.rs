@@ -56,7 +56,7 @@ fn setup_dispute() -> DisputeTestEnv {
     token_admin.mint(&funder, &(INVOICE_AMOUNT * 10));
     token_admin.mint(&payer, &(INVOICE_AMOUNT * 10));
 
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let contract = InvoiceLiquidityContractClient::new(&env, &contract_id);
     token_admin.mint(&contract.address, &(INVOICE_AMOUNT * 100));
 
@@ -103,6 +103,7 @@ fn test_dispute_pending_invoice() {
         &due_date,
         &DISCOUNT_RATE,
         &t.token.address,
+        &ReferralCode::None,
     );
 
     t.contract.dispute_invoice(&id, &reason_hash(&t.env));
@@ -123,9 +124,11 @@ fn test_dispute_funded_invoice() {
         &due_date,
         &DISCOUNT_RATE,
         &t.token.address,
+        &ReferralCode::None,
     );
 
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
 
     t.contract.dispute_invoice(&id, &reason_hash(&t.env));
 
@@ -145,6 +148,7 @@ fn test_cannot_fund_disputed_invoice() {
         &due_date,
         &DISCOUNT_RATE,
         &t.token.address,
+        &ReferralCode::None,
     );
 
     t.contract.dispute_invoice(&id, &reason_hash(&t.env));
@@ -165,9 +169,11 @@ fn test_cannot_mark_paid_disputed_invoice() {
         &due_date,
         &DISCOUNT_RATE,
         &t.token.address,
+        &ReferralCode::None,
     );
 
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
 
     t.contract.dispute_invoice(&id, &reason_hash(&t.env));
 
@@ -187,6 +193,7 @@ fn test_resolve_dispute_upheld_refunds_lp() {
         &due_date,
         &DISCOUNT_RATE,
         &t.token.address,
+        &ReferralCode::None,
     );
 
     let fund_discount = INVOICE_AMOUNT * DISCOUNT_RATE as i128 / 10_000;
@@ -194,7 +201,8 @@ fn test_resolve_dispute_upheld_refunds_lp() {
 
     let initial_funder_balance = t.token.balance(&t.funder);
 
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
 
     assert_eq!(t.token.balance(&t.funder), initial_funder_balance - cost);
 
@@ -222,9 +230,11 @@ fn test_resolve_dispute_rejected_restores_funded_status() {
         &due_date,
         &DISCOUNT_RATE,
         &t.token.address,
+        &ReferralCode::None,
     );
 
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     t.contract.dispute_invoice(&id, &reason_hash(&t.env));
 
     // Admin rejects dispute (resolution = 2)
@@ -246,6 +256,7 @@ fn test_non_payer_cannot_dispute() {
         &due_date,
         &DISCOUNT_RATE,
         &t.token.address,
+        &ReferralCode::None,
     );
 
     // Freelancer tries to dispute their own invoice
@@ -272,7 +283,10 @@ fn test_auto_resolve_dispute_timeout_behavior() {
         decay_period_ledgers: 1000,
         dispute_timeout_ledgers: 100,
         xlm_sac_address,
+        usdc_sac_address: Address::generate(&t.env),
+        eurc_sac_address: Address::generate(&t.env),
         price_oracle: None,
+        max_oracle_age_ledgers: 17280,
     };
     t.env.as_contract(&t.contract.address, || {
         crate::storage::set_config(&t.env, &config);
@@ -287,6 +301,7 @@ fn test_auto_resolve_dispute_timeout_behavior() {
         &due_date,
         &DISCOUNT_RATE,
         &t.token.address,
+        &ReferralCode::None,
     );
 
     t.contract.dispute_invoice(&id, &reason_hash(&t.env));

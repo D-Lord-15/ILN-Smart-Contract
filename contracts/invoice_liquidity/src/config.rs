@@ -14,6 +14,10 @@ pub struct Config {
     pub usdc_sac_address: Address, // USDC contract address
     pub eurc_sac_address: Address, // EURC contract address
     pub price_oracle: Option<Address>, // Optional price oracle for USD normalisation
+    /// Maximum acceptable oracle data age in ledgers before fund_invoice rejects it.
+    /// Default: 17_280 (≈ 24 hours at one ledger per 5 seconds).
+    /// Updatable by governance via set_max_oracle_age().
+    pub max_oracle_age_ledgers: u64,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -64,17 +68,26 @@ pub fn update_config(
         usdc_sac_address,
         eurc_sac_address,
         price_oracle: old_config.price_oracle,
+        max_oracle_age_ledgers: old_config.max_oracle_age_ledgers,
     };
 
     crate::storage::set_config(env, &new_config);
 
     let emit = |param_name: &str, old_value: i128, new_value: i128| {
-        env.events().publish_event(&ParameterUpdated {
-            param_name: Symbol::new(env, param_name),
-            old_value,
-            new_value,
-            updated_by: caller.clone(),
-        });
+        let pn = Symbol::new(env, param_name);
+        env.events().publish(
+            (
+                Symbol::new(env, "parameter_updated"),
+                pn.clone(),
+                caller.clone(),
+            ),
+            ParameterUpdated {
+                param_name: pn,
+                old_value,
+                new_value,
+                updated_by: caller.clone(),
+            },
+        );
     };
 
     // Stable audit identifiers for each numeric protocol parameter.
@@ -116,6 +129,23 @@ pub fn set_price_oracle(env: &Env, caller: &Address, oracle: Address) -> Result<
     }
 
     config.price_oracle = Some(oracle);
+    crate::storage::set_config(env, &config);
+    Ok(())
+}
+
+/// Update the maximum oracle data age (in ledgers). Admin only.
+pub fn set_max_oracle_age(
+    env: &Env,
+    caller: &Address,
+    max_age_ledgers: u64,
+) -> Result<(), ConfigError> {
+    let admin = crate::storage::get_admin(env).ok_or(ConfigError::Unauthorized)?;
+    let mut config = crate::storage::get_config(env).ok_or(ConfigError::Unauthorized)?;
+    if caller != &admin {
+        return Err(ConfigError::Unauthorized);
+    }
+
+    config.max_oracle_age_ledgers = max_age_ledgers;
     crate::storage::set_config(env, &config);
     Ok(())
 }

@@ -9,7 +9,7 @@ fn test_reputation_lifecycle_flow() {
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
-    let contract_id = env.register(ReputationBonusContract, ());
+    let contract_id = env.register_contract(None, ReputationBonusContract);
     let client = ReputationBonusContractClient::new(&env, &contract_id);
     client.init(&admin);
 
@@ -66,7 +66,7 @@ fn test_reputation_bonus_integration() {
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
-    let contract_id = env.register(ReputationBonusContract, ());
+    let contract_id = env.register_contract(None, ReputationBonusContract);
     let client = ReputationBonusContractClient::new(&env, &contract_id);
     client.init(&admin);
 
