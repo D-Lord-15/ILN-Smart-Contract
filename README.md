@@ -152,6 +152,19 @@ ILN-Smart-Contract/
 
 ### Clone, build, and test
 
+A `Makefile` at the repo root provides all common developer commands:
+
+| Command | Description |
+|---------|-------------|
+| `make build` | Compile all contracts to optimised WASM |
+| `make test` | Run the full test suite |
+| `make fmt` | Format all Rust source files |
+| `make lint` | Run Clippy with denied warnings |
+| `make deploy-testnet` | Deploy all contracts to Stellar testnet |
+| `make coverage` | Generate a tarpaulin HTML coverage report |
+| `make clean` | Remove build artefacts |
+| `make help` | List all available targets |
+
 ```bash
 git clone https://github.com/Invoice-Liquidity-Network/ILN-Smart-Contract.git
 cd ILN-Smart-Contract
