@@ -13,26 +13,12 @@ fn test_total_count() {
     let due_date = t.env.ledger().timestamp() + 86400;
 
     // Submit 1
-    let id1 = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &1_000_000_000,
-        &due_date,
-        &300,
-        &t.token.address,
-        &None,
+    let id1 = t.contract.submit_invoice(        &ReferralCode::None,
     );
     assert_eq!(t.contract.get_invoice_count(&None), 1);
 
     // Submit 2
-    let id2 = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &2_000_000_000,
-        &due_date,
-        &300,
-        &t.token.address,
-        &None,
+    let id2 = t.contract.submit_invoice(        &ReferralCode::None,
     );
     assert_eq!(t.contract.get_invoice_count(&None), 2);
 }
@@ -47,14 +33,7 @@ fn test_per_state_counts() {
     assert_eq!(t.contract.get_invoice_count(&Some(InvoiceStatus::Pending)), 0);
 
     // Submit an invoice -> Pending
-    let id = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &1_000_000_000,
-        &due_date,
-        &300,
-        &t.token.address,
-        &None,
+    let id = t.contract.submit_invoice(        &ReferralCode::None,
     );
 
     assert_eq!(t.contract.get_invoice_count(&Some(InvoiceStatus::Pending)), 1);
@@ -73,14 +52,7 @@ fn test_state_transitions() {
 
     let due_date = t.env.ledger().timestamp() + 86400;
 
-    let id = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &1_000_000_000,
-        &due_date,
-        &300,
-        &t.token.address,
-        &None,
+    let id = t.contract.submit_invoice(        &ReferralCode::None,
     );
 
     assert_eq!(t.contract.get_invoice_count(&Some(InvoiceStatus::Pending)), 1);
@@ -103,23 +75,9 @@ fn test_multiple_sequential_transitions() {
 
     let due_date = t.env.ledger().timestamp() + 86400;
 
-    let id1 = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &1_000_000_000,
-        &due_date,
-        &300,
-        &t.token.address,
-        &None,
+    let id1 = t.contract.submit_invoice(        &ReferralCode::None,
     );
-    let id2 = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &2_000_000_000,
-        &due_date,
-        &300,
-        &t.token.address,
-        &None,
+    let id2 = t.contract.submit_invoice(        &ReferralCode::None,
     );
 
     assert_eq!(t.contract.get_invoice_count(&Some(InvoiceStatus::Pending)), 2);

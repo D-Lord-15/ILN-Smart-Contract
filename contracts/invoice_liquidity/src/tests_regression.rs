@@ -45,7 +45,7 @@ fn setup_regression() -> RegressionTestEnv {
     token_admin.mint(&funder, &(ONE_USDC * 100));
     token_admin.mint(&payer, &(ONE_USDC * 100));
 
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let contract = InvoiceLiquidityContractClient::new(&env, &contract_id);
 
     let xlm_admin = Address::generate(&env);
@@ -91,6 +91,7 @@ fn regression_wasm32_target_independence() {
         &due_date,
         &100, // 1% discount
         &t.token.address,
+        &ReferralCode::None,
     );
 
     assert_eq!(id, 1);
@@ -123,6 +124,7 @@ fn regression_discount_rounding_minimum_amount() {
         &due_date,
         &ONE_BPS, // 1 bps = 0.01%
         &t.token.address,
+        &ReferralCode::None,
     );
 
     assert_eq!(id, 1);
@@ -158,6 +160,7 @@ fn regression_due_date_must_be_future() {
         &now, // exactly now - should be rejected
         &100,
         &t.token.address,
+        &ReferralCode::None,
     );
 
     assert!(result.is_err());
@@ -172,6 +175,7 @@ fn regression_due_date_must_be_future() {
         &past_date, // in the past - should be rejected
         &100,
         &t.token.address,
+        &ReferralCode::None,
     );
 
     assert!(result_past.is_err());
@@ -186,6 +190,7 @@ fn regression_due_date_must_be_future() {
         &too_soon,
         &100,
         &t.token.address,
+        &ReferralCode::None,
     );
 
     assert_eq!(result_too_soon, Err(Ok(ContractError::DueDateTooSoon)));
@@ -199,6 +204,7 @@ fn regression_due_date_must_be_future() {
         &valid_date,
         &100,
         &t.token.address,
+        &ReferralCode::None,
     );
 
     assert!(result_valid.is_ok());
@@ -219,6 +225,7 @@ fn regression_self_invoice_rejected() {
         &due_date,
         &ONE_BPS,
         &t.token.address,
+        &ReferralCode::None,
     );
 
     assert!(result.is_err());
@@ -243,6 +250,7 @@ fn regression_concurrent_invoice_ids_unique() {
         &due_date,
         &100,
         &t.token.address,
+        &ReferralCode::None,
     );
 
     // Submit second invoice in same ledger timestamp
@@ -254,6 +262,7 @@ fn regression_concurrent_invoice_ids_unique() {
         &due_date,
         &200,
         &t.token.address,
+        &ReferralCode::None,
     );
 
     // IDs must be different and sequential
@@ -287,6 +296,7 @@ fn regression_fund_exact_amount_no_dust() {
         &due_date,
         &100, // 1% discount
         &t.token.address,
+        &ReferralCode::None,
     );
 
     // Get initial funder balance
@@ -328,6 +338,7 @@ fn regression_batch_invoice_ids_unique() {
         due_date,
         discount_rate: 100,
         token: t.token.address.clone(),
+        referral_code: ReferralCode::None,
     });
     params.push_back(InvoiceParams {
         freelancer: t.freelancer.clone(),
@@ -336,6 +347,7 @@ fn regression_batch_invoice_ids_unique() {
         due_date,
         discount_rate: 200,
         token: t.token.address.clone(),
+        referral_code: ReferralCode::None,
     });
     params.push_back(InvoiceParams {
         freelancer: t.freelancer.clone(),
@@ -344,6 +356,7 @@ fn regression_batch_invoice_ids_unique() {
         due_date,
         discount_rate: 300,
         token: t.token.address.clone(),
+        referral_code: ReferralCode::None,
     });
 
     let ids = t.contract.submit_invoices_batch(&params);

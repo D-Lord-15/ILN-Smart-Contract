@@ -47,7 +47,7 @@ fn setup_fuzz() -> FuzzEnv {
     let payer = Address::generate(&env);
 
     // Deploy and initialise the ILN contract
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let contract = InvoiceLiquidityContractClient::new(&env, &contract_id);
 
     let xlm_admin = Address::generate(&env);
@@ -86,14 +86,7 @@ proptest! {
         let due_date = LEDGER_TIMESTAMP + 86_400;
         let discount_rate: u32 = 300;
 
-        let result = t.contract.try_submit_invoice(
-            &t.freelancer,
-            &t.payer,
-            &amount,
-            &due_date,
-            &discount_rate,
-            &t.token_address,
-        );
+        let result = t.contract.try_submit_invoice(&ReferralCode::None);
 
         prop_assert_eq!(
             result,
@@ -118,14 +111,7 @@ proptest! {
         let t = setup_fuzz();
         let due_date = LEDGER_TIMESTAMP + 86_400;
 
-        let result = t.contract.try_submit_invoice(
-            &t.freelancer,
-            &t.payer,
-            &amount,
-            &due_date,
-            &0u32,
-            &t.token_address,
-        );
+        let result = t.contract.try_submit_invoice(&ReferralCode::None);
 
         prop_assert_eq!(
             result,
@@ -140,14 +126,7 @@ proptest! {
         let due_date = LEDGER_TIMESTAMP + 86_400;
         let amount: i128 = 1_000_000_000;
 
-        let result = t.contract.try_submit_invoice(
-            &t.freelancer,
-            &t.payer,
-            &amount,
-            &due_date,
-            &discount_rate,
-            &t.token_address,
-        );
+        let result = t.contract.try_submit_invoice(&ReferralCode::None);
 
         prop_assert_eq!(
             result,
@@ -173,14 +152,7 @@ proptest! {
         let amount: i128 = 1_000_000_000;
         let discount_rate: u32 = 300;
 
-        let result = t.contract.try_submit_invoice(
-            &t.freelancer,
-            &t.payer,
-            &amount,
-            &due_date,
-            &discount_rate,
-            &t.token_address,
-        );
+        let result = t.contract.try_submit_invoice(&ReferralCode::None);
 
         prop_assert_eq!(
             result,
@@ -211,14 +183,7 @@ proptest! {
         let t = setup_fuzz();
         let due_date = LEDGER_TIMESTAMP + due_date_offset;
 
-        let result = t.contract.try_submit_invoice(
-            &t.freelancer,
-            &t.payer,
-            &amount,
-            &due_date,
-            &discount_rate,
-            &t.token_address,
-        );
+        let result = t.contract.try_submit_invoice(&ReferralCode::None);
 
         prop_assert!(
             result.is_ok(),
@@ -261,14 +226,8 @@ proptest! {
             // Vary the amount slightly per iteration to exercise different paths
             let amount = base_amount + (i as i128);
 
-            let id = t.contract.submit_invoice(
-                &t.freelancer,
-                &t.payer,
-                &amount,
-                &due_date,
-                &discount_rate,
-                &t.token_address,
-            );
+            let id = t.contract.submit_invoice(        &ReferralCode::None,
+    );
 
             prop_assert!(
                 id > previous_id,

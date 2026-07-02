@@ -74,12 +74,20 @@ pub fn update_config(
     crate::storage::set_config(env, &new_config);
 
     let emit = |param_name: &str, old_value: i128, new_value: i128| {
-        env.events().publish_event(&ParameterUpdated {
-            param_name: Symbol::new(env, param_name),
-            old_value,
-            new_value,
-            updated_by: caller.clone(),
-        });
+        let pn = Symbol::new(env, param_name);
+        env.events().publish(
+            (
+                Symbol::new(env, "parameter_updated"),
+                pn.clone(),
+                caller.clone(),
+            ),
+            ParameterUpdated {
+                param_name: pn,
+                old_value,
+                new_value,
+                updated_by: caller.clone(),
+            },
+        );
     };
 
     // Stable audit identifiers for each numeric protocol parameter.

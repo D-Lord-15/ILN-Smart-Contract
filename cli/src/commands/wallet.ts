@@ -1,22 +1,38 @@
-/**
- * `iln wallet` — keypair and profile management.
- *
- * Sub-commands:
- *   iln wallet generate [--profile <name>]   — create and store a keypair
- *   iln wallet list                          — list all profiles
- *
- * Issue: #246
- */
 import { Command } from "commander";
-import { listProfiles, saveProfile } from "../config.js";
+import { listProfiles, saveProfile, loadProfile, resolveProfile } from "../config.js";
+import { Keypair, Horizon } from "@stellar/stellar-sdk";
+import readline from "readline/promises";
 
-/** Generate a deterministic-looking keypair for demo/test purposes.
- *  In production this would use @stellar/stellar-sdk Keypair.random(). */
+/**
+ * Helper to read input from the terminal (e.g., for PINs or secrets).
+ */
+async function ask(question: string, silent = false): Promise<string> {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+  if (silent) {
+    process.stdout.write(question);
+    const password = await new Promise<string>((resolve) => {
+      process.stdin.on("data", (data) => {
+        resolve(data.toString().trim());
+      });
+    });
+    process.stdout.write("\n");
+    rl.close();
+    return password;
+  }
+  const answer = await rl.question(question);
+  rl.close();
+  return answer;
+}
+
+/** Generate a Stellar keypair. */
 export function generateKeypair(): { publicKey: string; secretKey: string } {
-  const rand = Math.random().toString(36).slice(2).toUpperCase().padEnd(54, "0");
+  const kp = Keypair.random();
   return {
-    publicKey: `G${rand.slice(0, 55)}`,
-    secretKey: `S${rand.slice(0, 55)}`,
+    publicKey: kp.publicKey(),
+    secretKey: kp.secret(),
   };
 }
 
@@ -31,16 +47,101 @@ export function makeWalletCommand(): Command {
     .description("Generate a new Stellar keypair and store it as a named profile")
     .option("--profile <name>", "Profile name to store the keypair under", "default")
     .option("--json", "Output result as JSON")
-    .action((opts: { profile: string; json?: boolean }) => {
+    .action(async (opts: { profile: string; json?: boolean }) => {
       const kp = generateKeypair();
-      saveProfile({ name: opts.profile, publicKey: kp.publicKey, secretKey: kp.secretKey });
-
-      if (opts.json) {
-        console.log(JSON.stringify({ profile: opts.profile, publicKey: kp.publicKey }));
-      } else {
+      
+      if (!opts.json) {
+        console.log(`\x1b[33mWarning: Keep your secret key secure. Anyone with access to it can control your funds.\x1b[0m`);
+        const pin = await ask("Set a PIN to encrypt your secret key: ", true);
+        saveProfile({ name: opts.profile, publicKey: kp.publicKey, secretKey: kp.secretKey }, undefined, pin);
+        
         console.log(`✓ Keypair generated and saved as profile "${opts.profile}"`);
         console.log(`  Public key : ${kp.publicKey}`);
-        console.log(`  Profile    : ~/.iln/profiles/${opts.profile}.json`);
+      } else {
+        saveProfile({ name: opts.profile, publicKey: kp.publicKey, secretKey: kp.secretKey });
+        console.log(JSON.stringify({ profile: opts.profile, publicKey: kp.publicKey }));
+      }
+    });
+
+  // iln wallet import --secret S...
+  cmd
+    .command("import")
+    .description("Import an existing Stellar secret key")
+    .requiredOption("--secret <secret>", "The Stellar secret key to import")
+    .option("--profile <name>", "Profile name to store the keypair under", "default")
+    .action(async (opts: { secret: string; profile: string }) => {
+      try {
+        const kp = Keypair.fromSecret(opts.secret);
+        const pin = await ask("Set a PIN to encrypt your secret key: ", true);
+        saveProfile({ name: opts.profile, publicKey: kp.publicKey(), secretKey: opts.secret }, undefined, pin);
+        console.log(`✓ Secret key imported and saved as profile "${opts.profile}"`);
+        console.log(`  Public key : ${kp.publicKey()}`);
+      } catch (err: any) {
+        console.error(`Error: Invalid secret key. ${err.message}`);
+        process.exit(1);
+      }
+    });
+
+  // iln wallet show
+  cmd
+    .command("show")
+    .description("Display the current public key and balances")
+    .action(async () => {
+      const profile = resolveProfile();
+      if (!profile) {
+        console.error("Error: No active wallet profile found.");
+        process.exit(1);
+      }
+
+      console.log(`\x1b[1mActive Wallet Profile: ${profile.name}\x1b[0m`);
+      console.log(`Public Key: ${profile.publicKey}`);
+
+      try {
+        const server = new Horizon.Server("https://horizon-testnet.stellar.org");
+        const account = await server.loadAccount(profile.publicKey);
+        
+        console.log(`\n\x1b[1mBalances:\x1b[0m`);
+        const balances = account.balances;
+        const targets = ["XLM", "USDC", "EURC"];
+        
+        targets.forEach(asset => {
+          const bal = balances.find((b: any) => b.asset_type === "native" ? "XLM" === asset : b.asset_code === asset);
+          if (bal) {
+            console.log(`${asset.padEnd(5)}: ${bal.balance}`);
+          } else {
+            console.log(`${asset.padEnd(5)}: 0`);
+          }
+        });
+      } catch (err: any) {
+        console.log(`\nCould not fetch balances: ${err.message}`);
+      }
+    });
+
+  // iln wallet fund
+  cmd
+    .command("fund")
+    .description("Request testnet XLM via Friendbot")
+    .action(async () => {
+      const profile = resolveProfile();
+      if (!profile) {
+        console.error("Error: No active wallet profile found.");
+        process.exit(1);
+      }
+
+      console.log(`Requesting testnet XLM for ${profile.publicKey}...`);
+      try {
+        const res = await fetch("https://friendbot.stellar.org", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ address: profile.publicKey }),
+        });
+        if (res.ok) {
+          console.log(`✓ Successfully requested XLM from Friendbot.`);
+        } else {
+          console.error(`Error: Friendbot request failed with status ${res.status}`);
+        }
+      } catch (err: any) {
+        console.error(`Error: ${err.message}`);
       }
     });
 

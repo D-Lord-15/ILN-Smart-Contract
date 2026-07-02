@@ -61,7 +61,7 @@ pub fn setup() -> TestEnv {
     token_admin.mint(&funder2, &(INVOICE_AMOUNT * 10));
     token_admin.mint(&payer, &(INVOICE_AMOUNT * 10));
 
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let contract = InvoiceLiquidityContractClient::new(&env, &contract_id);
 
     // Fund the contract treasury
@@ -103,7 +103,7 @@ fn submit_auction_invoice(t: &TestEnv) -> u64 {
         &AUCTION_MIN_RATE,
         &AUCTION_DECAY_PER_HOUR,
         &t.token.address,
-        &Option::<BytesN<32>>::None,
+        &ReferralCode::None,
     )
 }
 
@@ -134,7 +134,7 @@ fn test_submit_auction_invoice_stores_correct_fields() {
         &AUCTION_MIN_RATE,
         &AUCTION_DECAY_PER_HOUR,
         &t.token.address,
-        &Option::<BytesN<32>>::None,
+        &ReferralCode::None,
     );
 
     let invoice = t.contract.get_invoice(&id);
@@ -170,10 +170,10 @@ fn test_submit_auction_emits_event() {
         &AUCTION_MIN_RATE,
         &AUCTION_DECAY_PER_HOUR,
         &t.token.address,
-        &Option::<BytesN<32>>::None,
+        &ReferralCode::None,
     );
 
-    let events = t.env.events().all().filter_by_contract(&t.contract.address);
+    let events = t.env.events().all();
     
     let expected_event = crate::events::AuctionStarted {
         invoice_id: id,
@@ -354,7 +354,7 @@ fn test_auction_cannot_fund_after_due_date() {
         &AUCTION_MIN_RATE,
         &AUCTION_DECAY_PER_HOUR,
         &t.token.address,
-        &Option::<BytesN<32>>::None,
+        &ReferralCode::None,
     );
 
     // Advance past due date
@@ -385,7 +385,7 @@ fn test_invalid_start_rate_zero() {
         &AUCTION_MIN_RATE,
         &AUCTION_DECAY_PER_HOUR,
         &t.token.address,
-        &Option::<BytesN<32>>::None,
+        &ReferralCode::None,
     );
 
     assert!(result.is_err());
@@ -405,7 +405,7 @@ fn test_invalid_start_rate_exceeds_max() {
         &AUCTION_MIN_RATE,
         &AUCTION_DECAY_PER_HOUR,
         &t.token.address,
-        &Option::<BytesN<32>>::None,
+        &ReferralCode::None,
     );
 
     assert!(result.is_err());
@@ -425,7 +425,7 @@ fn test_invalid_min_rate_exceeds_start_rate() {
         &1000, // Invalid: min rate exceeds start rate
         &AUCTION_DECAY_PER_HOUR,
         &t.token.address,
-        &Option::<BytesN<32>>::None,
+        &ReferralCode::None,
     );
 
     assert!(result.is_err());
@@ -445,7 +445,7 @@ fn test_invalid_decay_rate_zero() {
         &AUCTION_MIN_RATE,
         &0, // Invalid: zero decay rate
         &t.token.address,
-        &Option::<BytesN<32>>::None,
+        &ReferralCode::None,
     );
 
     assert!(result.is_err());
@@ -472,7 +472,7 @@ fn test_auction_invoice_marked_correctly() {
         &due_date,
         &DISCOUNT_RATE,
         &t.token.address,
-        &Option::<BytesN<32>>::None,
+        &ReferralCode::None,
     );
     let standard_invoice = t.contract.get_invoice(&standard_id);
 
@@ -494,7 +494,7 @@ fn test_standard_invoice_unaffected_by_auction_changes() {
         &due_date,
         &DISCOUNT_RATE,
         &t.token.address,
-        &Option::<BytesN<32>>::None,
+        &ReferralCode::None,
     );
 
     // Fund with known rate
@@ -533,11 +533,11 @@ fn test_auction_invoice_with_referral_code() {
         &AUCTION_MIN_RATE,
         &AUCTION_DECAY_PER_HOUR,
         &t.token.address,
-        &Some(referral_code.clone()),
+        &ReferralCode::Present(referral_code.clone()),
     );
 
     let invoice = t.contract.get_invoice(&id);
-    assert_eq!(invoice.referral_code, Some(referral_code));
+    assert_eq!(invoice.referral_code, ReferralCode::Present(referral_code));
 }
 
 // ================================================================
@@ -556,7 +556,7 @@ fn test_auction_rate_with_very_small_decay() {
         &900,  // 9%
         &1,    // Very small decay: 0.01% per hour
         &t.token.address,
-        &Option::<BytesN<32>>::None,
+        &ReferralCode::None,
     );
 
     // Even after 1 hour, rate should be close to start
@@ -591,7 +591,7 @@ fn test_auction_rate_with_large_decay() {
         &0,    // 0%
         &5000,  // Very large decay: 50% per hour
         &t.token.address,
-        &Option::<BytesN<32>>::None,
+        &ReferralCode::None,
     );
 
     // After 1 hour, rate should be 50%

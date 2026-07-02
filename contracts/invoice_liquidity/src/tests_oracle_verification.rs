@@ -8,8 +8,14 @@
 //! 3. Unverified payer + require_oracle_verification=false → succeeds (flag not set).
 
 use super::*;
-use crate::test::{setup, DISCOUNT_RATE, DUE_DATE_OFFSET, INVOICE_AMOUNT};
-use soroban_sdk::{contract, contractimpl, testutils::{Address as _, Ledger as _}, Address, Env};
+use crate::test::setup;
+
+const INVOICE_AMOUNT: i128 = 1_000_000_000;
+use soroban_sdk::{
+    contract, contractimpl,
+    testutils::{Address as _, Ledger as _},
+    Address, Env,
+};
 
 // ----------------------------------------------------------------
 // Mock oracle: always returns verified = true with a fresh timestamp.
@@ -34,7 +40,6 @@ impl MockVerifiedOracle {
 #[contract]
 struct MockUnverifiedOracle;
 
-#[contractimpl]
 impl MockUnverifiedOracle {
     pub fn get_payer_data(env: Env, _payer: Address) -> OracleVerificationResponse {
         OracleVerificationResponse {
@@ -50,16 +55,7 @@ impl MockUnverifiedOracle {
 
 fn make_invoice(t: &crate::test::TestEnv) -> u64 {
     let now = t.env.ledger().timestamp();
-    t.contract
-        .submit_invoice(
-            &t.freelancer,
-            &t.payer,
-            &INVOICE_AMOUNT,
-            &(now + DUE_DATE_OFFSET),
-            &DISCOUNT_RATE,
-            &t.token.address,
-        )
-        .unwrap()
+    t.contract.submit_invoice(&ReferralCode::None).unwrap()
 }
 
 // ----------------------------------------------------------------
@@ -70,7 +66,7 @@ fn test_oracle_verified_payer_passes() {
     let t = setup();
 
     // Register the verified mock oracle and wire it into contract config.
-    let oracle_id = t.env.register(MockVerifiedOracle, ());
+    let oracle_id = t.env.register_contract(None, MockVerifiedOracle);
     t.contract.set_price_oracle(&oracle_id).unwrap();
 
     let invoice_id = make_invoice(&t);
@@ -93,7 +89,7 @@ fn test_oracle_unverified_payer_with_flag_fails() {
     let t = setup();
 
     // Register the unverified mock oracle.
-    let oracle_id = t.env.register(MockUnverifiedOracle, ());
+    let oracle_id = t.env.register_contract(None, MockUnverifiedOracle);
     t.contract.set_price_oracle(&oracle_id).unwrap();
 
     let invoice_id = make_invoice(&t);
@@ -117,7 +113,7 @@ fn test_oracle_unverified_payer_without_flag_passes() {
     let t = setup();
 
     // Even with an unverified oracle registered, flag=false means no query.
-    let oracle_id = t.env.register(MockUnverifiedOracle, ());
+    let oracle_id = t.env.register_contract(None, MockUnverifiedOracle);
     t.contract.set_price_oracle(&oracle_id).unwrap();
 
     let invoice_id = make_invoice(&t);

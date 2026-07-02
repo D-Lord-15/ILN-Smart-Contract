@@ -38,7 +38,7 @@ fn emits_invoice_paid_event_with_full_settlement_details() {
     // ------------------------------------------------------------
     // Contract setup
     // ------------------------------------------------------------
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let client = InvoiceLiquidityContractClient::new(&env, &contract_id);
 
     client.initialize(&admin, &token, &token);

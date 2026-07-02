@@ -18,7 +18,7 @@ use soroban_sdk::{testutils::Address as _, Address, Env};
 fn setup() -> (Env, MockOracleClient<'static>) {
     let env = Env::default();
     env.mock_all_auths();
-    let id = env.register(MockOracle, ());
+    let id = env.register_contract(None, MockOracle);
     let client = MockOracleClient::new(&env, &id);
     (env, client)
 }

@@ -12,7 +12,7 @@ fn setup_test(
     Address,
 ) {
     env.mock_all_auths();
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let client = InvoiceLiquidityContractClient::new(env, &contract_id);
 
     let admin = Address::generate(env);
@@ -38,7 +38,15 @@ fn freelancer_can_cancel_pending() {
     let due_date = env.ledger().timestamp() + 100000;
     let discount = 100;
 
-    let id = client.submit_invoice(&freelancer, &payer, &amount, &due_date, &discount, &token);
+    let id = client.submit_invoice(
+        &freelancer,
+        &payer,
+        &amount,
+        &due_date,
+        &discount,
+        &token,
+        &ReferralCode::None,
+    );
 
     assert!(client.try_cancel_invoice(&id).is_ok());
 

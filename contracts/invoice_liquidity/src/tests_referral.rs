@@ -1,7 +1,12 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{BytesN};
+use crate::test::setup;
+use soroban_sdk::BytesN;
+
+const INVOICE_AMOUNT: i128 = 1_000_000_000;
+const DISCOUNT_RATE: u32 = 300;
+const DUE_DATE_OFFSET: u64 = 60 * 60 * 24 * 30;
 
 #[test]
 fn test_submit_invoice_without_referral_does_not_increment_stats() {
@@ -17,7 +22,7 @@ fn test_submit_invoice_without_referral_does_not_increment_stats() {
         &due_date,
         &DISCOUNT_RATE,
         &t.token.address,
-        &Option::<BytesN<32>>::None,
+        &ReferralCode::None,
     );
 
     // stats for arbitrary code should be zero

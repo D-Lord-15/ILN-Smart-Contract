@@ -20,7 +20,7 @@ export {
   validateDueDate,
 } from "./utils/validate.js";
 export { KeypairSigner } from "./signers/KeypairSigner.js";
-export { FreighterSigner, ILNError, ILNErrorCode } from "./signers/FreighterSigner.js";
+export { FreighterSigner, ILNErrorCode } from "./signers/FreighterSigner.js";
 export { subscribe, parseContractEvent, matchesFilter } from "./events/subscribe.js";
 export { ILNClient, iln } from "./client.js";
 export type { ISigner } from "./signers/ISigner.js";
@@ -62,8 +62,20 @@ export type {
   ProposalFilter,
   CreateProposalResult,
 } from "./types/governance.js";
+
 export { ILNError } from "./errors.js";
 export { disputeInvoice, sha256Hex } from "./methods/disputeInvoice.js";
 export type { DisputeInvoiceParams, DisputeInvoiceResult } from "./methods/disputeInvoice.js";
 export { TokenRegistry, tokenRegistry } from "./utils/tokenRegistry.js";
 export type { TokenInfo, NetworkName } from "./utils/tokenRegistry.js";
+export {
+  estimateFee,
+  estimateSubmitFee,
+  estimateFundFee,
+} from "./utils/feeCalculator.js";
+export type {
+  FeeEstimate,
+  FeeEstimateOptions,
+  EstimateSubmitFeeParams,
+  SorobanOperation,
+} from "./utils/feeCalculator.js";

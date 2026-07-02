@@ -9,6 +9,13 @@ import { Command } from "commander";
 import { makeConfigCommand } from "./commands/config.js";
 import { makeExportCommand } from "./commands/export.js";
 import { makeWalletCommand } from "./commands/wallet.js";
+import { makeSubmitCommand } from "./commands/submit.js";
+import { makeCancelCommand } from "./commands/cancel.js";
+import { makeMarketplaceCommand } from "./commands/marketplace.js";
+import { makeFundCommand } from "./commands/fund.js";
+import { makeStatusCommand } from "./commands/status.js";
+import { makeReputationCommand } from "./commands/reputation.js";
+import { makeCompletionCommand } from "./commands/completion.js";
 
 const program = new Command();
 
@@ -21,5 +28,12 @@ program
 program.addCommand(makeConfigCommand());
 program.addCommand(makeExportCommand());
 program.addCommand(makeWalletCommand());
+program.addCommand(makeSubmitCommand());
+program.addCommand(makeCancelCommand());
+program.addCommand(makeMarketplaceCommand());
+program.addCommand(makeFundCommand());
+program.addCommand(makeStatusCommand());
+program.addCommand(makeReputationCommand());
+program.addCommand(makeCompletionCommand());
 
 program.parse(process.argv);

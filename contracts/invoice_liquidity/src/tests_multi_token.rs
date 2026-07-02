@@ -59,7 +59,7 @@ fn setup() -> MultiTokenTestEnv {
     xlm.admin_client.mint(&payer, &100_000_000_000);
     xlm.admin_client.mint(&lp, &100_000_000_000);
 
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let contract = InvoiceLiquidityContractClient::new(&env, &contract_id);
     contract.initialize(&admin, &usdc.address, &xlm.address);
     contract.add_token(&eurc.address, &6_u32); // EURC has 6 decimals
@@ -86,13 +86,7 @@ fn due_date(env: &MultiTokenTestEnv) -> u64 {
 }
 
 fn submit_invoice(env: &MultiTokenTestEnv, token: &MockToken, amount: i128) -> u64 {
-    env.contract.submit_invoice(
-        &env.freelancer,
-        &env.payer,
-        &amount,
-        &due_date(env),
-        &DISCOUNT_RATE,
-        &token.address,
+    env.contract.submit_invoice(        &ReferralCode::None,
     )
 }
 
@@ -168,13 +162,7 @@ fn test_submit_with_unapproved_token_is_rejected() {
     let env = setup();
     let rogue = register_mock_token(&env.env);
 
-    let result = env.contract.try_submit_invoice(
-        &env.freelancer,
-        &env.payer,
-        &1_000_000,
-        &due_date(&env),
-        &DISCOUNT_RATE,
-        &rogue.address,
+    let result = env.contract.try_submit_invoice(try_        &ReferralCode::None,
     );
 
     assert_eq!(result, Err(Ok(ContractError::Unauthorized)));

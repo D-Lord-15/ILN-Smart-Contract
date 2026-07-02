@@ -1,6 +1,16 @@
 pub use crate::storage::DataKey as StorageKey;
 use soroban_sdk::{contracttype, Address, BytesN, Env, IntoVal, Symbol};
 
+/// A nullable BytesN<32> that works with #[contracttype] derive.
+/// In Soroban SDK 21.x, `Option<BytesN<32>>` doesn't implement the required
+/// ScVal conversion traits, so we use this wrapper enum instead.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub enum ReferralCode {
+    None,
+    Present(BytesN<32>),
+}
+
 // ----------------------------------------------------------------
 // Status enum — tracks lifecycle of invoice
 // ----------------------------------------------------------------
@@ -38,7 +48,7 @@ pub struct Invoice {
     pub funded_at: Option<u32>,  // ledger timestamp when funding occurred
     pub amount_funded: i128,     // cumulative amount funded so far
     pub amount_paid: i128,       // cumulative amount paid by the payer
-    pub referral_code: Option<BytesN<32>>, // optional referral code used at submission
+    pub referral_code: ReferralCode,
     pub submitter_reputation: u32, // snapshot of freelancer's reputation at submission time
 }
 
@@ -51,7 +61,7 @@ pub struct InvoiceParams {
     pub due_date: u64,
     pub discount_rate: u32,
     pub token: Address,
-    pub referral_code: Option<BytesN<32>>,
+    pub referral_code: ReferralCode,
 }
 
 #[contracttype]
@@ -429,14 +439,20 @@ pub fn set_reputation(env: &Env, profile: &ReputationProfile) {
         || old_profile.invoices_paid != profile.invoices_paid
         || old_profile.invoices_defaulted != profile.invoices_defaulted
     {
-        env.events().publish_event(&crate::events::ReputationUpdated {
-            address: profile.address.clone(),
-            old_score,
-            new_score,
-            invoices_submitted: profile.invoices_submitted,
-            invoices_paid: profile.invoices_paid,
-            invoices_defaulted: profile.invoices_defaulted,
-        });
+        env.events().publish(
+            (
+                Symbol::new(env, "reputation_updated"),
+                profile.address.clone(),
+            ),
+            crate::events::ReputationUpdated {
+                address: profile.address.clone(),
+                old_score,
+                new_score,
+                invoices_submitted: profile.invoices_submitted,
+                invoices_paid: profile.invoices_paid,
+                invoices_defaulted: profile.invoices_defaulted,
+            },
+        );
     }
 }
 
@@ -571,9 +587,7 @@ pub fn set_lp_score(env: &Env, lp: &Address, score: u32) {
             env.storage().persistent().remove(&key);
         }
     } else {
-        env.storage()
-            .persistent()
-            .set(&key, &score);
+        env.storage().persistent().set(&key, &score);
     }
 }
 

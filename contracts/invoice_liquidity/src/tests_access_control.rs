@@ -23,7 +23,7 @@ fn setup_env() -> (
     let xlm_contract = env.register_stellar_asset_contract_v2(xlm_admin.clone());
     let xlm_address = xlm_contract.address();
 
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let client = InvoiceLiquidityContractClient::new(&env, &contract_id);
 
     client.initialize(&admin, &token_address, &xlm_address);

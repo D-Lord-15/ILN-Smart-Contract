@@ -1,7 +1,7 @@
 use soroban_sdk::contracterror;
 
 #[contracterror]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ContractError {
     InvoiceNotFound = 1,
     AlreadyFunded = 2,

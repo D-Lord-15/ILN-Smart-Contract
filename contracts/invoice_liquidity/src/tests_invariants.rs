@@ -8,7 +8,7 @@ use super::*;
 use soroban_sdk::{
     testutils::{Address as _, Events as _, Ledger},
     token::{Client as TokenClient, StellarAssetClient},
-    Address, Env, Event, Symbol,
+    Address, Env, Symbol,
 };
 
 use crate::events::{AdminChanged, InvoiceSubmitted, ParameterUpdated};
@@ -49,7 +49,7 @@ fn setup() -> TestEnv {
     token_admin.mint(&funder, &(INVOICE_AMOUNT * 10));
     token_admin.mint(&payer, &(INVOICE_AMOUNT * 10));
 
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let contract = InvoiceLiquidityContractClient::new(&env, &contract_id);
     token_admin.mint(&contract.address, &(INVOICE_AMOUNT * 100));
 
@@ -84,6 +84,7 @@ fn submit_standard_invoice(t: &TestEnv) -> u64 {
         &due_date,
         &DISCOUNT_RATE,
         &t.token.address,
+        &ReferralCode::None,
     )
 }
 
@@ -179,7 +180,8 @@ fn invariants_hold_after_submit() {
 fn invariants_hold_after_fund() {
     let t = setup();
     let id = submit_standard_invoice(&t);
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     check_invariants(&t.env, &t.contract);
 }
 
@@ -187,7 +189,8 @@ fn invariants_hold_after_fund() {
 fn invariants_hold_after_mark_paid() {
     let t = setup();
     let id = submit_standard_invoice(&t);
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     t.contract.mark_paid(&id, &INVOICE_AMOUNT);
     check_invariants(&t.env, &t.contract);
 }
@@ -208,7 +211,8 @@ fn invariants_hold_across_multiple_invoices() {
     let id2 = submit_standard_invoice(&t);
     let id3 = submit_standard_invoice(&t);
 
-    t.contract.fund_invoice(&t.funder, &id1, &INVOICE_AMOUNT, &false);
+    t.contract
+        .fund_invoice(&t.funder, &id1, &INVOICE_AMOUNT, &false);
     t.contract.mark_paid(&id1, &INVOICE_AMOUNT);
     check_invariants(&t.env, &t.contract);
 
@@ -239,7 +243,8 @@ fn invariant_logic_catches_funded_without_funder() {
     check_invariants(&t.env, &t.contract);
 
     // Fund so we get a Funded invoice, then verify funder IS set.
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     let funded = t.contract.get_invoice(&id);
     assert!(
         funded.funder.is_some(),
@@ -265,10 +270,10 @@ fn submit_invoice_event_contains_all_fields() {
         &due_date,
         &DISCOUNT_RATE,
         &t.token.address,
-        &Option::<soroban_sdk::BytesN<32>>::None,
+        &ReferralCode::None,
     );
 
-    let events = t.env.events().all().filter_by_contract(&t.contract.address);
+    let events = t.env.events().all();
     let submitted_xdr = InvoiceSubmitted {
         invoice_id: id,
         freelancer: t.freelancer.clone(),
@@ -277,7 +282,7 @@ fn submit_invoice_event_contains_all_fields() {
         amount: INVOICE_AMOUNT,
         due_date,
         discount_rate: DISCOUNT_RATE,
-        referral_code: None,
+        referral_code: ReferralCode::None,
         status: InvoiceStatus::Pending,
         timestamp: ts_before,
     }
@@ -307,10 +312,10 @@ fn submit_invoice_event_timestamp_matches_ledger() {
         &due_date,
         &DISCOUNT_RATE,
         &t.token.address,
-        &Option::<soroban_sdk::BytesN<32>>::None,
+        &ReferralCode::None,
     );
 
-    let events = t.env.events().all().filter_by_contract(&t.contract.address);
+    let events = t.env.events().all();
     let expected = InvoiceSubmitted {
         invoice_id: id,
         freelancer: t.freelancer.clone(),
@@ -319,7 +324,7 @@ fn submit_invoice_event_timestamp_matches_ledger() {
         amount: INVOICE_AMOUNT,
         due_date,
         discount_rate: DISCOUNT_RATE,
-        referral_code: None,
+        referral_code: ReferralCode::None,
         status: InvoiceStatus::Pending,
         timestamp: 1_800_000_000,
     }
@@ -344,7 +349,7 @@ fn set_admin_emits_admin_changed_event() {
 
     t.contract.set_admin(&new_admin);
 
-    let events = t.env.events().all().filter_by_contract(&t.contract.address);
+    let events = t.env.events().all();
     let expected = AdminChanged {
         old_admin: t.admin.clone(),
         new_admin: new_admin.clone(),
@@ -369,7 +374,7 @@ fn set_admin_updates_admin_in_storage() {
     // The new admin can now call a privileged function; the old admin cannot.
     // Verify by checking that update_fee_rate succeeds (admin auth required).
     // mock_all_auths() covers both, so we verify the event instead.
-    let events = t.env.events().all().filter_by_contract(&t.contract.address);
+    let events = t.env.events().all();
     let expected = AdminChanged {
         old_admin: t.admin.clone(),
         new_admin: new_admin.clone(),
@@ -413,7 +418,7 @@ fn update_fee_rate_emits_parameter_updated_event() {
 
     t.contract.update_fee_rate(&250);
 
-    let events = t.env.events().all().filter_by_contract(&t.contract.address);
+    let events = t.env.events().all();
     let expected = ParameterUpdated {
         param_name: Symbol::new(&t.env, "protocol_fee_rate_bps"),
         old_value: 0,
@@ -435,7 +440,7 @@ fn update_max_discount_emits_parameter_updated_event() {
 
     t.contract.update_max_discount(&4_500);
 
-    let events = t.env.events().all().filter_by_contract(&t.contract.address);
+    let events = t.env.events().all();
     let expected = ParameterUpdated {
         param_name: Symbol::new(&t.env, "max_discount_rate_bps"),
         old_value: 5_000,
@@ -467,7 +472,7 @@ fn update_config_emits_parameter_updated_events_for_reputation_settings() {
         &xlm_sac_address,
     );
 
-    let events = t.env.events().all().filter_by_contract(&t.contract.address);
+    let events = t.env.events().all();
     let expected = [
         ParameterUpdated {
             param_name: Symbol::new(&t.env, "high_rep_threshold"),

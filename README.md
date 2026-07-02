@@ -10,6 +10,8 @@ The Invoice Liquidity Network (ILN) Event Indexer is a lightweight, high-perform
 3. [Docker Deployment](#docker-deployment)
 4. [REST API Reference](#rest-api-reference)
 5. [Troubleshooting](#troubleshooting)
+> **New here?** Start with the [Developer Quickstart](docs/developer-quickstart.md), then read [Architecture](docs/Architecture.md) for the full money flow.
+For the full documentation map, see [Documentation Index](docs/index.md) and [Glossary](docs/glossary.md).
 
 ---
 
@@ -45,6 +47,34 @@ flowchart TD
 ---
 
 ## Environment Variables
+## Contracts
+
+| Crate | Path | Responsibility |
+|-------|------|----------------|
+| **`invoice_liquidity`** | `contracts/invoice_liquidity/` | Core escrow: submit, fund, settle, cancel, and default invoices; reputation scores; multi-token support; optional payer oracle |
+| **`iln_governance`** | `contracts/iln_governance/` | On-chain governance: proposals, voting, delegation, quorum, and admin veto |
+| **`iln_distribution`** | `contracts/iln_distribution/` | Yield and incentive distribution for LPs, freelancers, and payers (linked to governance token) |
+| **`reputation_bonus`** | `contracts/reputation_bonus/` | Reputation-based discount bonuses and related invoice hooks |
+| **`iln_fuzz`** | `contracts/fuzz/` | Property-based fuzz tests against core invoice flows |
+| **Integration tests** | `contracts/tests/` | Cross-contract tests with mock tokens and oracles |
+
+All contracts compile to Soroban WASM (`wasm32v1-none`) and are tested natively via `soroban-sdk` test utilities (no live network required for `cargo test`).
+
+| Doc | Description |
+|-----|-------------|
+| [First Invoice Tutorial](docs/tutorials/first-invoice.md) | Hands-on walkthrough: submit, fund, settle, and query an invoice on testnet |
+| [Local Development Guide](docs/local-development.md) | Docker setup, local Stellar node, deploying contracts locally, running tests |
+| [Developer Quickstart](docs/developer-quickstart.md) | Rust toolchain setup, building, testing, and deploying to testnet |
+| [Documentation Index](docs/index.md) | Complete map of protocol, integration, operations, and contributor docs |
+| [Glossary](docs/glossary.md) | Definitions for protocol, DeFi, invoice factoring, and Stellar terms |
+| [SDK Integration Guide](docs/sdk-integration.md) | TypeScript examples for every contract interaction |
+| [Architecture](docs/Architecture.md) | System design, money flow, and security model |
+| [Contract ABI](docs/contract-abi.md) | Function signatures and error codes |
+| [Events](docs/events.md) | All emitted events and their payloads |
+| [Governance](docs/governance.md) | Proposal lifecycle and voting mechanics |
+| [Storage Layout](docs/storage-layout.md) | On-chain storage key reference |
+| [Threat Model](docs/threat-model.md) | Security assumptions and known risks |
+---
 
 Configure the indexer via environment variables. Create a `.env` file at the indexer directory root or inject them directly into your container.
 
@@ -156,6 +186,22 @@ volumes:
   ```
 
 ---
+A `Makefile` at the repo root provides all common developer commands:
+
+| Command | Description |
+|---------|-------------|
+| `make build` | Compile all contracts to optimised WASM |
+| `make test` | Run the full test suite |
+| `make fmt` | Format all Rust source files |
+| `make lint` | Run Clippy with denied warnings |
+| `make deploy-testnet` | Deploy all contracts to Stellar testnet |
+| `make coverage` | Generate a tarpaulin HTML coverage report |
+| `make clean` | Remove build artefacts |
+| `make help` | List all available targets |
+
+```bash
+git clone https://github.com/Invoice-Liquidity-Network/ILN-Smart-Contract.git
+cd ILN-Smart-Contract
 
 ## REST API Reference
 
@@ -257,6 +303,47 @@ GET /stats
   "activeLpsCount": 47
 }
 ```
+## Documentation
+
+### Getting started
+
+| Document | Description |
+|----------|-------------|
+| [Developer Quickstart](docs/developer-quickstart.md) | Toolchain, build, test, and testnet deploy |
+| [Local Development Guide](docs/local-development.md) | Docker Stellar node, scripts, and workflow |
+| [Documentation Index](docs/index.md) | Full documentation map |
+| [Glossary](docs/glossary.md) | Protocol and Stellar terminology |
+| [SDK Integration Guide](docs/sdk-integration.md) | TypeScript / Stellar SDK examples (testnet) |
+| [SDK Usage Guide](sdk/README.md) | Complete NPM package usage guide for @iln/sdk |
+| [FAQ](docs/faq.md) | Frequently asked questions for users and developers |
+
+### Architecture & security
+
+| Document | Description |
+|----------|-------------|
+| [Architecture](docs/Architecture.md) | Actors, money flow, state machine, deployment |
+| [Threat Model](docs/threat-model.md) | Security assumptions, risks, and mitigations |
+| [Security Policy](docs/security.md) | Reporting process, severity, safe harbor, and component-specific vulnerability classes |
+| [Access Control](docs/access-control.md) | Roles, auth requirements, and admin functions |
+| [Storage Layout](docs/storage-layout.md) | On-chain keys and data structures |
+| [Upgrade Guide](docs/upgrade-guide.md) | Contract upgrade process and safeguards |
+| [Mainnet Launch Checklist](docs/mainnet-launch-checklist.md) | Launch readiness owners, statuses, and sign-off |
+| [Architecture Decision Records](docs/adr/README.md) | ADR index (Soroban choice, governance timelock, etc.) |
+
+### Contract reference
+
+| Document | Description |
+|----------|-------------|
+| [Contract ABI](docs/contract-abi.md) | Public functions and **error codes** |
+| [Error Codes](docs/error-codes.md) | Numeric error reference with causes and remediation |
+| [Events](docs/events.md) | Emitted events and payloads |
+| [Governance](docs/governance.md) | Proposals, voting, delegation, timelock |
+| [Multi-Token Support](docs/multi-token.md) | USDC, XLM, and token configuration |
+| [Reputation](docs/reputation.md) | Reputation system overview |
+| [Reputation Model](docs/reputation-model.md) | Scoring formulas and decay |
+| [Oracle Design](docs/oracle-design.md) | Optional payer-verification oracle |
+| [Oracle Integration](docs/oracle-integration.md) | Deploy and register a compatible oracle |
+| [Benchmarks](docs/benchmarks.md) | Gas / resource usage benchmarks |
 
 ---
 

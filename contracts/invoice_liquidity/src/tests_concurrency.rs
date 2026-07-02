@@ -40,7 +40,7 @@ fn setup_env() -> ConcurrencyEnv {
     let xlm_admin = Address::generate(&env);
     let xlm = env.register_stellar_asset_contract_v2(xlm_admin);
 
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let contract = InvoiceLiquidityContractClient::new(&env, &contract_id);
     let eurc_addr = Address::generate(&env);
     contract.initialize(&usdc_admin, &usdc.address(), &eurc_addr, &xlm.address());
@@ -91,13 +91,7 @@ fn test_scenario_1_double_funding_attempt() {
     let due_date = t.env.ledger().timestamp() + 86_400;
     let amount = 1_000_000_000;
 
-    let id = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &amount,
-        &due_date,
-        &300,
-        &t.token,
+    let id = t.contract.submit_invoice(        &ReferralCode::None,
     );
 
     // LP 1 funds => success
@@ -125,13 +119,7 @@ fn test_scenario_2_fund_after_cancel() {
     let due_date = t.env.ledger().timestamp() + 86_400;
     let amount = 1_000_000_000;
 
-    let id = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &amount,
-        &due_date,
-        &300,
-        &t.token,
+    let id = t.contract.submit_invoice(        &ReferralCode::None,
     );
 
     // Act: Cancel the invoice
@@ -165,13 +153,7 @@ fn test_scenario_3_fund_after_expiry() {
     let due_date = t.env.ledger().timestamp() + 10;
     let amount = 1_000_000_000;
 
-    let id = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &amount,
-        &due_date,
-        &300,
-        &t.token,
+    let id = t.contract.submit_invoice(        &ReferralCode::None,
     );
 
     // Simulate expiry by advancing ledger time
@@ -200,13 +182,7 @@ fn test_scenario_4_rapid_state_reads() {
     let due_date = t.env.ledger().timestamp() + 86_400;
     let amount = 1_000_000_000;
 
-    let id = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &amount,
-        &due_date,
-        &300,
-        &t.token,
+    let id = t.contract.submit_invoice(        &ReferralCode::None,
     );
 
     // State 1 Reads
@@ -242,13 +218,7 @@ fn test_scenario_5_fund_mark_paid_fund_again() {
     let due_date = t.env.ledger().timestamp() + 86_400;
     let amount = 1_000_000_000;
 
-    let id = t.contract.submit_invoice(
-        &t.freelancer,
-        &t.payer,
-        &amount,
-        &due_date,
-        &300,
-        &t.token,
+    let id = t.contract.submit_invoice(        &ReferralCode::None,
     );
 
     // First funding succeeds

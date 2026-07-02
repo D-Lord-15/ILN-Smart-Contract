@@ -7,6 +7,8 @@ use soroban_sdk::{
     Address, Env,
 };
 
+use invoice_liquidity::ReferralCode;
+
 const DEFAULT_INVOICE_AMOUNT: i128 = 1_000_000_000;
 const DEFAULT_DISCOUNT_RATE: u32 = 300;
 const DEFAULT_DUE_DATE_OFFSET: u64 = 60 * 60 * 24 * 30;
@@ -59,7 +61,7 @@ impl TestContext {
         xlm_admin_client.mint(&payer, &(DEFAULT_INVOICE_AMOUNT * 10));
         xlm_admin_client.mint(&lp, &(DEFAULT_INVOICE_AMOUNT * 10));
 
-        let contract_id = env.register(InvoiceLiquidityContract, ());
+        let contract_id = env.register_contract(None, InvoiceLiquidityContract);
         let contract = InvoiceLiquidityContractClient::new(&env, &contract_id);
 
         usdc_admin_client.mint(&contract.address, &(DEFAULT_INVOICE_AMOUNT * 100));
@@ -87,14 +89,17 @@ impl TestContext {
 
     pub fn submit_invoice(&self, amount: i128, rate: u32, due_days: u64) -> u64 {
         let due_date = self.env.ledger().timestamp() + due_days;
-        self.contract.submit_invoice(
-            &self.submitter,
-            &self.payer,
-            &amount,
-            &due_date,
-            &rate,
-            &self.usdc.address,
-        )
+        self.contract
+            .submit_invoice(
+                &self.submitter,
+                &self.payer,
+                &amount,
+                &due_date,
+                &rate,
+                &self.usdc.address,
+                &ReferralCode::None,
+            )
+            .expect("submit invoice")
     }
 
     pub fn fund_invoice(&self, invoice_id: u64) {
@@ -103,7 +108,8 @@ impl TestContext {
     }
 
     pub fn mark_paid(&self, invoice_id: u64) {
-        self.contract.mark_paid(&invoice_id, &DEFAULT_INVOICE_AMOUNT);
+        self.contract
+            .mark_paid(&invoice_id, &DEFAULT_INVOICE_AMOUNT);
     }
 
     pub fn default_due_date(&self) -> u64 {

@@ -66,7 +66,7 @@ fn setup() -> TestEnv {
     usdc.admin_client.mint(&lp, &100_000_000_000);
     xlm.admin_client.mint(&lp, &100_000_000_000);
 
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let contract = InvoiceLiquidityContractClient::new(&env, &contract_id);
     let eurc_address = Address::generate(&env);
     contract.initialize(&admin, &usdc.address, &eurc_address, &xlm.address);
@@ -97,7 +97,7 @@ fn submit(t: &TestEnv, token: &Address) -> u64 {
         &due,
         &DISCOUNT_RATE,
         token,
-        &Option::<soroban_sdk::BytesN<32>>::None,
+        &ReferralCode::None,
     )
 }
 
@@ -164,7 +164,9 @@ impl FeeOnTransferToken {
         let received = amount.checked_sub(fee).unwrap_or(0);
         let key_to = FeeTokenDataKey::Balance(to.clone());
         let to_balance: i128 = env.storage().persistent().get(&key_to).unwrap_or(0);
-        env.storage().persistent().set(&key_to, &(to_balance + received));
+        env.storage()
+            .persistent()
+            .set(&key_to, &(to_balance + received));
     }
 
     pub fn balance(env: Env, who: Address) -> i128 {
@@ -178,7 +180,7 @@ impl FeeOnTransferToken {
 #[test]
 fn add_token_rejects_fee_on_transfer_token() {
     let t = setup();
-    let fee_token_address = t.env.register(FeeOnTransferToken, ());
+    let fee_token_address = t.env.register_contract(None, FeeOnTransferToken);
     let fee_token_admin = StellarAssetClient::new(&t.env, &fee_token_address);
 
     fee_token_admin.mint(&t.admin, &100_000_000_000);

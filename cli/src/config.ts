@@ -9,11 +9,13 @@
 import fs from "fs";
 import os from "os";
 import path from "path";
+import { encrypt, decrypt } from "./crypto.js";
 
 export interface ILNConfig {
   network: "testnet" | "mainnet";
   rpcUrl: string;
   defaultProfile?: string;
+  pin?: string; // Encrypted or hashed PIN? No, usually we use PIN to derive key.
 }
 
 export interface ProfileData {
@@ -93,17 +95,29 @@ export function profilePath(name: string, baseDir?: string): string {
   return path.join(profilesDir(baseDir), `${name}.json`);
 }
 
-export function saveProfile(profile: ProfileData, baseDir?: string): void {
+export function saveProfile(profile: ProfileData, baseDir?: string, pin?: string): void {
   ensureDirs(baseDir);
-  fs.writeFileSync(profilePath(profile.name, baseDir), JSON.stringify(profile, null, 2), "utf-8");
+  const data = { ...profile };
+  if (data.secretKey && pin) {
+    data.secretKey = encrypt(data.secretKey, pin);
+  }
+  fs.writeFileSync(profilePath(profile.name, baseDir), JSON.stringify(data, null, 2), "utf-8");
 }
 
-export function loadProfile(name: string, baseDir?: string): ProfileData {
+export function loadProfile(name: string, baseDir?: string, pin?: string): ProfileData {
   const file = profilePath(name, baseDir);
   if (!fs.existsSync(file)) {
     throw new Error(`Profile "${name}" not found. Run: iln wallet generate --profile ${name}`);
   }
-  return JSON.parse(fs.readFileSync(file, "utf-8")) as ProfileData;
+  const data = JSON.parse(fs.readFileSync(file, "utf-8")) as ProfileData;
+  if (data.secretKey && pin) {
+    try {
+      data.secretKey = decrypt(data.secretKey, pin);
+    } catch {
+      throw new Error(`Invalid PIN for profile "${name}"`);
+    }
+  }
+  return data;
 }
 
 export function listProfiles(baseDir?: string): ProfileData[] {
@@ -123,10 +137,10 @@ export function listProfiles(baseDir?: string): ProfileData[] {
     .filter((p): p is ProfileData => p !== null);
 }
 
-export function resolveProfile(profileFlag?: string, baseDir?: string): ProfileData | null {
+export function resolveProfile(profileFlag?: string, baseDir?: string, pin?: string): ProfileData | null {
   const name = profileFlag ?? loadConfig(baseDir).defaultProfile ?? "default";
   try {
-    return loadProfile(name, baseDir);
+    return loadProfile(name, baseDir, pin);
   } catch {
     return null;
   }

@@ -59,10 +59,10 @@ fn setup() -> LifecycleTestEnv {
     gov_token_admin.mint(&voter_a, &2_000);
     gov_token_admin.mint(&voter_b, &500);
 
-    let iln_id = env.register(MockIln, ());
+    let iln_id = env.register_contract(None, MockIln);
     let iln = MockIlnClient::new(&env, &iln_id);
 
-    let governance_id = env.register(GovContract, ());
+    let governance_id = env.register_contract(None, GovContract);
     let governance = GovContractClient::new(&env, &governance_id);
     governance.initialize(&iln_id, &gov_token);
 
@@ -161,8 +161,7 @@ fn full_lifecycle_updates_parameter_and_emits_events() {
     let created_events = t
         .env
         .events()
-        .all()
-        .filter_by_contract(&t.governance.address);
+        .all();
     assert_eq!(
         created_events.events().last(),
         Some(&proposal_created_event(
@@ -185,8 +184,7 @@ fn full_lifecycle_updates_parameter_and_emits_events() {
     let gov_events = t
         .env
         .events()
-        .all()
-        .filter_by_contract(&t.governance.address);
+        .all();
     assert_eq!(
         gov_events.events().last(),
         Some(&vote_event(
@@ -203,8 +201,7 @@ fn full_lifecycle_updates_parameter_and_emits_events() {
     let gov_events = t
         .env
         .events()
-        .all()
-        .filter_by_contract(&t.governance.address);
+        .all();
     assert_eq!(
         gov_events.events().last(),
         Some(&vote_event(
@@ -221,8 +218,7 @@ fn full_lifecycle_updates_parameter_and_emits_events() {
     let gov_events = t
         .env
         .events()
-        .all()
-        .filter_by_contract(&t.governance.address);
+        .all();
     assert_eq!(
         gov_events.events().last(),
         Some(&vote_event(
@@ -243,8 +239,7 @@ fn full_lifecycle_updates_parameter_and_emits_events() {
     let exec_events = t
         .env
         .events()
-        .all()
-        .filter_by_contract(&t.governance.address);
+        .all();
     assert_eq!(
         exec_events.events().last(),
         Some(&proposal_executed_event(

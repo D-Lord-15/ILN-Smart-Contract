@@ -101,14 +101,8 @@ mod tests {
         // Submit an invoice
         let invoice_id = t
             .contract
-            .submit_invoice(
-                &t.freelancer,
-                &t.payer,
-                &amount,
-                &due_date,
-                &discount_rate,
-                &t.usdc_token,
-            )
+            .submit_invoice(        &ReferralCode::None,
+    )
             .unwrap();
 
         // Verify NFT was minted
@@ -144,14 +138,8 @@ mod tests {
         // Submit an invoice
         let invoice_id = t
             .contract
-            .submit_invoice(
-                &t.freelancer,
-                &t.payer,
-                &amount,
-                &due_date,
-                &discount_rate,
-                &t.usdc_token,
-            )
+            .submit_invoice(        &ReferralCode::None,
+    )
             .unwrap();
 
         // Verify initial owner is freelancer
@@ -188,14 +176,8 @@ mod tests {
         // Submit an invoice
         let invoice_id = t
             .contract
-            .submit_invoice(
-                &t.freelancer,
-                &t.payer,
-                &amount,
-                &due_date,
-                &discount_rate,
-                &t.usdc_token,
-            )
+            .submit_invoice(        &ReferralCode::None,
+    )
             .unwrap();
 
         // Verify NFT exists
@@ -233,14 +215,8 @@ mod tests {
         // Step 1: Submit invoice - NFT minted to freelancer
         let invoice_id = t
             .contract
-            .submit_invoice(
-                &t.freelancer,
-                &t.payer,
-                &amount,
-                &due_date,
-                &discount_rate,
-                &t.usdc_token,
-            )
+            .submit_invoice(        &ReferralCode::None,
+    )
             .unwrap();
 
         assert!(t.contract.invoice_nft_exists(&invoice_id));
@@ -274,27 +250,15 @@ mod tests {
         // Create first invoice
         let invoice_id_1 = t
             .contract
-            .submit_invoice(
-                &t.freelancer,
-                &t.payer,
-                &amount,
-                &due_date,
-                &discount_rate,
-                &t.usdc_token,
-            )
+            .submit_invoice(        &ReferralCode::None,
+    )
             .unwrap();
 
         // Create second invoice
         let invoice_id_2 = t
             .contract
-            .submit_invoice(
-                &t.freelancer,
-                &t.payer,
-                &amount,
-                &due_date,
-                &discount_rate,
-                &t.usdc_token,
-            )
+            .submit_invoice(        &ReferralCode::None,
+    )
             .unwrap();
 
         // Verify both NFTs exist and are independent
@@ -337,27 +301,15 @@ mod tests {
         // Submit invoice with USDC
         let invoice_id_usdc = t
             .contract
-            .submit_invoice(
-                &t.freelancer,
-                &t.payer,
-                &amount,
-                &due_date,
-                &discount_rate,
-                &t.usdc_token,
-            )
+            .submit_invoice(        &ReferralCode::None,
+    )
             .unwrap();
 
         // Submit invoice with EURC
         let invoice_id_eurc = t
             .contract
-            .submit_invoice(
-                &t.freelancer,
-                &t.payer,
-                &amount,
-                &due_date,
-                &discount_rate,
-                &t.eurc_token,
-            )
+            .submit_invoice(        &ReferralCode::None,
+    )
             .unwrap();
 
         let metadata_usdc = t
@@ -394,14 +346,8 @@ mod tests {
 
         let invoice_id = t
             .contract
-            .submit_invoice(
-                &t.freelancer,
-                &t.payer,
-                &amount,
-                &due_date,
-                &discount_rate,
-                &t.usdc_token,
-            )
+            .submit_invoice(        &ReferralCode::None,
+    )
             .unwrap();
 
         let timestamp_after = t.env.ledger().timestamp();
@@ -429,14 +375,8 @@ mod tests {
 
         let invoice_id = t
             .contract
-            .submit_invoice(
-                &t.freelancer,
-                &t.payer,
-                &amount,
-                &due_date,
-                &discount_rate,
-                &t.usdc_token,
-            )
+            .submit_invoice(        &ReferralCode::None,
+    )
             .unwrap();
 
         // Partially fund the invoice (50%)
@@ -485,14 +425,8 @@ mod tests {
 
         let invoice_id = t
             .contract
-            .submit_invoice(
-                &t.freelancer,
-                &t.payer,
-                &amount,
-                &due_date,
-                &discount_rate,
-                &t.eurc_token,
-            )
+            .submit_invoice(        &ReferralCode::None,
+    )
             .unwrap();
 
         let metadata = t
@@ -532,14 +466,8 @@ mod tests {
         // Submit invoice
         let invoice_id = t
             .contract
-            .submit_invoice(
-                &t.freelancer,
-                &t.payer,
-                &amount,
-                &due_date,
-                &discount_rate,
-                &t.usdc_token,
-            )
+            .submit_invoice(        &ReferralCode::None,
+    )
             .unwrap();
 
         // Fund invoice - NFT owned by original LP
@@ -580,14 +508,8 @@ mod tests {
 
         let invoice_id = t
             .contract
-            .submit_invoice(
-                &t.freelancer,
-                &t.payer,
-                &amount,
-                &due_date,
-                &discount_rate,
-                &t.usdc_token,
-            )
+            .submit_invoice(        &ReferralCode::None,
+    )
             .unwrap();
 
         // Partial fund - 50%
@@ -619,14 +541,8 @@ mod tests {
 
         let invoice_id = t
             .contract
-            .submit_invoice(
-                &t.freelancer,
-                &t.payer,
-                &amount,
-                &due_date,
-                &discount_rate,
-                &t.usdc_token,
-            )
+            .submit_invoice(        &ReferralCode::None,
+    )
             .unwrap();
 
         // Fund

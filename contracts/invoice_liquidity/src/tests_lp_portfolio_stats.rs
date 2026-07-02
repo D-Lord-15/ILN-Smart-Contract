@@ -49,14 +49,7 @@ fn test_lp_stats_after_single_full_fund() {
     let payer = Address::generate(&t.env);
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
 
-    let id = t.contract.submit_invoice(
-        &freelancer,
-        &payer,
-        &INVOICE_AMOUNT,
-        &due_date,
-        &DISCOUNT_RATE,
-        &t.token.address,
-        &None,
+    let id = t.contract.submit_invoice(        &ReferralCode::None,
     );
 
     t.contract.fund_invoice(&lp, &id, &INVOICE_AMOUNT, &false);
@@ -90,14 +83,7 @@ fn test_lp_stats_total_earned_after_payment() {
     let freelancer = Address::generate(&t.env);
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
 
-    let id = t.contract.submit_invoice(
-        &freelancer,
-        &payer,
-        &INVOICE_AMOUNT,
-        &due_date,
-        &DISCOUNT_RATE,
-        &t.token.address,
-        &None,
+    let id = t.contract.submit_invoice(        &ReferralCode::None,
     );
 
     t.contract.fund_invoice(&lp, &id, &INVOICE_AMOUNT, &false);
@@ -184,14 +170,7 @@ fn test_lp_stats_partial_topup_no_duplicate_position() {
     let payer = Address::generate(&t.env);
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
 
-    let id = t.contract.submit_invoice(
-        &freelancer,
-        &payer,
-        &INVOICE_AMOUNT,
-        &due_date,
-        &DISCOUNT_RATE,
-        &t.token.address,
-        &None,
+    let id = t.contract.submit_invoice(        &ReferralCode::None,
     );
 
     // Two partial fund calls by the same LP
@@ -228,14 +207,7 @@ fn test_lp_stats_two_lps_independent() {
     let freelancer = Address::generate(&t.env);
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
 
-    let id = t.contract.submit_invoice(
-        &freelancer,
-        &payer,
-        &INVOICE_AMOUNT,
-        &due_date,
-        &DISCOUNT_RATE,
-        &t.token.address,
-        &None,
+    let id = t.contract.submit_invoice(        &ReferralCode::None,
     );
 
     let half = INVOICE_AMOUNT / 2;
@@ -285,15 +257,8 @@ fn test_lp_stats_cumulative_across_paid_invoices() {
         let payer = Address::generate(&t.env);
         token_admin.mint(&payer, &(INVOICE_AMOUNT * 2));
 
-        let id = t.contract.submit_invoice(
-            &freelancer,
-            &payer,
-            &INVOICE_AMOUNT,
-            &due_date,
-            &DISCOUNT_RATE,
-            &t.token.address,
-            &None,
-        );
+        let id = t.contract.submit_invoice(        &ReferralCode::None,
+    );
         t.contract.fund_invoice(&lp, &id, &INVOICE_AMOUNT, &false);
         t.contract.mark_paid(&id, &INVOICE_AMOUNT);
     }

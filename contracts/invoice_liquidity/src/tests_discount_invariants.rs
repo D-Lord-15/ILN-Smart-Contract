@@ -86,7 +86,7 @@ fn setup_invariant(invoice_amount: i128) -> InvariantEnv {
     let xlm_id = env.register_stellar_asset_contract_v2(xlm_admin);
     let xlm_address = xlm_id.address();
 
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let contract = InvoiceLiquidityContractClient::new(&env, &contract_id);
     let eurc_address = Address::generate(&env);
     contract.initialize(&usdc_admin, &usdc_address, &eurc_address, &xlm_address);
@@ -127,14 +127,8 @@ proptest! {
         // Submit invoice
         // ------------------------------------------------------------------
         let due_date = LEDGER_TIMESTAMP + due_date_offset;
-        let invoice_id = t.contract.submit_invoice(
-            &t.freelancer,
-            &t.payer,
-            &invoice_amount,
-            &due_date,
-            &discount_rate,
-            &t.token.address,
-        );
+        let invoice_id = t.contract.submit_invoice(        &ReferralCode::None,
+    );
 
         // Expected discount: same integer division the contract uses.
         let discount_amount = invoice_amount * discount_rate as i128 / 10_000;

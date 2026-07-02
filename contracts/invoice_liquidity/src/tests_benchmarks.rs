@@ -36,7 +36,7 @@ fn setup_benchmark_env() -> BaseBenchEnv {
     let xlm_admin = Address::generate(&env);
     let xlm = env.register_stellar_asset_contract_v2(xlm_admin);
 
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let contract = InvoiceLiquidityContractClient::new(&env, &contract_id);
     let eurc_address = Address::generate(&env);
     contract.initialize(&usdc_admin, &usdc.address(), &eurc_address, &xlm.address());
@@ -78,14 +78,7 @@ fn benchmark_submit_invoice() {
     let due_date = bench.env.ledger().timestamp() + 86_400;
 
     measure(&bench.env, "submit_invoice", || {
-        bench.contract.submit_invoice(
-            &bench.freelancer,
-            &bench.payer,
-            &BENCH_INVOICE_AMOUNT,
-            &due_date,
-            &BENCH_DISCOUNT_RATE,
-            &bench.token,
-        );
+        bench.contract.submit_invoice(&ReferralCode::None);
     });
 }
 
@@ -93,17 +86,12 @@ fn benchmark_submit_invoice() {
 fn benchmark_fund_invoice() {
     let bench = setup_benchmark_env();
     let due_date = bench.env.ledger().timestamp() + 86_400;
-    let id = bench.contract.submit_invoice(
-        &bench.freelancer,
-        &bench.payer,
-        &BENCH_INVOICE_AMOUNT,
-        &due_date,
-        &BENCH_DISCOUNT_RATE,
-        &bench.token,
-    );
+    let id = bench.contract.submit_invoice(&ReferralCode::None);
 
     measure(&bench.env, "fund_invoice", || {
-        bench.contract.fund_invoice(&bench.lp, &id, &BENCH_INVOICE_AMOUNT, &false);
+        bench
+            .contract
+            .fund_invoice(&bench.lp, &id, &BENCH_INVOICE_AMOUNT, &false);
     });
 }
 
@@ -111,22 +99,13 @@ fn benchmark_fund_invoice() {
 fn benchmark_mark_paid() {
     let bench = setup_benchmark_env();
     let due_date = bench.env.ledger().timestamp() + 86_400;
-    let id = bench.contract.submit_invoice(
-        &bench.freelancer,
-        &bench.payer,
-        &BENCH_INVOICE_AMOUNT,
-        &due_date,
-        &BENCH_DISCOUNT_RATE,
-        &bench.token,
-    );
+    let id = bench.contract.submit_invoice(&ReferralCode::None);
     bench
         .contract
         .fund_invoice(&bench.lp, &id, &BENCH_INVOICE_AMOUNT, &false);
 
     measure(&bench.env, "mark_paid", || {
-        bench
-            .contract
-            .mark_paid(&id, &BENCH_INVOICE_AMOUNT);
+        bench.contract.mark_paid(&id, &BENCH_INVOICE_AMOUNT);
     });
 }
 
@@ -138,31 +117,17 @@ fn benchmark_all_functions_summary() {
     let due_date = bench.env.ledger().timestamp() + 86_400;
 
     results.push(measure(&bench.env, "submit_invoice", || {
-        bench.contract.submit_invoice(
-            &bench.freelancer,
-            &bench.payer,
-            &BENCH_INVOICE_AMOUNT,
-            &due_date,
-            &BENCH_DISCOUNT_RATE,
-            &bench.token,
-        );
+        bench.contract.submit_invoice(&ReferralCode::None);
     }));
 
-    let id = bench.contract.submit_invoice(
-        &bench.freelancer,
-        &bench.payer,
-        &BENCH_INVOICE_AMOUNT,
-        &(due_date + 1),
-        &BENCH_DISCOUNT_RATE,
-        &bench.token,
-    );
+    let id = bench.contract.submit_invoice(&ReferralCode::None);
     results.push(measure(&bench.env, "fund_invoice", || {
-        bench.contract.fund_invoice(&bench.lp, &id, &BENCH_INVOICE_AMOUNT, &false);
-    }));
-    results.push(measure(&bench.env, "mark_paid", || {
         bench
             .contract
-            .mark_paid(&id, &BENCH_INVOICE_AMOUNT);
+            .fund_invoice(&bench.lp, &id, &BENCH_INVOICE_AMOUNT, &false);
+    }));
+    results.push(measure(&bench.env, "mark_paid", || {
+        bench.contract.mark_paid(&id, &BENCH_INVOICE_AMOUNT);
     }));
 
     std::println!("\n| Function       | CPU Instructions | Memory (bytes) |");

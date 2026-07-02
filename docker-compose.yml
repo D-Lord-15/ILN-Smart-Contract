@@ -28,8 +28,77 @@ services:
       start_period: 30s
     restart: unless-stopped
 
+  notifications-db:
+    image: postgres:16-alpine
+    container_name: iln-notifications-db
+    environment:
+      - POSTGRES_USER=notifications
+      - POSTGRES_PASSWORD=notifications
+      - POSTGRES_DB=notifications
+    ports:
+      - "5433:5432"
+    volumes:
+      - notifications-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U notifications"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  indexer:
+    build:
+      context: ./indexer
+      dockerfile: Dockerfile
+    image: iln/indexer:latest
+    container_name: iln-indexer
+    depends_on:
+      stellar:
+        condition: service_healthy
+    environment:
+      - PORT=3000
+      - HORIZON_URL=http://stellar:8000
+      - DB_PATH=/app/data/indexer.db
+    ports:
+      - "3000:3000"
+    volumes:
+      - indexer-data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  notifications:
+    build:
+      context: ./notifications
+      dockerfile: Dockerfile
+    image: iln/notifications:latest
+    container_name: iln-notifications
+    depends_on:
+      notifications-db:
+        condition: service_healthy
+    environment:
+      - PORT=3001
+      - DATABASE_URL=postgres://notifications:notifications@notifications-db:5432/notifications
+    ports:
+      - "3001:3001"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
 volumes:
   stellar-data:
+    driver: local
+  indexer-data:
+    driver: local
+  notifications-db-data:
     driver: local
 
 networks:

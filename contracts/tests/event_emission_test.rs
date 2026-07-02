@@ -18,7 +18,7 @@ fn invoice_liquidity_submit_emits_event() {
 
     let id = ctx.submit_invoice(1_000_000, 100, 1000);
 
-    let events = ctx.env.events().all().filter_by_contract(&ctx.contract.address);
+    let events = ctx.env.events().all();
     assert!(events.events().last().is_some(), "submit_invoice must emit an event");
 
     // Basic sanity: ensure the last event contains the invoice id as bytes.

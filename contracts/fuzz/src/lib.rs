@@ -27,7 +27,7 @@ mod tests {
         let usdc_address = usdc_contract_id.address();
 
         // Deploy and initialise the ILN contract
-        let contract_id = env.register(InvoiceLiquidityContract, ());
+        let contract_id = env.register_contract(None, InvoiceLiquidityContract);
         let contract = InvoiceLiquidityContractClient::new(&env, &contract_id);
 
         let xlm_admin = Address::generate(&env);

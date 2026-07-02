@@ -167,8 +167,8 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let iln_id = env.register(MockIln, ());
-        let dist_id = env.register(IlnDistribution, ());
+        let iln_id = env.register_contract(None, MockIln);
+        let dist_id = env.register_contract(None, IlnDistribution);
         let dist = IlnDistributionClient::new(&env, &dist_id);
         let iln = MockIlnClient::new(&env, &iln_id);
 
@@ -195,8 +195,8 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let iln_id = env.register(MockIln, ());
-        let dist_id = env.register(IlnDistribution, ());
+        let iln_id = env.register_contract(None, MockIln);
+        let dist_id = env.register_contract(None, IlnDistribution);
         let dist = IlnDistributionClient::new(&env, &dist_id);
         let iln = MockIlnClient::new(&env, &iln_id);
 
@@ -222,8 +222,8 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        let iln_id = env.register(MockIln, ());
-        let dist_id = env.register(IlnDistribution, ());
+        let iln_id = env.register_contract(None, MockIln);
+        let dist_id = env.register_contract(None, IlnDistribution);
         let dist = IlnDistributionClient::new(&env, &dist_id);
         let iln = MockIlnClient::new(&env, &iln_id);
 

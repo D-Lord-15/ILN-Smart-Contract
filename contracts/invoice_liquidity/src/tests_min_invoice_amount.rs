@@ -12,7 +12,7 @@ fn setup_test(
     Address,
 ) {
     env.mock_all_auths();
-    let contract_id = env.register(InvoiceLiquidityContract, ());
+    let contract_id = env.register_contract(None, InvoiceLiquidityContract);
     let client = InvoiceLiquidityContractClient::new(env, &contract_id);
 
     let admin = Address::generate(env);
@@ -38,7 +38,7 @@ fn submit_invoice_at_minimum_succeeds() {
     let due_date = env.ledger().timestamp() + 100000;
     let discount = 100u32;
 
-    let id = client.submit_invoice(&freelancer, &payer, &amount, &due_date, &discount, &token);
+    let id = client.submit_invoice(&freelancer, &payer, &amount, &due_date, &discount, &token, &ReferralCode::None);
 
     let invoice = client.get_invoice(&id);
     assert_eq!(invoice.amount, amount);
@@ -53,7 +53,7 @@ fn submit_invoice_below_minimum_rejected() {
     let due_date = env.ledger().timestamp() + 100000;
     let discount = 100u32;
 
-    let result = client.try_submit_invoice(&freelancer, &payer, &amount, &due_date, &discount, &token);
+    let result = client.try_submit_invoice(&freelancer, &payer, &amount, &due_date, &discount, &token, &ReferralCode::None);
     assert_eq!(result, Err(Ok(ContractError::AmountTooSmall)));
 }
 
@@ -66,6 +66,6 @@ fn submit_invoice_zero_rejected() {
     let due_date = env.ledger().timestamp() + 100000;
     let discount = 100u32;
 
-    let result = client.try_submit_invoice(&freelancer, &payer, &amount, &due_date, &discount, &token);
+    let result = client.try_submit_invoice(&freelancer, &payer, &amount, &due_date, &discount, &token, &ReferralCode::None);
     assert_eq!(result, Err(Ok(ContractError::AmountTooSmall)));
 }

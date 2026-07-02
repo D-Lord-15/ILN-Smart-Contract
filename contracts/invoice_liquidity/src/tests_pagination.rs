@@ -22,6 +22,7 @@ fn test_list_invoices_by_submitter_pagination() {
             &due_date,
             &300,
             &t.token.address,
+            &ReferralCode::None,
         );
     }
 
@@ -76,6 +77,7 @@ fn test_list_invoices_by_submitter_max_page_size() {
             &due_date,
             &300,
             &t.token.address,
+            &ReferralCode::None,
         );
     }
 
@@ -101,6 +103,7 @@ fn test_list_invoices_by_submitter_batch() {
             due_date,
             discount_rate: 300,
             token: t.token.address.clone(),
+            referral_code: ReferralCode::None,
         });
     }
 
@@ -126,6 +129,7 @@ fn test_list_invoices_by_submitter_after_transfer() {
         &due_date,
         &300,
         &t.token.address,
+        &ReferralCode::None,
     );
 
     // freelancer1 should have 1 invoice

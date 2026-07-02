@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  stellar:
+    image: stellar/stellar-quickstart:latest
+    container_name: iln-stellar-e2e
+    ports:
+      - "8000:8000"
+      - "11626:11626"
+    environment:
+      - NETWORK_MODE=standalone
+      - STELLAR_NETWORK_ID=local
+      - FAST_START=true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/ledger"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+    volumes:
+      - stellar-e2e-data:/opt/stellar
+
+volumes:
+  stellar-e2e-data:
+    driver: local
