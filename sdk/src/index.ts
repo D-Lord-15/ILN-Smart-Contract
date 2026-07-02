@@ -68,3 +68,14 @@ export { disputeInvoice, sha256Hex } from "./methods/disputeInvoice.js";
 export type { DisputeInvoiceParams, DisputeInvoiceResult } from "./methods/disputeInvoice.js";
 export { TokenRegistry, tokenRegistry } from "./utils/tokenRegistry.js";
 export type { TokenInfo, NetworkName } from "./utils/tokenRegistry.js";
+export {
+  estimateFee,
+  estimateSubmitFee,
+  estimateFundFee,
+} from "./utils/feeCalculator.js";
+export type {
+  FeeEstimate,
+  FeeEstimateOptions,
+  EstimateSubmitFeeParams,
+  SorobanOperation,
+} from "./utils/feeCalculator.js";
