@@ -73,8 +73,10 @@ docker compose down
 
 - `PORT` - Server port (default: 3000)
 - `HORIZON_URL` - Stellar Horizon URL (default: http://localhost:8000)
+- `CONTRACT_ID` or `ILN_CONTRACT_ID` - ILN contract address used for Horizon event ingestion
 - `DB_PATH` - SQLite database file path (default: ./data/indexer.db)
 - `LOG_LEVEL` - Logging level (default: info)
+- `API_KEYS` - Optional comma-separated list of `X-API-Key` values that bypass the public rate limit
 
 ### Health Check
 

@@ -1,3 +1,4 @@
+export { initializeSchema } from '../db/schema.js';
 import type Database from 'better-sqlite3';
 
 export function initializeSchema(db: Database.Database): void {

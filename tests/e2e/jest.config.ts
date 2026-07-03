@@ -9,6 +9,14 @@ const config: Config = {
   globalTeardown: '<rootDir>/setup/globalTeardown.ts',
   testTimeout: 120000,
   setupFilesAfterSetup: [],
+  reporters: [
+    'default',
+    ['jest-allure-reporter', {
+      resultsDir: 'allure-results',
+      suiteTitle: true,
+      ancestorSeparator: ' > ',
+    }],
+  ],
   transform: {
     '^.+\\.tsx?$': [
       'ts-jest',

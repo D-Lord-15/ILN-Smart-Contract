@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 /**
  * Tests for `iln submit --dry-run` (#229).
  */
@@ -21,12 +22,12 @@ function makeResult(): SubmitResult {
 
 describe("iln submit --dry-run", () => {
   it("prints transaction payload without calling submitter", async () => {
-    const submitter = jest.fn().mockResolvedValue(makeResult());
-    const prompter = jest.fn();
+    const submitter = vi.fn().mockResolvedValue(makeResult());
+    const prompter = vi.fn();
     const cmd = makeSubmitCommand(prompter, submitter);
 
     const logs: string[] = [];
-    jest.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
+    vi.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
 
     await cmd.parseAsync([
       "--payer", VALID_PAYER,
@@ -45,12 +46,12 @@ describe("iln submit --dry-run", () => {
   });
 
   it("dry-run output is valid JSON", async () => {
-    const submitter = jest.fn();
-    const prompter = jest.fn();
+    const submitter = vi.fn();
+    const prompter = vi.fn();
     const cmd = makeSubmitCommand(prompter, submitter);
 
     const logs: string[] = [];
-    jest.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
+    vi.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
 
     await cmd.parseAsync([
       "--payer", VALID_PAYER,
@@ -67,9 +68,9 @@ describe("iln submit --dry-run", () => {
   });
 
   it("dry-run exits cleanly (no process.exit call)", async () => {
-    const exit = jest.spyOn(process, "exit").mockImplementation((() => {}) as never);
-    const cmd = makeSubmitCommand(jest.fn(), jest.fn());
-    jest.spyOn(console, "log").mockImplementation(() => {});
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => {}) as never);
+    const cmd = makeSubmitCommand(vi.fn(), vi.fn());
+    vi.spyOn(console, "log").mockImplementation(() => {});
 
     await cmd.parseAsync([
       "--payer", VALID_PAYER, "--amount", "100", "--rate", "300", "--due", "2025-12-31", "--dry-run",

@@ -1,3 +1,4 @@
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 /**
  * Tests for `iln submit` — flag-based mode (#229).
  */
@@ -22,12 +23,12 @@ function makeResult(overrides: Partial<SubmitResult> = {}): SubmitResult {
 
 describe("iln submit — flag-based mode", () => {
   it("calls submitter with flag values and prints success", async () => {
-    const submitter = jest.fn().mockResolvedValue(makeResult());
-    const prompter = jest.fn();
+    const submitter = vi.fn().mockResolvedValue(makeResult());
+    const prompter = vi.fn();
     const cmd = makeSubmitCommand(prompter, submitter);
 
     const logs: string[] = [];
-    jest.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
+    vi.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
 
     await cmd.parseAsync([
       "--payer", VALID_PAYER,
@@ -46,10 +47,10 @@ describe("iln submit — flag-based mode", () => {
   });
 
   it("does not call prompter when all flags are provided", async () => {
-    const submitter = jest.fn().mockResolvedValue(makeResult());
-    const prompter = jest.fn();
+    const submitter = vi.fn().mockResolvedValue(makeResult());
+    const prompter = vi.fn();
     const cmd = makeSubmitCommand(prompter, submitter);
-    jest.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "log").mockImplementation(() => {});
 
     await cmd.parseAsync([
       "--payer", VALID_PAYER, "--amount", "200", "--rate", "150", "--due", "2026-01-01",
@@ -60,11 +61,11 @@ describe("iln submit — flag-based mode", () => {
   });
 
   it("exits with error for invalid payer address", async () => {
-    const submitter = jest.fn();
-    const prompter = jest.fn();
+    const submitter = vi.fn();
+    const prompter = vi.fn();
     const cmd = makeSubmitCommand(prompter, submitter);
-    const exit = jest.spyOn(process, "exit").mockImplementation((() => {}) as never);
-    jest.spyOn(console, "error").mockImplementation(() => {});
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => {}) as never);
+    vi.spyOn(console, "error").mockImplementation(() => {});
 
     await cmd.parseAsync([
       "--payer", "NOT_VALID", "--amount", "100", "--rate", "300", "--due", "2025-12-31",

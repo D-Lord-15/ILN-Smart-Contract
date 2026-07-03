@@ -26,11 +26,16 @@ const httpClient = async (
   return { ok: res.ok, status: res.status };
 };
 
+export interface SlackRouterOptions {
+  httpClient?: typeof httpClient;
+}
+
 export function createSlackRouter(
   store: Map<string, SlackSubscription>,
-  allowedOrigins?: string[],
+  options: SlackRouterOptions = {},
 ): Router {
   const router = Router();
+  const deliveryClient = options.httpClient ?? httpClient;
 
   router.post('/subscriptions/slack', (req, res) => {
     const { url, eventTypes } = req.body ?? {};
@@ -76,7 +81,7 @@ export function createSlackRouter(
       return;
     }
     const results = await Promise.allSettled(
-      subscriptions.map((s) => deliverSlackNotification(s.url, event, httpClient)),
+      subscriptions.map((s) => deliverSlackNotification(s.url, event, deliveryClient)),
     );
     const delivered = results.filter(
       (r) => r.status === 'fulfilled' && r.value.ok,
