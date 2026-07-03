@@ -345,6 +345,14 @@ GET /stats
 | [Oracle Integration](docs/oracle-integration.md) | Deploy and register a compatible oracle |
 | [Benchmarks](docs/benchmarks.md) | Gas / resource usage benchmarks |
 
+### Services & testing
+
+| Document | Description |
+|----------|-------------|
+| [Indexer REST API Reference](docs/api-reference.md) | Every indexer endpoint: methods, params, schemas, errors, and curl examples |
+| [Notifications Service](notifications/README.md) | Webhook + email notification service: setup, webhook registration, event types, and HMAC verification |
+| [E2E Testing Guide](tests/e2e/README.md) | Running the end-to-end suite, the Docker node setup, helpers, and writing new tests |
+
 ---
 
 ### 4. Participant Reputation
