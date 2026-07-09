@@ -9,7 +9,7 @@ on:
 jobs:
   typescript-tests:
     if: ${{ false }}
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-nursca
     steps:
       - uses: actions/checkout@v4
 
@@ -62,7 +62,7 @@ jobs:
 
   test:
     if: ${{ false }}
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-nursca
     steps:
       - uses: actions/checkout@v4
 
@@ -80,7 +80,7 @@ jobs:
 
   integration:
     if: ${{ false }}
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-nursca
     steps:
       - uses: actions/checkout@v4
 
@@ -104,7 +104,7 @@ jobs:
           cargo test --workspace --tests --all
 
   fmt:
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-nursca
     steps:
       - uses: actions/checkout@v4
 
@@ -121,7 +121,7 @@ jobs:
 
   clippy:
     if: ${{ false }}
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-nursca
     steps:
       - uses: actions/checkout@v4
 
@@ -145,7 +145,7 @@ jobs:
         run: cargo clippy --all-targets -- -D warnings
 
   benchmarks:
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-nursca
     steps:
       - uses: actions/checkout@v4
 
@@ -173,7 +173,7 @@ jobs:
 
   coverage:
     if: ${{ false }}
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-nursca
     steps:
       - uses: actions/checkout@v4
 
@@ -211,7 +211,7 @@ jobs:
 
   snyk:
     if: ${{ false }}
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-nursca
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4

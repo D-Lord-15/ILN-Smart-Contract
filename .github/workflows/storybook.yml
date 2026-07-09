@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on: namespace-profile-nursca
     permissions:
       contents: read
       pages: write
