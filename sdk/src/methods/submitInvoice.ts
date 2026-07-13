@@ -7,6 +7,7 @@ import {
   Account,
   Transaction,
   scValToNative,
+  xdr,
 } from "@stellar/stellar-sdk";
 import type { SubmitInvoiceParams, SubmitInvoiceResult } from "../types/params.js";
 import { ILNError } from "../errors.js";
@@ -66,10 +67,19 @@ export async function submitInvoice(
   const submitterAddress = sourceAccount.accountId();
   
   const tokenArg = nativeToScVal(params.token, { type: "address" });
-  let refArg = nativeToScVal(undefined);
+  // ReferralCode is a Soroban enum: Vec[U32(0), Void] for None, Vec[U32(1), BytesN<32>] for Present
+  let refArg: xdr.ScVal;
   if (params.referralCode) {
     const refBuffer = Buffer.from(params.referralCode, 'hex');
-    refArg = nativeToScVal(refBuffer, { type: "bytes" });
+    refArg = xdr.ScVal.scvVec([
+      xdr.ScVal.scvU32(1),
+      nativeToScVal(refBuffer, { type: "bytes" }),
+    ]);
+  } else {
+    refArg = xdr.ScVal.scvVec([
+      xdr.ScVal.scvU32(0),
+      xdr.ScVal.scvVoid(),
+    ]);
   }
 
   const op = contract.call(

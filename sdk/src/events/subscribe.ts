@@ -185,6 +185,7 @@ export function parseContractEvent(
         status: str(body["status"]),
       };
 
+    case "default_appealed":
     case "appealed":
       return {
         timestamp: num(body["timestamp"] ?? ((raw.ledgerClosedAt as string) as string)),
@@ -243,7 +244,7 @@ export function parseContractEvent(
         timestamp: num(body["timestamp"] ?? (raw.ledgerClosedAt as string)),
         txHash: ((raw.txHash || "") as string) || "",
         type: "token_removed",
-        token: str(topics[1]),
+        token: str(topics[0]),
       } as unknown as ILNEvent;
 
     case "transferred":
@@ -291,6 +292,17 @@ export function parseContractEvent(
         oldAdmin: str(body["old_admin"]),
         newAdmin: str(body["new_admin"]),
         
+      };
+
+    case "parameter_updated":
+      return {
+        timestamp: num(body["timestamp"] ?? ((raw.ledgerClosedAt as string) as string)),
+        txHash: (((raw.txHash || "") as string) as string) || "",
+        type: "parameter_updated",
+        paramName: str(topics[0]),
+        oldValue: big(body["old_value"]),
+        newValue: big(body["new_value"]),
+        updatedBy: str(body["updated_by"]),
       };
 
     case "fund_requested":

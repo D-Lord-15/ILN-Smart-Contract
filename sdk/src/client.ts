@@ -122,8 +122,7 @@ export class ILNClient {
         options?.contractId ??
         // Published testnet deployment: the canonical contract ID from
         // the latest testnet CI/CD deployment. Update here when redeploying.
-        // TODO: replace with actual testnet contract ID once deployed
-        "CD2Q6M76VFLHNHDNROENMX7PJ5OBYBMVPM73S4M6XAJXN3NKCBJQPLUC",
+        "CCVXGPKFAN374T62PLZAHWIS4UKUVTOYRD72HT36SGWWX7LRD5VFUUJD",
       ...(signer ? { signer } : {}),
     });
   }

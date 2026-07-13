@@ -1,3 +1,4 @@
+import { vi, describe, it, expect } from 'vitest';
 /**
  * Tests for `iln pay` — full and partial payment flows.
  * Issue: #232
@@ -23,41 +24,49 @@ function mockInvoice(overrides: Partial<InvoicePayState> = {}): InvoicePayState 
   };
 }
 
-function mockResult(overrides: Partial<PayResult> =ken: "USDC",
+function mockResult(overrides: Partial<PayResult> = {}): PayResult {
+  return {
+    invoiceId: INVOICE_ID,
+    txHash: "TX_FULL_PAYMENT",
+    paidAmount: 100,
+    remainingAmount: 0,
+    token: "USDC",
     lpEarnings: 0.5,
     isFullyPaid: true,
     ...overrides,
   };
 }
 
-function makePromptYes(): jest.Mock {
-  return jest.fn().mockResolvedValue(true);
+function makePromptYes() {
+  return vi.fn().mockResolvedValue(true);
 }
 
-function makePromptNo(): jest.Mock {
-  return jest.fn().mockResolvedValue(false);
+function makePromptNo() {
+  return vi.fn().mockResolvedValue(false);
 }
 
 // ── Full payment ──────────────────────────────────────────────────────────────
 
 describe("iln pay — full payment", () => {
   it("calls executor with full remaining amount when --amount is omitted", async () => {
-    const fetcher = jest.fn().mockResolvedValue(mockInvoice());
-    const executor = jest.fn().mockResolvedValue(mockResult());
+    const fetcher = vi.fn().mockResolvedValue(mockInvoice());
+    const executor = vi.fn().mockResolvedValue(mockResult());
     const cmd = makePayCommand(makePromptYes(), fetcher, executor);
 
-    jest.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "log").mockImplementation(() => {});
 
     await cmd.parseAsync(["node", "iln", "--id", INVOICE_ID, "--yes"]);
 
     expect(executor).toHaveBeenCalledWith(INVOICE_ID, 100);
   });
 
-  it("prints settlement rn().mockResolvedValue(mockResult());
+  it("prints settlement receipt after full payment", async () => {
+    const fetcher = vi.fn().mockResolvedValue(mockInvoice());
+    const executor = vi.fn().mockResolvedValue(mockResult());
     const cmd = makePayCommand(makePromptYes(), fetcher, executor);
 
     const logs: string[] = [];
-    jest.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
+    vi.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
 
     await cmd.parseAsync(["node", "iln", "--id", INVOICE_ID, "--yes"]);
 
@@ -66,12 +75,12 @@ describe("iln pay — full payment", () => {
   });
 
   it("shows LP earnings in settlement receipt", async () => {
-    const fetcher = jest.fn().mockResolvedValue(mockInvoice());
-    const executor = jest.fn().mockResolvedValue(mockResult({ lpEarnings: 0.5 }));
+    const fetcher = vi.fn().mockResolvedValue(mockInvoice());
+    const executor = vi.fn().mockResolvedValue(mockResult({ lpEarnings: 0.5 }));
     const cmd = makePayCommand(makePromptYes(), fetcher, executor);
 
     const logs: string[] = [];
-    jest.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
+    vi.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
 
     await cmd.parseAsync(["node", "iln", "--id", INVOICE_ID, "--yes"]);
 
@@ -83,13 +92,13 @@ describe("iln pay — full payment", () => {
 
 describe("iln pay — partial payment", () => {
   it("calls executor with --amount value for partial payment", async () => {
-    const fetcher = jest.fn().mockResolvedValue(mockInvoice());
-    const executor = jest.fn().mockResolvedValue(
+    const fetcher = vi.fn().mockResolvedValue(mockInvoice());
+    const executor = vi.fn().mockResolvedValue(
       mockResult({ paidAmount: 50, remainingAmount: 50, isFullyPaid: false }),
     );
     const cmd = makePayCommand(makePromptYes(), fetcher, executor);
 
-    jest.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "log").mockImplementation(() => {});
 
     await cmd.parseAsync(["node", "iln", "--id", INVOICE_ID, "--amount", "50", "--yes"]);
 
@@ -97,11 +106,13 @@ describe("iln pay — partial payment", () => {
   });
 
   it("prints partial progress line on partial payment", async () => {
-    const fetcher = jest.fn().mockResolvedValue(mockInvoice());
-    const executor = jest.fn().mockResolvedValue(
+    const fetcher = vi.fn().mockResolvedValue(mockInvoice());
+    const executor = vi.fn().mockResolvedValue(
       mockResult({ paidAmount: 50, remainingAmount: 50, isFullyPaid: false }),
-    ); = [];
-    jest.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
+    );
+    const cmd = makePayCommand(makePromptYes(), fetcher, executor);
+    const logs: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
 
     await cmd.parseAsync(["node", "iln", "--id", INVOICE_ID, "--amount", "50", "--yes"]);
 
@@ -109,13 +120,13 @@ describe("iln pay — partial payment", () => {
   });
 
   it("rejects amount exceeding remaining balance", async () => {
-    const fetcher = jest.fn().mockResolvedValue(mockInvoice({ remainingAmount: 30 }));
-    const executor = jest.fn();
+    const fetcher = vi.fn().mockResolvedValue(mockInvoice({ remainingAmount: 30 }));
+    const executor = vi.fn();
     const cmd = makePayCommand(makePromptYes(), fetcher, executor);
 
     const errors: string[] = [];
-    jest.spyOn(console, "error").mockImplementation((...a) => errors.push(a.join(" ")));
-    const exitSpy = jest.spyOn(process, "exit").mockImplementation(() => { throw new Error("exit"); });
+    vi.spyOn(console, "error").mockImplementation((...a) => errors.push(a.join(" ")));
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => { throw new Error("exit"); });
 
     await expect(
       cmd.parseAsync(["node", "iln", "--id", INVOICE_ID, "--amount", "50", "--yes"]),
@@ -131,12 +142,12 @@ describe("iln pay — partial payment", () => {
 
 describe("iln pay — payment preview", () => {
   it("prints preview before signing", async () => {
-    const fetcher = jest.fn().mockResolvedValue(mockInvoice());
-    const executor = jest.fn().mockResolvedValue(mockResult());
+    const fetcher = vi.fn().mockResolvedValue(mockInvoice());
+    const executor = vi.fn().mockResolvedValue(mockResult());
     const cmd = makePayCommand(makePromptYes(), fetcher, executor);
 
     const logs: string[] = [];
-    jest.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
+    vi.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
 
     await cmd.parseAsync(["node", "iln", "--id", INVOICE_ID, "--yes"]);
 
@@ -147,9 +158,16 @@ describe("iln pay — payment preview", () => {
 
   it("printPaymentPreview includes LP note when lp is set", () => {
     const logs: string[] = [];
-    jest.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));ew omits LP note when lp is undefined", () => {
+    vi.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
+
+    printPaymentPreview(mockInvoice(), 50);
+
+    expect(logs[0]).toMatch(/Payer earns LP/);
+  });
+
+  it("printPaymentPreview omits LP note when lp is undefined", () => {
     const logs: string[] = [];
-    jest.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
+    vi.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
 
     printPaymentPreview(mockInvoice({ lp: undefined }), 50);
 
@@ -161,22 +179,26 @@ describe("iln pay — payment preview", () => {
 
 describe("iln pay — confirmation prompt", () => {
   it("prompts user when --yes is not passed", async () => {
-    const fetcher = jest.fn().mockResolvedValue(mockInvoice());
-    const executor = jest.fn().mockResolvedValue(mockResult());
+    const fetcher = vi.fn().mockResolvedValue(mockInvoice());
+    const executor = vi.fn().mockResolvedValue(mockResult());
     const prompter = makePromptYes();
     const cmd = makePayCommand(prompter, fetcher, executor);
 
-    jest.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "log").mockImplementation(() => {});
 
     await cmd.parseAsync(["node", "iln", "--id", INVOICE_ID]);
 
     expect(prompter).toHaveBeenCalled();
-    expect(executor).toHaveBelvedValue(mockInvoice());
-    const executor = jest.fn().mockResolvedValue(mockResult());
-    const prompter = jest.fn();
+    expect(executor).toHaveBeenCalled();
+  });
+
+  it("skips prompt with --yes flag", async () => {
+    const fetcher = vi.fn().mockResolvedValue(mockInvoice());
+    const executor = vi.fn().mockResolvedValue(mockResult());
+    const prompter = vi.fn();
     const cmd = makePayCommand(prompter, fetcher, executor);
 
-    jest.spyOn(console, "log").mockImplementation(() => {});
+    vi.spyOn(console, "log").mockImplementation(() => {});
 
     await cmd.parseAsync(["node", "iln", "--id", INVOICE_ID, "--yes"]);
 
@@ -184,12 +206,12 @@ describe("iln pay — confirmation prompt", () => {
   });
 
   it("cancels payment when user declines confirmation", async () => {
-    const fetcher = jest.fn().mockResolvedValue(mockInvoice());
-    const executor = jest.fn();
+    const fetcher = vi.fn().mockResolvedValue(mockInvoice());
+    const executor = vi.fn();
     const cmd = makePayCommand(makePromptNo(), fetcher, executor);
 
     const logs: string[] = [];
-    jest.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
+    vi.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
 
     await cmd.parseAsync(["node", "iln", "--id", INVOICE_ID]);
 
@@ -198,10 +220,12 @@ describe("iln pay — confirmation prompt", () => {
   });
 });
 
-// ── printSettlementReceipt / printPartialProgress unit tests ─────────────ers", () => {
+// ── printSettlementReceipt / printPartialProgress unit tests ─────────────
+
+describe("iln pay — receipt helpers", () => {
   it("printSettlementReceipt shows FULLY PAID for complete payment", () => {
     const logs: string[] = [];
-    jest.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
+    vi.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
 
     printSettlementReceipt(mockResult());
 
@@ -210,7 +234,7 @@ describe("iln pay — confirmation prompt", () => {
 
   it("printSettlementReceipt shows partial status when not fully paid", () => {
     const logs: string[] = [];
-    jest.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
+    vi.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
 
     printSettlementReceipt(mockResult({ isFullyPaid: false, remainingAmount: 50 }));
 
@@ -219,7 +243,7 @@ describe("iln pay — confirmation prompt", () => {
 
   it("printPartialProgress shows paid and remaining amounts", () => {
     const logs: string[] = [];
-    jest.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
+    vi.spyOn(console, "log").mockImplementation((...a) => logs.push(a.join(" ")));
 
     printPartialProgress(mockResult({ paidAmount: 50, remainingAmount: 50, isFullyPaid: false }));
 

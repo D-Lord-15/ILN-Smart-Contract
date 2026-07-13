@@ -24,6 +24,9 @@ import {
   testnetServer,
 } from "./setup.js";
 
+// Testnet USDC SAC address
+const USDC_SAC = "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA";
+
 // Skip the entire suite locally when secrets are absent; CI provides them.
 const describeOrSkip = hasIntegrationSecrets() ? describe : describe.skip;
 
@@ -72,7 +75,7 @@ describeOrSkip("invoice lifecycle (testnet)", () => {
       {
         payer: lp.publicKey(),
         amount: 1_000_000n,
-        token: "USDC",
+        token: USDC_SAC,
         discountRate: 300,
         dueDate,
       },

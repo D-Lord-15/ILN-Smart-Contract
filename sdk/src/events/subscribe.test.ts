@@ -228,7 +228,7 @@ describe("parseContractEvent", () => {
     const raw = makeRaw("paused", [], { timestamp: "1700007000" });
     const ev = parseContractEvent(raw as unknown) as unknown;
     expect(ev?.type).toBe("paused");
-    expect(ev?.timestamp).toBe(1_700_007_000n);
+    expect(ev?.timestamp).toBe(1_700_007_000);
   });
 
   it("parses unpaused", () => {

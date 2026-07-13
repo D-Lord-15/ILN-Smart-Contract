@@ -1,11 +1,5 @@
 var __defProp = Object.defineProperty;
 var __getOwnPropNames = Object.getOwnPropertyNames;
-var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
-  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
-}) : x)(function(x) {
-  if (typeof require !== "undefined") return require.apply(this, arguments);
-  throw Error('Dynamic require of "' + x + '" is not supported');
-});
 var __esm = (fn, res) => function __init() {
   return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
 };
@@ -13,6 +7,167 @@ var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
 };
+
+// src/utils/retry.ts
+function isTransientError(error) {
+  if (error instanceof Error) {
+    const errorMessage = error.message.toLowerCase();
+    const errorString = String(error).toLowerCase();
+    if (errorMessage.includes("timeout") || errorMessage.includes("etimedout") || errorMessage.includes("econnrefused") || errorMessage.includes("enotfound") || errorMessage.includes("connection") || errorMessage.includes("network") || errorString.includes("timeout") || errorString.includes("econnrefused") || errorString.includes("enotfound")) {
+      return true;
+    }
+    if (errorMessage.includes("429") || errorMessage.includes("too many requests") || errorMessage.includes("rate limit")) {
+      return true;
+    }
+    if (errorMessage.includes("503") || errorMessage.includes("service unavailable") || errorMessage.includes("temporarily unavailable")) {
+      return true;
+    }
+    if (errorMessage.includes("error(contract,") || errorString.includes("error(contract,")) {
+      return false;
+    }
+    if (errorMessage.includes("user rejected") || errorMessage.includes("rejected by user") || errorMessage.includes("user cancelled") || errorMessage.includes("user denied")) {
+      return false;
+    }
+    if (errorMessage.includes("invalid") || errorMessage.includes("validation") || errorMessage.includes("malformed")) {
+      return false;
+    }
+    if (errorMessage.includes("unauthorized") || errorMessage.includes("authentication") || errorMessage.includes("forbidden")) {
+      return false;
+    }
+  }
+  return false;
+}
+async function retry(fn, options = {}) {
+  const opts = { ...DEFAULT_RETRY_OPTIONS, ...options };
+  let lastError;
+  for (let attempt = 0; attempt <= opts.maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (!isTransientError(error)) {
+        throw error;
+      }
+      if (attempt === opts.maxRetries) {
+        throw error;
+      }
+      const delay = opts.initialDelayMs * Math.pow(opts.backoffMultiplier, attempt);
+      if (opts.verbose) {
+        console.warn(
+          `[retry] Attempt ${attempt + 1}/${opts.maxRetries + 1} failed, retrying in ${delay}ms:`,
+          error instanceof Error ? error.message : error
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+  throw lastError;
+}
+var DEFAULT_RETRY_OPTIONS;
+var init_retry = __esm({
+  "src/utils/retry.ts"() {
+    "use strict";
+    DEFAULT_RETRY_OPTIONS = {
+      maxRetries: 3,
+      initialDelayMs: 500,
+      backoffMultiplier: 2,
+      verbose: false
+    };
+  }
+});
+
+// src/utils/xdrDecoder.ts
+function decodeInvoice(raw) {
+  const dueDate = Number(raw["due_date"]);
+  const discountRate = Number(raw["discount_rate"]);
+  return {
+    id: BigInt(String(raw["id"])),
+    freelancer: String(raw["freelancer"]),
+    payer: String(raw["payer"]),
+    token: String(raw["token"]),
+    amount: BigInt(String(raw["amount"])),
+    dueDate,
+    discountRate,
+    status: parseInvoiceStatus(raw["status"]),
+    funder: raw["funder"] ? String(raw["funder"]) : void 0,
+    fundedAt: raw["funded_at"] ? Number(raw["funded_at"]) : void 0,
+    amountFunded: BigInt(String(raw["amount_funded"])),
+    amountPaid: BigInt(String(raw["amount_paid"])),
+    referralCode: raw["referral_code"] ? Buffer.from(raw["referral_code"]).toString("hex") : void 0,
+    submitterReputation: Number(raw["submitter_reputation"]),
+    effectiveYieldBps: computeEffectiveYieldBps2(discountRate, dueDate)
+  };
+}
+function parseInvoiceStatus(status) {
+  if (typeof status === "string") {
+    return status;
+  }
+  if (status && typeof status === "object" && "tag" in status) {
+    return String(status.tag);
+  }
+  return "Pending";
+}
+function computeEffectiveYieldBps2(discountRateBps, dueDateUnix) {
+  const nowUnix = Math.floor(Date.now() / 1e3);
+  const secondsToMaturity = Math.max(0, dueDateUnix - nowUnix);
+  const daysToMaturity = secondsToMaturity / 86400;
+  return Math.round(discountRateBps * daysToMaturity / 365);
+}
+function decodeReputationScore(raw, address) {
+  return {
+    address: String(raw["address"] ?? address),
+    score: Number(raw["score"] ?? 0),
+    invoicesSubmitted: Number(raw["invoices_submitted"] ?? 0),
+    invoicesPaid: Number(raw["invoices_paid"] ?? 0),
+    invoicesDefaulted: Number(raw["invoices_defaulted"] ?? 0)
+  };
+}
+function decodeContractStats(raw) {
+  const volumeByToken = {};
+  const rawTokenVolumes = raw["token_volumes"];
+  if (Array.isArray(rawTokenVolumes)) {
+    for (const [token, volume] of rawTokenVolumes) {
+      volumeByToken[token] = BigInt(volume);
+    }
+  }
+  return {
+    totalInvoices: BigInt(String(raw["total_invoices"] ?? "0")),
+    totalFunded: BigInt(String(raw["total_funded"] ?? "0")),
+    totalPaid: BigInt(String(raw["total_paid"] ?? "0")),
+    totalVolumeUsdc: BigInt(String(raw["total_volume_usdc"] ?? "0")),
+    totalVolumeEurc: BigInt(String(raw["total_volume_eurc"] ?? "0")),
+    totalVolumeXlm: BigInt(String(raw["total_volume_xlm"] ?? "0")),
+    volumeByToken,
+    totalVolumeUsdNormalized: BigInt(
+      String(raw["total_volume_usd_normalized"] ?? "0")
+    )
+  };
+}
+function decodeGovernanceProposal(raw) {
+  const statusTag = raw["status"]?.tag ?? String(raw["status"]);
+  return {
+    id: BigInt(String(raw["id"])),
+    action: Number(raw["action"]),
+    proposedValue: BigInt(String(raw["proposed_value"] ?? 0)),
+    descriptionHash: raw["description_hash"] ? Buffer.from(raw["description_hash"]).toString("hex") : "",
+    proposer: String(raw["proposer"]),
+    votesFor: BigInt(String(raw["votes_for"] ?? 0)),
+    votesAgainst: BigInt(String(raw["votes_against"] ?? 0)),
+    status: parseProposalStatus(statusTag),
+    votingEndsAt: Number(raw["voting_ends_at"] ?? 0)
+  };
+}
+function parseProposalStatus(status) {
+  if (status === "Active" || status === "Passed" || status === "Rejected" || status === "Executed") {
+    return status;
+  }
+  return "Active";
+}
+var init_xdrDecoder = __esm({
+  "src/utils/xdrDecoder.ts"() {
+    "use strict";
+  }
+});
 
 // src/methods/reputation.ts
 var reputation_exports = {};
@@ -51,32 +206,22 @@ async function getReputation(server, contractId, address, networkPassphrase = Ne
     fee: BASE_FEE3,
     networkPassphrase
   }).addOperation(op).setTimeout(30).build();
-  const sim = await server.simulateTransaction(simTx);
+  const sim = await retry(() => server.simulateTransaction(simTx));
   if (SorobanRpc3.Api.isSimulationError(sim)) {
     throw new Error(`get_reputation simulation failed: ${sim.error}`);
   }
   if (!sim.result?.retval) {
-    return {
-      address,
-      score: 0,
-      invoicesSubmitted: 0,
-      invoicesPaid: 0,
-      invoicesDefaulted: 0
-    };
+    return decodeReputationScore({}, address);
   }
   const raw = scValToNative3(sim.result.retval);
-  return {
-    address: String(raw["address"] ?? address),
-    score: Number(raw["score"] ?? 0),
-    invoicesSubmitted: Number(raw["invoices_submitted"] ?? 0),
-    invoicesPaid: Number(raw["invoices_paid"] ?? 0),
-    invoicesDefaulted: Number(raw["invoices_defaulted"] ?? 0)
-  };
+  return decodeReputationScore(raw, address);
 }
 var G_ADDRESS_RE;
 var init_reputation = __esm({
   "src/methods/reputation.ts"() {
     "use strict";
+    init_retry();
+    init_xdrDecoder();
     G_ADDRESS_RE = /^G[A-Z2-7]{55}$/;
   }
 });
@@ -106,7 +251,7 @@ async function getContractStats(server, contractId, networkPassphrase = Networks
     fee: BASE_FEE4,
     networkPassphrase
   }).addOperation(op).setTimeout(30).build();
-  const sim = await server.simulateTransaction(simTx);
+  const sim = await retry(() => server.simulateTransaction(simTx));
   if (SorobanRpc4.Api.isSimulationError(sim)) {
     throw new Error(`get_contract_stats simulation failed: ${sim.error}`);
   }
@@ -123,29 +268,13 @@ async function getContractStats(server, contractId, networkPassphrase = Networks
     };
   }
   const raw = scValToNative4(sim.result.retval);
-  const volumeByToken = {};
-  const rawTokenVolumes = raw["token_volumes"];
-  if (Array.isArray(rawTokenVolumes)) {
-    for (const [token, volume] of rawTokenVolumes) {
-      volumeByToken[token] = BigInt(volume);
-    }
-  }
-  return {
-    totalInvoices: BigInt(String(raw["total_invoices"] ?? "0")),
-    totalFunded: BigInt(String(raw["total_funded"] ?? "0")),
-    totalPaid: BigInt(String(raw["total_paid"] ?? "0")),
-    totalVolumeUsdc: BigInt(String(raw["total_volume_usdc"] ?? "0")),
-    totalVolumeEurc: BigInt(String(raw["total_volume_eurc"] ?? "0")),
-    totalVolumeXlm: BigInt(String(raw["total_volume_xlm"] ?? "0")),
-    volumeByToken,
-    totalVolumeUsdNormalized: BigInt(
-      String(raw["total_volume_usd_normalized"] ?? "0")
-    )
-  };
+  return decodeContractStats(raw);
 }
 var init_stats = __esm({
   "src/methods/stats.ts"() {
     "use strict";
+    init_retry();
+    init_xdrDecoder();
   }
 });
 
@@ -232,6 +361,7 @@ function isAllowanceSufficient(allowance, required, minExpirationLedger) {
 }
 
 // src/methods/fundInvoice.ts
+init_retry();
 function computeEffectiveYieldBps(discountRateBps, dueDateUnix, nowUnix = Math.floor(Date.now() / 1e3)) {
   const secondsToMaturity = Math.max(0, dueDateUnix - nowUnix);
   const daysToMaturity = secondsToMaturity / 86400;
@@ -247,7 +377,7 @@ async function fetchInvoice(server, contractAddress, invoiceId, sourceAccount, n
     fee: BASE_FEE2,
     networkPassphrase
   }).addOperation(op).setTimeout(30).build();
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
   if (SorobanRpc2.Api.isSimulationError(sim)) {
     throw new Error(`get_invoice simulation failed: ${sim.error}`);
   }
@@ -282,7 +412,7 @@ async function verifyOracle(server, contractAddress, sourceAccount, networkPassp
     fee: BASE_FEE2,
     networkPassphrase
   }).addOperation(op).setTimeout(30).build();
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
   if (SorobanRpc2.Api.isSimulationError(sim)) {
     throw new Error(`Oracle verification failed: ${sim.error}`);
   }
@@ -306,7 +436,7 @@ async function fundInvoice(server, contractAddress, lpKeypair, invoiceId, option
     onFunded
   } = options;
   const lpAddress = lpKeypair.publicKey();
-  const accountData = await server.getAccount(lpAddress);
+  const accountData = await retry(() => server.getAccount(lpAddress));
   let sequence = accountData.sequence;
   const makeAccount = (seq) => new Account2(lpAddress, seq);
   const invoice = await fetchInvoice(
@@ -329,7 +459,7 @@ async function fundInvoice(server, contractAddress, lpKeypair, invoiceId, option
       networkPassphrase
     );
   }
-  const ledgerInfo = await server.getLatestLedger();
+  const ledgerInfo = await retry(() => server.getLatestLedger());
   const currentLedger = ledgerInfo.sequence;
   const allowance = await getAllowance(
     server,
@@ -375,11 +505,11 @@ async function fundInvoice(server, contractAddress, lpKeypair, invoiceId, option
     fee: BASE_FEE2,
     networkPassphrase
   }).addOperation(fundOp).setTimeout(30).build();
-  const preparedFundTx = await server.prepareTransaction(fundTx);
+  const preparedFundTx = await retry(() => server.prepareTransaction(fundTx));
   preparedFundTx.sign(lpKeypair);
-  const fundSendResult = await server.sendTransaction(
+  const fundSendResult = await retry(() => server.sendTransaction(
     preparedFundTx
-  );
+  ));
   if (fundSendResult.status === "ERROR") {
     throw new Error(
       `fund_invoice failed: ${JSON.stringify(fundSendResult.errorResult)}`
@@ -408,7 +538,7 @@ var _ILNError = class _ILNError extends Error {
     const errorString = String(error);
     const match = errorString.match(/Error\(Contract, (\d+)\)/);
     if (match) {
-      const code = parseInt(match[1], 10);
+      const code = parseInt(match[1] || "", 10);
       switch (code) {
         case 1:
           return new _ILNError.InvoiceNotFound();
@@ -489,202 +619,202 @@ var _ILNError = class _ILNError extends Error {
     return new Error(errorString);
   }
 };
-_ILNError.InvoiceNotFound = class extends _ILNError {
+_ILNError.InvoiceNotFound = class InvoiceNotFound extends _ILNError {
   constructor(msg = "Invoice not found") {
     super(msg, 1);
   }
 };
-_ILNError.AlreadyFunded = class extends _ILNError {
+_ILNError.AlreadyFunded = class AlreadyFunded extends _ILNError {
   constructor(msg = "Invoice already funded") {
     super(msg, 2);
   }
 };
-_ILNError.AlreadyPaid = class extends _ILNError {
+_ILNError.AlreadyPaid = class AlreadyPaid extends _ILNError {
   constructor(msg = "Invoice already paid") {
     super(msg, 3);
   }
 };
-_ILNError.NotFunded = class extends _ILNError {
+_ILNError.NotFunded = class NotFunded extends _ILNError {
   constructor(msg = "Invoice not funded") {
     super(msg, 4);
   }
 };
-_ILNError.Unauthorized = class extends _ILNError {
+_ILNError.Unauthorized = class Unauthorized extends _ILNError {
   constructor(msg = "Unauthorized") {
     super(msg, 5);
   }
 };
-_ILNError.InvalidAmount = class extends _ILNError {
+_ILNError.InvalidAmount = class InvalidAmount extends _ILNError {
   constructor(msg = "Invalid amount") {
     super(msg, 6);
   }
 };
-_ILNError.InvalidDiscountRate = class extends _ILNError {
+_ILNError.InvalidDiscountRate = class InvalidDiscountRate extends _ILNError {
   constructor(msg = "Invalid discount rate") {
     super(msg, 7);
   }
 };
-_ILNError.InvalidDueDate = class extends _ILNError {
+_ILNError.InvalidDueDate = class InvalidDueDate extends _ILNError {
   constructor(msg = "Invalid due date") {
     super(msg, 8);
   }
 };
-_ILNError.InvoiceDefaulted = class extends _ILNError {
+_ILNError.InvoiceDefaulted = class InvoiceDefaulted extends _ILNError {
   constructor(msg = "Invoice defaulted") {
     super(msg, 9);
   }
 };
-_ILNError.NothingToClaim = class extends _ILNError {
+_ILNError.NothingToClaim = class NothingToClaim extends _ILNError {
   constructor(msg = "Nothing to claim") {
     super(msg, 10);
   }
 };
-_ILNError.NotYetDefaulted = class extends _ILNError {
+_ILNError.NotYetDefaulted = class NotYetDefaulted extends _ILNError {
   constructor(msg = "Not yet defaulted") {
     super(msg, 11);
   }
 };
-_ILNError.OverfundingRejected = class extends _ILNError {
+_ILNError.OverfundingRejected = class OverfundingRejected extends _ILNError {
   constructor(msg = "Overfunding rejected") {
     super(msg, 12);
   }
 };
-_ILNError.InvoiceExpired = class extends _ILNError {
+_ILNError.InvoiceExpired = class InvoiceExpired extends _ILNError {
   constructor(msg = "Invoice expired") {
     super(msg, 13);
   }
 };
-_ILNError.BatchTooLarge = class extends _ILNError {
+_ILNError.BatchTooLarge = class BatchTooLarge extends _ILNError {
   constructor(msg = "Batch too large") {
     super(msg, 14);
   }
 };
-_ILNError.AlreadyCancelled = class extends _ILNError {
+_ILNError.AlreadyCancelled = class AlreadyCancelled extends _ILNError {
   constructor(msg = "Already cancelled") {
     super(msg, 15);
   }
 };
-_ILNError.AlreadyInitialized = class extends _ILNError {
+_ILNError.AlreadyInitialized = class AlreadyInitialized extends _ILNError {
   constructor(msg = "Already initialized") {
     super(msg, 16);
   }
 };
-_ILNError.AlreadyAppealed = class extends _ILNError {
+_ILNError.AlreadyAppealed = class AlreadyAppealed extends _ILNError {
   constructor(msg = "Already appealed") {
     super(msg, 17);
   }
 };
-_ILNError.AppealWindowClosed = class extends _ILNError {
+_ILNError.AppealWindowClosed = class AppealWindowClosed extends _ILNError {
   constructor(msg = "Appeal window closed") {
     super(msg, 18);
   }
 };
-_ILNError.NotDefaulted = class extends _ILNError {
+_ILNError.NotDefaulted = class NotDefaulted extends _ILNError {
   constructor(msg = "Not defaulted") {
     super(msg, 19);
   }
 };
-_ILNError.AlreadyInQueue = class extends _ILNError {
+_ILNError.AlreadyInQueue = class AlreadyInQueue extends _ILNError {
   constructor(msg = "Already in queue") {
     super(msg, 20);
   }
 };
-_ILNError.NotApprovedFunder = class extends _ILNError {
+_ILNError.NotApprovedFunder = class NotApprovedFunder extends _ILNError {
   constructor(msg = "Not approved funder") {
     super(msg, 21);
   }
 };
-_ILNError.InvoiceAppealed = class extends _ILNError {
+_ILNError.InvoiceAppealed = class InvoiceAppealed extends _ILNError {
   constructor(msg = "Invoice appealed") {
     super(msg, 22);
   }
 };
-_ILNError.AlreadyDisputed = class extends _ILNError {
+_ILNError.AlreadyDisputed = class AlreadyDisputed extends _ILNError {
   constructor(msg = "Already disputed") {
     super(msg, 23);
   }
 };
-_ILNError.NotDisputed = class extends _ILNError {
+_ILNError.NotDisputed = class NotDisputed extends _ILNError {
   constructor(msg = "Not disputed") {
     super(msg, 24);
   }
 };
-_ILNError.InvoiceDisputed = class extends _ILNError {
+_ILNError.InvoiceDisputed = class InvoiceDisputed extends _ILNError {
   constructor(msg = "Invoice disputed") {
     super(msg, 25);
   }
 };
-_ILNError.ContractPaused = class extends _ILNError {
+_ILNError.ContractPaused = class ContractPaused extends _ILNError {
   constructor(msg = "Contract paused") {
     super(msg, 26);
   }
 };
-_ILNError.DueDateTooSoon = class extends _ILNError {
+_ILNError.DueDateTooSoon = class DueDateTooSoon extends _ILNError {
   constructor(msg = "Due date too soon") {
     super(msg, 27);
   }
 };
-_ILNError.DueDateTooFar = class extends _ILNError {
+_ILNError.DueDateTooFar = class DueDateTooFar extends _ILNError {
   constructor(msg = "Due date too far") {
     super(msg, 28);
   }
 };
-_ILNError.SelfInvoice = class extends _ILNError {
+_ILNError.SelfInvoice = class SelfInvoice extends _ILNError {
   constructor(msg = "Self invoice") {
     super(msg, 29);
   }
 };
-_ILNError.OverpaymentRejected = class extends _ILNError {
+_ILNError.OverpaymentRejected = class OverpaymentRejected extends _ILNError {
   constructor(msg = "Overpayment rejected") {
     super(msg, 30);
   }
 };
-_ILNError.PayerReputationTooLow = class extends _ILNError {
+_ILNError.PayerReputationTooLow = class PayerReputationTooLow extends _ILNError {
   constructor(msg = "Payer reputation too low") {
     super(msg, 31);
   }
 };
-_ILNError.ArithmeticOverflow = class extends _ILNError {
+_ILNError.ArithmeticOverflow = class ArithmeticOverflow extends _ILNError {
   constructor(msg = "Arithmetic overflow") {
     super(msg, 32);
   }
 };
-_ILNError.FeeOnTransferToken = class extends _ILNError {
+_ILNError.FeeOnTransferToken = class FeeOnTransferToken extends _ILNError {
   constructor(msg = "Fee on transfer token") {
     super(msg, 33);
   }
 };
-_ILNError.PayerUnverified = class extends _ILNError {
+_ILNError.PayerUnverified = class PayerUnverified extends _ILNError {
   constructor(msg = "Payer unverified") {
     super(msg, 34);
   }
 };
-_ILNError.OracleDataStale = class extends _ILNError {
+_ILNError.OracleDataStale = class OracleDataStale extends _ILNError {
   constructor(msg = "Oracle data stale") {
     super(msg, 35);
   }
 };
-_ILNError.AmountTooSmall = class extends _ILNError {
+_ILNError.AmountTooSmall = class AmountTooSmall extends _ILNError {
   constructor(msg = "Amount too small") {
     super(msg, 36);
   }
 };
-_ILNError.InvoiceNotCancellable = class extends _ILNError {
+_ILNError.InvoiceNotCancellable = class InvoiceNotCancellable extends _ILNError {
   constructor(msg = "Invoice not cancellable") {
     super(msg, 37);
   }
 };
-_ILNError.InvalidAddress = class extends _ILNError {
+_ILNError.InvalidAddress = class InvalidAddress extends _ILNError {
   constructor(msg = "Invalid address") {
     super(msg, 38);
   }
 };
-_ILNError.InvalidTransfer = class extends _ILNError {
+_ILNError.InvalidTransfer = class InvalidTransfer extends _ILNError {
   constructor(msg = "Invalid transfer") {
     super(msg, 39);
   }
 };
-_ILNError.InsufficientAmount = class extends _ILNError {
+_ILNError.InsufficientAmount = class InsufficientAmount extends _ILNError {
   constructor(msg = "Insufficient amount") {
     super(msg, 999);
   }
@@ -778,7 +908,7 @@ function isTestEnvironment() {
 function warnIfHardcodedSecret(secret) {
   if (isTestEnvironment()) return;
   const knownExamples = /* @__PURE__ */ new Set([
-    "SCZANGBA5RLAZ7IQVXSRQD5KXJLJPNWZPWHSB4TWJNSC2DL5CGFJ6Y2",
+    "SBQM45DNQRUNKDBPTXCAT7CRQLJHOD2NVEP2EKUND7HM7GFCBFTAY2EZ",
     "SDASDASDASDASDASDASDASDASDASDASDASDASDASDASDASDASDA"
   ]);
   if (knownExamples.has(secret)) {
@@ -1079,29 +1209,30 @@ var FreighterSigner = class {
 };
 
 // src/events/subscribe.ts
+import { xdr, scValToNative as scValToNative5 } from "@stellar/stellar-sdk";
 var INITIAL_BACKOFF_MS = 500;
 var MAX_BACKOFF_MS = 3e4;
 var BACKOFF_FACTOR = 2;
 function decodeScVal(base64Xdr) {
   try {
-    const { xdr: xdr2, scValToNative: scValToNative8 } = __require("@stellar/stellar-sdk");
-    const scVal = xdr2.ScVal.fromXDR(base64Xdr, "base64");
-    return scValToNative8(scVal);
+    const scVal = xdr.ScVal.fromXDR(base64Xdr, "base64");
+    return scValToNative5(scVal);
   } catch {
     return null;
   }
 }
 function extractEventType(topics) {
+  if (!topics) return null;
   if (!topics.length) return null;
-  const decoded = decodeScVal(topics[0]);
+  const decoded = decodeScVal(topics[0] || "");
   if (typeof decoded === "string") return decoded;
   return null;
 }
 function parseContractEvent(raw) {
   const eventType = extractEventType(raw.topic);
   if (!eventType) return null;
-  const topics = raw.topic.slice(1).map(decodeScVal);
-  const value = decodeScVal(raw.value);
+  const topics = (raw.topic || []).slice(1).map(decodeScVal);
+  const value = decodeScVal(raw.value || "");
   const body = typeof value === "object" && value !== null ? value : {};
   const big = (v) => {
     try {
@@ -1116,21 +1247,24 @@ function parseContractEvent(raw) {
   switch (eventType) {
     case "submitted":
       return {
+        timestamp: num(body["timestamp"] ?? raw.ledgerClosedAt),
+        txHash: raw.txHash || "" || "",
         type: "submitted",
-        invoiceId: big(topics[0]),
+        invoiceId: big(topics[0] || ""),
         freelancer: str(topics[1]),
         payer: str(topics[2]),
         token: str(body["token"]),
         amount: big(body["amount"]),
         dueDate: big(body["due_date"]),
         discountRate: num(body["discount_rate"]),
-        status: str(body["status"]),
-        timestamp: big(body["timestamp"])
+        status: str(body["status"])
       };
     case "funded":
       return {
+        timestamp: num(body["timestamp"] ?? raw.ledgerClosedAt),
+        txHash: raw.txHash || "" || "",
         type: "funded",
-        invoiceId: big(topics[0]),
+        invoiceId: big(topics[0] || ""),
         funder: str(topics[1]),
         freelancer: str(body["freelancer"]),
         payer: str(body["payer"]),
@@ -1143,13 +1277,14 @@ function parseContractEvent(raw) {
         fundedAt: body["funded_at"] != null ? big(body["funded_at"]) : null,
         status: str(body["status"]),
         lp: str(body["lp"]),
-        effectiveYieldBps: num(body["effective_yield_bps"]),
-        timestamp: big(body["timestamp"])
+        effectiveYieldBps: num(body["effective_yield_bps"])
       };
     case "paid":
       return {
+        timestamp: num(body["timestamp"] ?? raw.ledgerClosedAt),
+        txHash: raw.txHash || "" || "",
         type: "paid",
-        invoiceId: big(topics[0]),
+        invoiceId: big(topics[0] || ""),
         payer: str(topics[1]),
         lp: str(topics[2]),
         freelancer: str(body["freelancer"]),
@@ -1163,8 +1298,10 @@ function parseContractEvent(raw) {
       };
     case "partially_paid":
       return {
+        timestamp: num(body["timestamp"] ?? raw.ledgerClosedAt),
+        txHash: raw.txHash || "" || "",
         type: "partially_paid",
-        invoiceId: big(topics[0]),
+        invoiceId: big(topics[0] || ""),
         payer: str(topics[1]),
         amountPaidNow: big(body["amount_paid_now"]),
         totalAmountPaid: big(body["total_amount_paid"]),
@@ -1172,8 +1309,10 @@ function parseContractEvent(raw) {
       };
     case "defaulted":
       return {
+        timestamp: num(body["timestamp"] ?? raw.ledgerClosedAt),
+        txHash: raw.txHash || "" || "",
         type: "defaulted",
-        invoiceId: big(topics[0]),
+        invoiceId: big(topics[0] || ""),
         funder: str(topics[1]),
         freelancer: str(body["freelancer"]),
         payer: str(body["payer"]),
@@ -1187,96 +1326,123 @@ function parseContractEvent(raw) {
     case "default_appealed":
     case "appealed":
       return {
+        timestamp: num(body["timestamp"] ?? raw.ledgerClosedAt),
+        txHash: raw.txHash || "" || "",
         type: "appealed",
-        invoiceId: big(topics[0]),
+        invoiceId: big(topics[0] || ""),
         payer: str(topics[1]),
         evidenceHash: str(body["evidence_hash"]),
         appealedAt: big(body["appealed_at"])
       };
     case "appeal_resolved":
       return {
+        timestamp: num(body["timestamp"] ?? raw.ledgerClosedAt),
+        txHash: raw.txHash || "" || "",
         type: "appeal_resolved",
-        invoiceId: big(topics[0]),
+        invoiceId: big(topics[0] || ""),
         payer: str(topics[1]),
         upheld: bool(body["upheld"]),
         resolvedAt: big(body["resolved_at"])
       };
     case "disputed":
       return {
+        timestamp: num(body["timestamp"] ?? raw.ledgerClosedAt),
+        txHash: raw.txHash || "" || "",
         type: "disputed",
-        invoiceId: big(topics[0]),
+        invoiceId: big(topics[0] || ""),
         payer: str(topics[1]),
         reasonHash: str(body["reason_hash"]),
         disputedAt: big(body["disputed_at"])
       };
     case "dispute_resolved":
       return {
+        timestamp: num(body["timestamp"] ?? raw.ledgerClosedAt),
+        txHash: raw.txHash || "" || "",
         type: "dispute_resolved",
-        invoiceId: big(topics[0]),
+        invoiceId: big(topics[0] || ""),
         resolutionHash: str(topics[1]),
         resolution: num(body["resolution"]),
         resolvedAt: big(body["resolved_at"])
       };
     case "token_added":
       return {
+        timestamp: num(body["timestamp"] ?? raw.ledgerClosedAt),
+        txHash: raw.txHash || "" || "",
         type: "token_added",
-        token: str(topics[0]),
+        token: str(topics[0] || ""),
         decimals: num(body["decimals"])
       };
     case "token_removed":
-      return { type: "token_removed", token: str(topics[0]) };
-    case "parameter_updated":
       return {
-        type: "parameter_updated",
-        paramName: str(topics[0]),
-        oldValue: big(body["old_value"]),
-        newValue: big(body["new_value"]),
-        updatedBy: str(topics[1])
+        timestamp: num(body["timestamp"] ?? raw.ledgerClosedAt),
+        txHash: raw.txHash || "" || "",
+        type: "token_removed",
+        token: str(topics[0])
       };
     case "transferred":
       return {
+        timestamp: num(body["timestamp"] ?? raw.ledgerClosedAt),
+        txHash: raw.txHash || "" || "",
         type: "transferred",
-        invoiceId: big(topics[0]),
+        invoiceId: big(topics[0] || ""),
         oldFreelancer: str(body["old_freelancer"]),
         newFreelancer: str(body["new_freelancer"]),
         status: str(body["status"])
       };
     case "cancelled":
       return {
+        timestamp: num(body["timestamp"] ?? raw.ledgerClosedAt),
+        txHash: raw.txHash || "" || "",
         type: "cancelled",
-        invoiceId: big(topics[0]),
+        invoiceId: big(topics[0] || ""),
         freelancer: str(body["freelancer"]),
         status: str(body["status"])
       };
     case "paused":
-      return { type: "paused", timestamp: big(body["timestamp"]) };
+      return { txHash: raw.txHash || "", type: "paused", timestamp: num(body["timestamp"]) };
     case "unpaused":
-      return { type: "unpaused", timestamp: big(body["timestamp"]) };
+      return { txHash: raw.txHash || "", type: "unpaused", timestamp: num(body["timestamp"]) };
     case "upgraded":
       return {
+        timestamp: num(body["timestamp"] ?? raw.ledgerClosedAt),
+        txHash: raw.txHash || "" || "",
         type: "upgraded",
-        admin: str(topics[0]),
-        newWasmHash: str(body["new_wasm_hash"]),
-        timestamp: big(body["timestamp"])
+        admin: str(topics[0] || ""),
+        newWasmHash: str(body["new_wasm_hash"])
       };
     case "admin_changed":
       return {
+        timestamp: num(body["timestamp"] ?? raw.ledgerClosedAt),
+        txHash: raw.txHash || "" || "",
         type: "admin_changed",
         oldAdmin: str(body["old_admin"]),
-        newAdmin: str(body["new_admin"]),
-        timestamp: big(body["timestamp"])
+        newAdmin: str(body["new_admin"])
+      };
+    case "parameter_updated":
+      return {
+        timestamp: num(body["timestamp"] ?? raw.ledgerClosedAt),
+        txHash: raw.txHash || "" || "",
+        type: "parameter_updated",
+        paramName: str(topics[0]),
+        oldValue: big(body["old_value"]),
+        newValue: big(body["new_value"]),
+        updatedBy: str(body["updated_by"])
       };
     case "fund_requested":
       return {
+        timestamp: num(body["timestamp"] ?? raw.ledgerClosedAt),
+        txHash: raw.txHash || "" || "",
         type: "fund_requested",
-        invoiceId: big(topics[0]),
+        invoiceId: big(topics[0] || ""),
         lp: str(topics[1]),
         score: num(body["score"])
       };
     case "fund_queue_resolved":
       return {
+        timestamp: num(body["timestamp"] ?? raw.ledgerClosedAt),
+        txHash: raw.txHash || "" || "",
         type: "fund_queue_resolved",
-        invoiceId: big(topics[0]),
+        invoiceId: big(topics[0] || ""),
         approvedLp: str(topics[1]),
         score: num(body["score"])
       };
@@ -1388,9 +1554,8 @@ var ILNClient = class _ILNClient {
       networkPassphrase: "Test SDF Network ; September 2015",
       contractId: options?.contractId ?? // Published testnet deployment: the canonical contract ID from
       // the latest testnet CI/CD deployment. Update here when redeploying.
-      // TODO: replace with actual testnet contract ID once deployed
-      "CD2Q6M76VFLHNHDNROENMX7PJ5OBYBMVPM73S4M6XAJXN3NKCBJQPLUC",
-      signer
+      "CCVXGPKFAN374T62PLZAHWIS4UKUVTOYRD72HT36SGWWX7LRD5VFUUJD",
+      ...signer ? { signer } : {}
     });
   }
   /**
@@ -1410,7 +1575,7 @@ var ILNClient = class _ILNClient {
       networkPassphrase: "Public Global Stellar Network ; September 2015",
       contractId: options?.contractId ?? // TODO: replace with actual mainnet contract ID after mainnet deployment
       "",
-      signer
+      ...signer ? { signer } : {}
     });
   }
   /**
@@ -1486,9 +1651,11 @@ import {
   SorobanRpc as SorobanRpc8,
   TransactionBuilder as TransactionBuilder5,
   BASE_FEE as BASE_FEE5,
-  scValToNative as scValToNative5,
+  scValToNative as scValToNative6,
   nativeToScVal as nativeToScVal3
 } from "@stellar/stellar-sdk";
+init_xdrDecoder();
+init_retry();
 async function getInvoice(server, contractAddress, invoiceId, sourceAccount, networkPassphrase) {
   const contract = new Contract5(contractAddress);
   const op = contract.call(
@@ -1499,7 +1666,7 @@ async function getInvoice(server, contractAddress, invoiceId, sourceAccount, net
     fee: BASE_FEE5,
     networkPassphrase
   }).addOperation(op).setTimeout(30).build();
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
   if (SorobanRpc8.Api.isSimulationError(sim)) {
     if (String(sim.error).includes("NotFound") || String(sim.error).includes("Error(Contract, 1)")) {
       throw new ILNError.InvoiceNotFound(`Invoice ${invoiceId} not found`);
@@ -1509,27 +1676,8 @@ async function getInvoice(server, contractAddress, invoiceId, sourceAccount, net
   if (!sim.result?.retval) {
     throw new ILNError.InvoiceNotFound(`Invoice ${invoiceId} not found`);
   }
-  const raw = scValToNative5(sim.result.retval);
-  const dueDate = Number(raw["due_date"]);
-  const discountRate = Number(raw["discount_rate"]);
-  return {
-    id: BigInt(String(raw["id"])),
-    freelancer: String(raw["freelancer"]),
-    payer: String(raw["payer"]),
-    token: String(raw["token"]),
-    amount: BigInt(String(raw["amount"])),
-    dueDate,
-    discountRate,
-    status: raw["status"]?.tag || String(raw["status"]),
-    // handle scval enum
-    funder: raw["funder"] ? String(raw["funder"]) : void 0,
-    fundedAt: raw["funded_at"] ? Number(raw["funded_at"]) : void 0,
-    amountFunded: BigInt(String(raw["amount_funded"])),
-    amountPaid: BigInt(String(raw["amount_paid"])),
-    referralCode: raw["referral_code"] ? Buffer.from(raw["referral_code"]).toString("hex") : void 0,
-    submitterReputation: Number(raw["submitter_reputation"]),
-    effectiveYieldBps: computeEffectiveYieldBps(discountRate, dueDate)
-  };
+  const raw = scValToNative6(sim.result.retval);
+  return decodeInvoice(raw);
 }
 async function listInvoicesBySubmitter(server, contractAddress, submitter, sourceAccount, networkPassphrase, page = 0, pageSize = 50) {
   const contract = new Contract5(contractAddress);
@@ -1543,35 +1691,15 @@ async function listInvoicesBySubmitter(server, contractAddress, submitter, sourc
     fee: BASE_FEE5,
     networkPassphrase
   }).addOperation(op).setTimeout(30).build();
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
   if (SorobanRpc8.Api.isSimulationError(sim)) {
     throw ILNError.fromError(sim.error);
   }
   if (!sim.result?.retval) {
     return [];
   }
-  const rawArr = scValToNative5(sim.result.retval);
-  return rawArr.map((raw) => {
-    const dueDate = Number(raw["due_date"]);
-    const discountRate = Number(raw["discount_rate"]);
-    return {
-      id: BigInt(String(raw["id"])),
-      freelancer: String(raw["freelancer"]),
-      payer: String(raw["payer"]),
-      token: String(raw["token"]),
-      amount: BigInt(String(raw["amount"])),
-      dueDate,
-      discountRate,
-      status: raw["status"]?.tag || String(raw["status"]),
-      funder: raw["funder"] ? String(raw["funder"]) : void 0,
-      fundedAt: raw["funded_at"] ? Number(raw["funded_at"]) : void 0,
-      amountFunded: BigInt(String(raw["amount_funded"])),
-      amountPaid: BigInt(String(raw["amount_paid"])),
-      referralCode: raw["referral_code"] ? Buffer.from(raw["referral_code"]).toString("hex") : void 0,
-      submitterReputation: Number(raw["submitter_reputation"]),
-      effectiveYieldBps: computeEffectiveYieldBps(discountRate, dueDate)
-    };
-  });
+  const rawArr = scValToNative6(sim.result.retval);
+  return rawArr.map((raw) => decodeInvoice(raw));
 }
 async function listInvoicesByLP(server, contractAddress, lp, sourceAccount, networkPassphrase, page = 0, pageSize = 50) {
   const contract = new Contract5(contractAddress);
@@ -1585,35 +1713,15 @@ async function listInvoicesByLP(server, contractAddress, lp, sourceAccount, netw
     fee: BASE_FEE5,
     networkPassphrase
   }).addOperation(op).setTimeout(30).build();
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
   if (SorobanRpc8.Api.isSimulationError(sim)) {
     throw ILNError.fromError(sim.error);
   }
   if (!sim.result?.retval) {
     return [];
   }
-  const rawArr = scValToNative5(sim.result.retval);
-  return rawArr.map((raw) => {
-    const dueDate = Number(raw["due_date"]);
-    const discountRate = Number(raw["discount_rate"]);
-    return {
-      id: BigInt(String(raw["id"])),
-      freelancer: String(raw["freelancer"]),
-      payer: String(raw["payer"]),
-      token: String(raw["token"]),
-      amount: BigInt(String(raw["amount"])),
-      dueDate,
-      discountRate,
-      status: raw["status"]?.tag || String(raw["status"]),
-      funder: raw["funder"] ? String(raw["funder"]) : void 0,
-      fundedAt: raw["funded_at"] ? Number(raw["funded_at"]) : void 0,
-      amountFunded: BigInt(String(raw["amount_funded"])),
-      amountPaid: BigInt(String(raw["amount_paid"])),
-      referralCode: raw["referral_code"] ? Buffer.from(raw["referral_code"]).toString("hex") : void 0,
-      submitterReputation: Number(raw["submitter_reputation"]),
-      effectiveYieldBps: computeEffectiveYieldBps(discountRate, dueDate)
-    };
-  });
+  const rawArr = scValToNative6(sim.result.retval);
+  return rawArr.map((raw) => decodeInvoice(raw));
 }
 
 // src/methods/submitInvoice.ts
@@ -1623,8 +1731,10 @@ import {
   TransactionBuilder as TransactionBuilder6,
   BASE_FEE as BASE_FEE6,
   nativeToScVal as nativeToScVal4,
-  scValToNative as scValToNative6
+  scValToNative as scValToNative7,
+  xdr as xdr2
 } from "@stellar/stellar-sdk";
+init_retry();
 async function submitInvoice(server, contractAddress, params, sourceAccount, signTransaction, networkPassphrase) {
   if (params.amount <= 0n) {
     throw new ILNError.InvalidAmount("Invoice amount must be greater than 0");
@@ -1644,10 +1754,18 @@ async function submitInvoice(server, contractAddress, params, sourceAccount, sig
   const contract = new Contract6(contractAddress);
   const submitterAddress = sourceAccount.accountId();
   const tokenArg = nativeToScVal4(params.token, { type: "address" });
-  let refArg = nativeToScVal4(void 0);
+  let refArg;
   if (params.referralCode) {
     const refBuffer = Buffer.from(params.referralCode, "hex");
-    refArg = nativeToScVal4(refBuffer, { type: "bytes", size: 32 });
+    refArg = xdr2.ScVal.scvVec([
+      xdr2.ScVal.scvU32(1),
+      nativeToScVal4(refBuffer, { type: "bytes" })
+    ]);
+  } else {
+    refArg = xdr2.ScVal.scvVec([
+      xdr2.ScVal.scvU32(0),
+      xdr2.ScVal.scvVoid()
+    ]);
   }
   const op = contract.call(
     "submit_invoice",
@@ -1663,21 +1781,21 @@ async function submitInvoice(server, contractAddress, params, sourceAccount, sig
     fee: BASE_FEE6,
     networkPassphrase
   }).addOperation(op).setTimeout(30).build();
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
   if (SorobanRpc9.Api.isSimulationError(sim)) {
     throw ILNError.fromError(sim.error);
   }
   const assembledTx = SorobanRpc9.assembleTransaction(tx, sim).build();
   const signedTx = await signTransaction(assembledTx);
-  const sendResult = await server.sendTransaction(signedTx);
-  if (sendResult.errorResultXdr) {
-    throw new Error(`Transaction failed: ${sendResult.errorResultXdr}`);
+  const sendResult = await retry(() => server.sendTransaction(signedTx));
+  if (sendResult.errorResult) {
+    throw new Error(`Transaction failed: ${sendResult.errorResult}`);
   }
-  let status = await server.getTransaction(sendResult.hash);
+  let status = await retry(() => server.getTransaction(sendResult.hash));
   let retries = 0;
   while (status.status === SorobanRpc9.Api.GetTransactionStatus.NOT_FOUND && retries < 15) {
     await new Promise((r) => setTimeout(r, 2e3));
-    status = await server.getTransaction(sendResult.hash);
+    status = await retry(() => server.getTransaction(sendResult.hash));
     retries++;
   }
   if (status.status === SorobanRpc9.Api.GetTransactionStatus.FAILED) {
@@ -1685,7 +1803,7 @@ async function submitInvoice(server, contractAddress, params, sourceAccount, sig
   }
   let invoiceId = 0n;
   if (status.status === SorobanRpc9.Api.GetTransactionStatus.SUCCESS && status.returnValue) {
-    invoiceId = BigInt(String(scValToNative6(status.returnValue)));
+    invoiceId = BigInt(String(scValToNative7(status.returnValue)));
   }
   return { invoiceId, txHash: sendResult.hash };
 }
@@ -1724,8 +1842,8 @@ async function transferLPPosition(server, contractAddress, invoiceId, newLP, sou
   const assembledTx = SorobanRpc10.assembleTransaction(tx, sim).build();
   const signedTx = await signTransaction(assembledTx);
   const sendResult = await server.sendTransaction(signedTx);
-  if (sendResult.errorResultXdr) {
-    throw new Error(`Transaction failed: ${sendResult.errorResultXdr}`);
+  if (sendResult.errorResult) {
+    throw new Error(`Transaction failed: ${sendResult.errorResult}`);
   }
   let status = await server.getTransaction(sendResult.hash);
   let retries = 0;
@@ -1748,6 +1866,7 @@ import {
   BASE_FEE as BASE_FEE8,
   nativeToScVal as nativeToScVal6
 } from "@stellar/stellar-sdk";
+init_retry();
 async function cancelInvoice(server, contractAddress, invoiceId, sourceAccount, signTransaction, networkPassphrase) {
   const invoice = await getInvoice(
     server,
@@ -1773,21 +1892,21 @@ async function cancelInvoice(server, contractAddress, invoiceId, sourceAccount, 
     fee: BASE_FEE8,
     networkPassphrase
   }).addOperation(op).setTimeout(30).build();
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
   if (SorobanRpc11.Api.isSimulationError(sim)) {
     throw ILNError.fromError(sim.error);
   }
   const assembledTx = SorobanRpc11.assembleTransaction(tx, sim).build();
   const signedTx = await signTransaction(assembledTx);
-  const sendResult = await server.sendTransaction(signedTx);
-  if (sendResult.errorResultXdr) {
-    throw new Error(`Transaction failed: ${sendResult.errorResultXdr}`);
+  const sendResult = await retry(() => server.sendTransaction(signedTx));
+  if (sendResult.errorResult) {
+    throw new Error(`Transaction failed: ${sendResult.errorResult}`);
   }
-  let status = await server.getTransaction(sendResult.hash);
+  let status = await retry(() => server.getTransaction(sendResult.hash));
   let retries = 0;
   while (status.status === SorobanRpc11.Api.GetTransactionStatus.NOT_FOUND && retries < 15) {
     await new Promise((r) => setTimeout(r, 2e3));
-    status = await server.getTransaction(sendResult.hash);
+    status = await retry(() => server.getTransaction(sendResult.hash));
     retries++;
   }
   if (status.status === SorobanRpc11.Api.GetTransactionStatus.FAILED) {
@@ -1804,6 +1923,7 @@ import {
   BASE_FEE as BASE_FEE9,
   nativeToScVal as nativeToScVal7
 } from "@stellar/stellar-sdk";
+init_retry();
 async function markPaid(server, contractAddress, invoiceId, amount, sourceAccount, signTransaction, networkPassphrase) {
   const invoice = await getInvoice(server, contractAddress, invoiceId, sourceAccount, networkPassphrase);
   const outstanding = invoice.amount - invoice.amountPaid;
@@ -1826,21 +1946,21 @@ async function markPaid(server, contractAddress, invoiceId, amount, sourceAccoun
     fee: BASE_FEE9,
     networkPassphrase
   }).addOperation(op).setTimeout(30).build();
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
   if (SorobanRpc12.Api.isSimulationError(sim)) {
     throw ILNError.fromError(sim.error);
   }
   const assembledTx = SorobanRpc12.assembleTransaction(tx, sim).build();
   const signedTx = await signTransaction(assembledTx);
-  const sendResult = await server.sendTransaction(signedTx);
-  if (sendResult.errorResultXdr) {
-    throw new Error(`Transaction failed: ${sendResult.errorResultXdr}`);
+  const sendResult = await retry(() => server.sendTransaction(signedTx));
+  if (sendResult.errorResult) {
+    throw new Error(`Transaction failed: ${sendResult.errorResult}`);
   }
-  let status = await server.getTransaction(sendResult.hash);
+  let status = await retry(() => server.getTransaction(sendResult.hash));
   let retries = 0;
   while (status.status === SorobanRpc12.Api.GetTransactionStatus.NOT_FOUND && retries < 15) {
     await new Promise((r) => setTimeout(r, 2e3));
-    status = await server.getTransaction(sendResult.hash);
+    status = await retry(() => server.getTransaction(sendResult.hash));
     retries++;
   }
   if (status.status === SorobanRpc12.Api.GetTransactionStatus.FAILED) {
@@ -1861,54 +1981,42 @@ import {
   TransactionBuilder as TransactionBuilder10,
   BASE_FEE as BASE_FEE10,
   nativeToScVal as nativeToScVal8,
-  scValToNative as scValToNative7
+  scValToNative as scValToNative8
 } from "@stellar/stellar-sdk";
 
 // src/types/governance.ts
 import { ProposalAction, ProposalStatus } from "@invoice-liquidity/types";
 
 // src/methods/governance.ts
+init_retry();
+init_xdrDecoder();
 async function sendGovernanceCall(server, sourceAccount, networkPassphrase, op, signTransaction) {
   const tx = new TransactionBuilder10(sourceAccount, {
     fee: BASE_FEE10,
     networkPassphrase
   }).addOperation(op).setTimeout(30).build();
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
   if (SorobanRpc13.Api.isSimulationError(sim)) {
     throw ILNError.fromError(sim.error);
   }
   const assembledTx = SorobanRpc13.assembleTransaction(tx, sim).build();
   const signedTx = await signTransaction(assembledTx);
-  const sendResult = await server.sendTransaction(signedTx);
-  if (sendResult.errorResultXdr) {
-    throw new Error(`Transaction failed: ${sendResult.errorResultXdr}`);
+  const sendResult = await retry(() => server.sendTransaction(signedTx));
+  if (sendResult.errorResult) {
+    throw new Error(`Transaction failed: ${sendResult.errorResult}`);
   }
-  let status = await server.getTransaction(sendResult.hash);
+  let status = await retry(() => server.getTransaction(sendResult.hash));
   let retries = 0;
   while (status.status === SorobanRpc13.Api.GetTransactionStatus.NOT_FOUND && retries < 15) {
     await new Promise((r) => setTimeout(r, 2e3));
-    status = await server.getTransaction(sendResult.hash);
+    status = await retry(() => server.getTransaction(sendResult.hash));
     retries++;
   }
   if (status.status === SorobanRpc13.Api.GetTransactionStatus.FAILED) {
     throw new Error("Transaction failed during execution");
   }
-  const returnValue = status.status === SorobanRpc13.Api.GetTransactionStatus.SUCCESS && status.returnValue ? scValToNative7(status.returnValue) : void 0;
+  const returnValue = status.status === SorobanRpc13.Api.GetTransactionStatus.SUCCESS && status.returnValue ? scValToNative8(status.returnValue) : void 0;
   return { txHash: sendResult.hash, returnValue };
-}
-function parseProposal(raw) {
-  const statusTag = raw["status"]?.tag ?? String(raw["status"]);
-  return {
-    id: BigInt(String(raw["id"])),
-    action: Number(raw["action"]),
-    proposedValue: BigInt(String(raw["proposed_value"] ?? 0)),
-    descriptionHash: raw["description_hash"] ? Buffer.from(raw["description_hash"]).toString("hex") : "",
-    proposer: String(raw["proposer"]),
-    votesFor: BigInt(String(raw["votes_for"] ?? 0)),
-    votesAgainst: BigInt(String(raw["votes_against"] ?? 0)),
-    status: ProposalStatus[statusTag] ?? statusTag,
-    votingEndsAt: Number(raw["voting_ends_at"] ?? 0)
-  };
 }
 async function createProposal(server, contractAddress, action, proposedValue, descriptionHash, sourceAccount, signTransaction, networkPassphrase) {
   const contract = new Contract10(contractAddress);
@@ -1917,7 +2025,7 @@ async function createProposal(server, contractAddress, action, proposedValue, de
     nativeToScVal8(sourceAccount.accountId(), { type: "address" }),
     nativeToScVal8(action, { type: "u32" }),
     nativeToScVal8(proposedValue, { type: "i128" }),
-    nativeToScVal8(Buffer.from(descriptionHash, "hex"), { type: "bytes", size: 32 })
+    nativeToScVal8(Buffer.from(descriptionHash, "hex"), { type: "bytes" })
   );
   const { txHash, returnValue } = await sendGovernanceCall(
     server,
@@ -1971,14 +2079,15 @@ async function getProposal(server, contractAddress, id, sourceAccount, networkPa
     fee: BASE_FEE10,
     networkPassphrase
   }).addOperation(op).setTimeout(30).build();
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
   if (SorobanRpc13.Api.isSimulationError(sim)) {
     throw ILNError.fromError(sim.error);
   }
   if (!sim.result?.retval) {
     throw new ILNError(`Proposal ${id} not found`);
   }
-  return parseProposal(scValToNative7(sim.result.retval));
+  const raw = scValToNative8(sim.result.retval);
+  return decodeGovernanceProposal(raw);
 }
 async function listProposals(server, contractAddress, sourceAccount, networkPassphrase, filter) {
   const contract = new Contract10(contractAddress);
@@ -1987,15 +2096,15 @@ async function listProposals(server, contractAddress, sourceAccount, networkPass
     fee: BASE_FEE10,
     networkPassphrase
   }).addOperation(op).setTimeout(30).build();
-  const sim = await server.simulateTransaction(tx);
+  const sim = await retry(() => server.simulateTransaction(tx));
   if (SorobanRpc13.Api.isSimulationError(sim)) {
     throw ILNError.fromError(sim.error);
   }
   if (!sim.result?.retval) {
     return [];
   }
-  const rawArr = scValToNative7(sim.result.retval);
-  let proposals = rawArr.map(parseProposal);
+  const rawArr = scValToNative8(sim.result.retval);
+  let proposals = rawArr.map((raw) => decodeGovernanceProposal(raw));
   if (filter?.status) {
     proposals = proposals.filter((p) => p.status === filter.status);
   }
@@ -2006,7 +2115,8 @@ async function listProposals(server, contractAddress, sourceAccount, networkPass
 }
 
 // src/methods/disputeInvoice.ts
-import { Contract as Contract11, xdr } from "@stellar/stellar-sdk";
+init_retry();
+import { Contract as Contract11, xdr as xdr3 } from "@stellar/stellar-sdk";
 async function sha256Hex(text) {
   const bytes = new TextEncoder().encode(text);
   if (typeof process !== "undefined" && process.versions?.node) {
@@ -2023,19 +2133,20 @@ async function disputeInvoice(params) {
   const contract = new Contract11(contractAddress);
   const operation = contract.call(
     "dispute_invoice",
-    xdr.ScVal.scvU64(xdr.Uint64.fromString(invoiceId.toString())),
-    xdr.ScVal.scvBytes(hashBytes)
+    xdr3.ScVal.scvU64(xdr3.Uint64.fromString(invoiceId.toString())),
+    xdr3.ScVal.scvBytes(hashBytes)
   );
-  const account = await rpc.getAccount(await signer.publicKey());
-  const { built } = await rpc.prepareTransaction(
-    // @ts-expect-error TransactionBuilder types vary across SDK versions
-    new (await import("@stellar/stellar-sdk")).TransactionBuilder(account, {
+  const account = await retry(() => rpc.getAccount(signer.publicKey));
+  const { TransactionBuilder: TransactionBuilder12 } = await import("@stellar/stellar-sdk");
+  const networkPassphrase = (await rpc.getNetwork()).passphrase;
+  const built = await retry(() => rpc.prepareTransaction(
+    new TransactionBuilder12(account, {
       fee: String(fee),
-      networkPassphrase: (await rpc.getNetwork()).passphrase
+      networkPassphrase
     }).addOperation(operation).setTimeout(30).build()
-  );
-  const signed = await signer.sign(built);
-  const response = await rpc.sendTransaction(signed);
+  ));
+  const signed = await signer.signTransaction(built, rpc);
+  const response = await retry(() => rpc.sendTransaction(signed));
   return { txHash: response.hash, evidenceHash };
 }
 
@@ -2130,6 +2241,59 @@ var TokenRegistry = class {
   }
 };
 var tokenRegistry = new TokenRegistry("testnet");
+
+// src/utils/feeCalculator.ts
+import {
+  Contract as Contract12,
+  SorobanRpc as SorobanRpc15,
+  TransactionBuilder as TransactionBuilder11,
+  BASE_FEE as BASE_FEE11,
+  Networks as Networks6,
+  Address as Address4,
+  nativeToScVal as nativeToScVal9
+} from "@stellar/stellar-sdk";
+var STROOPS_PER_XLM = 10000000n;
+async function estimateFee(operation, server, sourceAccount, networkPassphrase = Networks6.TESTNET, options = {}) {
+  const { feeBuffer = 1.2 } = options;
+  const tx = new TransactionBuilder11(sourceAccount, {
+    fee: BASE_FEE11,
+    networkPassphrase
+  }).addOperation(operation).setTimeout(30).build();
+  const sim = await server.simulateTransaction(tx);
+  if (SorobanRpc15.Api.isSimulationError(sim)) {
+    throw new Error(`Fee simulation failed: ${sim.error}`);
+  }
+  const baseFeeStroops = BigInt(sim.minResourceFee ?? "0");
+  const bufferedStroops = BigInt(Math.ceil(Number(baseFeeStroops) * feeBuffer));
+  const xlm = Number(bufferedStroops) / Number(STROOPS_PER_XLM);
+  return {
+    feeStroops: bufferedStroops,
+    feeXLM: xlm.toFixed(7)
+  };
+}
+async function estimateSubmitFee(params, server, contractAddress, sourceAccount, networkPassphrase = Networks6.TESTNET, options = {}) {
+  const contract = new Contract12(contractAddress);
+  const op = contract.call(
+    "submit_invoice",
+    new Address4(params.payer).toScVal(),
+    nativeToScVal9(params.amount, { type: "i128" }),
+    new Address4(params.token).toScVal(),
+    nativeToScVal9(params.discountRate, { type: "u32" }),
+    nativeToScVal9(params.dueDate, { type: "u64" }),
+    nativeToScVal9(params.referralCode ?? null, { type: "string" })
+  );
+  return estimateFee(op, server, sourceAccount, networkPassphrase, options);
+}
+async function estimateFundFee(invoiceId, lpAddress, amount, server, contractAddress, sourceAccount, networkPassphrase = Networks6.TESTNET, options = {}) {
+  const contract = new Contract12(contractAddress);
+  const op = contract.call(
+    "fund_invoice",
+    new Address4(lpAddress).toScVal(),
+    nativeToScVal9(invoiceId, { type: "u64" }),
+    nativeToScVal9(amount, { type: "i128" })
+  );
+  return estimateFee(op, server, sourceAccount, networkPassphrase, options);
+}
 export {
   FreighterSigner,
   ILNClient,
@@ -2145,6 +2309,9 @@ export {
   computeEffectiveYieldBps,
   createProposal,
   disputeInvoice,
+  estimateFee,
+  estimateFundFee,
+  estimateSubmitFee,
   executeProposal,
   fundInvoice,
   getAllowance,

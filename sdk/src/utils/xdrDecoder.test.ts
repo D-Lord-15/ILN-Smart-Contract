@@ -142,7 +142,7 @@ describe("xdrDecoder property-based tests", () => {
             total_volume_usdc: fc.bigInt(),
             total_volume_eurc: fc.bigInt(),
             total_volume_xlm: fc.bigInt(),
-            token_volumes: fc.array(fc.tuple(fc.hexaString({ minLength: 56, maxLength: 56 }), fc.string())),
+            token_volumes: fc.array(fc.tuple(fc.hexaString({ minLength: 56, maxLength: 56 }), fc.bigInt().map(String))),
             total_volume_usd_normalized: fc.bigInt(),
           }),
           (raw) => {
