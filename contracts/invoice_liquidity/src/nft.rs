@@ -16,6 +16,7 @@
 use soroban_sdk::{contracttype, Address, Env, Symbol};
 
 use crate::errors::ContractError;
+use crate::events::{InvoiceNftBurned, InvoiceNftMinted, InvoiceNftTransferred};
 use crate::storage::DataKey;
 
 /// NFT Metadata: complete information about an invoice NFT
@@ -85,8 +86,8 @@ pub fn mint_invoice_nft(
         due_date,
         discount_rate,
         token,
-        owner,
-        minted_at: env.ledger().timestamp(),
+        owner: owner.clone(),
+        minted_at: env.ledger().timestamp() as u32,
     };
 
     env.storage()
@@ -97,14 +98,21 @@ pub fn mint_invoice_nft(
         .persistent()
         .set(&get_nft_owner_key(invoice_id), &owner);
 
-    // Publish NFT minting event
-    env.events().publish_event((
-        Symbol::new(env, "invoice_nft_minted"),
-        invoice_id,
-        owner,
-        amount,
-        due_date,
-    ));
+    // Publish NFT minting event (Soroban SDK: publish(topics, data))
+    env.events().publish(
+        (
+            Symbol::new(env, "invoice_nft_minted"),
+            invoice_id,
+            owner.clone(),
+        ),
+        InvoiceNftMinted {
+            invoice_id,
+            owner,
+            amount,
+            due_date,
+            timestamp: env.ledger().timestamp(),
+        },
+    );
 
     Ok(())
 }
@@ -148,13 +156,21 @@ pub fn transfer_invoice_nft(
         .persistent()
         .set(&get_nft_owner_key(invoice_id), &to);
 
-    // Publish NFT transfer event
-    env.events().publish_event((
-        Symbol::new(env, "invoice_nft_transferred"),
-        invoice_id,
-        from,
-        to,
-    ));
+    // Publish NFT transfer event (Soroban SDK: publish(topics, data))
+    env.events().publish(
+        (
+            Symbol::new(env, "invoice_nft_transferred"),
+            invoice_id,
+            from.clone(),
+            to.clone(),
+        ),
+        InvoiceNftTransferred {
+            invoice_id,
+            from,
+            to,
+            timestamp: env.ledger().timestamp(),
+        },
+    );
 
     Ok(())
 }
@@ -191,12 +207,19 @@ pub fn burn_invoice_nft(env: &Env, invoice_id: u64, owner: Address) -> Result<()
         .persistent()
         .remove(&get_nft_owner_key(invoice_id));
 
-    // Publish NFT burn event
-    env.events().publish_event((
-        Symbol::new(env, "invoice_nft_burned"),
-        invoice_id,
-        owner,
-    ));
+    // Publish NFT burn event (Soroban SDK: publish(topics, data))
+    env.events().publish(
+        (
+            Symbol::new(env, "invoice_nft_burned"),
+            invoice_id,
+            owner.clone(),
+        ),
+        InvoiceNftBurned {
+            invoice_id,
+            owner,
+            timestamp: env.ledger().timestamp(),
+        },
+    );
 
     Ok(())
 }
