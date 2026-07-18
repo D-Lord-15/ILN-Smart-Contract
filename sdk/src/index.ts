@@ -74,6 +74,7 @@ export {
   getInsurancePoolInfo,
 } from "./methods/insurance.js";
 export type { InsurancePoolInfo } from "@invoice-liquidity/types";
+export { getDistributionAccrual } from "./methods/distribution.js";
 export { TokenRegistry, tokenRegistry } from "./utils/tokenRegistry.js";
 export type { TokenInfo, NetworkName } from "./utils/tokenRegistry.js";
 export {
