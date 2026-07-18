@@ -119,6 +119,17 @@ export interface ContractStats {
 }
 
 // ---------------------------------------------------------------------------
+// Insurance Pool Types
+// ---------------------------------------------------------------------------
+
+export interface InsurancePoolInfo {
+  poolBalance: bigint;
+  coverage: bigint;
+  isEnrolled: boolean;
+  premiumsPaid: bigint;
+}
+
+// ---------------------------------------------------------------------------
 // Token Parameters
 // ---------------------------------------------------------------------------
 
