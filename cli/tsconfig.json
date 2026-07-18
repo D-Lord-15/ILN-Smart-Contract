@@ -1,7 +1,10 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "module": "commonjs",
+    "moduleResolution": "node",
+    "exactOptionalPropertyTypes": false,
+    "noUncheckedIndexedAccess": false,
     "outDir": "dist",
     "resolveJsonModule": true,
     "baseUrl": ".",
