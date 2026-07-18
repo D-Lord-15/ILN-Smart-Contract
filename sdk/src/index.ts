@@ -66,6 +66,14 @@ export type {
 export { ILNError } from "./errors.js";
 export { disputeInvoice, sha256Hex } from "./methods/disputeInvoice.js";
 export type { DisputeInvoiceParams, DisputeInvoiceResult } from "./methods/disputeInvoice.js";
+export {
+  getPoolBalance,
+  getCoverage,
+  isEnrolled,
+  getPremiumsPaid,
+  getInsurancePoolInfo,
+} from "./methods/insurance.js";
+export type { InsurancePoolInfo } from "@invoice-liquidity/types";
 export { TokenRegistry, tokenRegistry } from "./utils/tokenRegistry.js";
 export type { TokenInfo, NetworkName } from "./utils/tokenRegistry.js";
 export {
