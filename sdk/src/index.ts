@@ -7,6 +7,7 @@
 export { fundInvoice, computeEffectiveYieldBps } from "./methods/fundInvoice.js";
 export { getReputation } from "./methods/reputation.js";
 export { getContractStats } from "./methods/stats.js";
+export { getTopPayers } from "./methods/topPayers.js";
 export {
   getAllowance,
   buildApproveTransaction,
@@ -27,6 +28,7 @@ export type { ISigner } from "./signers/ISigner.js";
 export type { ILNClientConfig } from "./client.js";
 export type { ReputationProfile } from "./methods/reputation.js";
 export type { ContractStats } from "./methods/stats.js";
+export type { TopPayerEntry } from "./methods/topPayers.js";
 export type {
   FundOptions,
   FundResult,
