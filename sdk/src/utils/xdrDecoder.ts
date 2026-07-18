@@ -184,6 +184,39 @@ export function decodeContractStats(raw: Record<string, unknown>): ContractStats
 }
 
 // ---------------------------------------------------------------------------
+// TopPayerEntry decoder
+// ---------------------------------------------------------------------------
+
+/**
+ * A single entry in the top-payers leaderboard.
+ */
+export interface TopPayerEntry {
+  /** Stellar G… address of the payer. */
+  address: string;
+  /** Payer's reputation score. */
+  score: number;
+}
+
+/**
+ * Decode a TopPayerEntry from native contract response (after scValToNative).
+ *
+ * @param raw - Native object from scValToNative(sim.result.retval)
+ * @returns Decoded TopPayerEntry object
+ *
+ * @example
+ * ```ts
+ * const raw = scValToNative(sim.result.retval);
+ * const entries = raw.map(decodeTopPayerEntry);
+ * ```
+ */
+export function decodeTopPayerEntry(raw: Record<string, unknown>): TopPayerEntry {
+  return {
+    address: String(raw["address"]),
+    score: Number(raw["score"]),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // GovernanceProposal decoder
 // ---------------------------------------------------------------------------
 

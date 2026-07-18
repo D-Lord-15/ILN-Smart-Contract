@@ -88,6 +88,7 @@ export class ILNClient {
   // Cached imports (lazy-loaded for tree-shaking)
   private _getReputation?: typeof import("./methods/reputation.js").getReputation;
   private _getContractStats?: typeof import("./methods/stats.js").getContractStats;
+  private _getTopPayers?: typeof import("./methods/topPayers.js").getTopPayers;
   private _getPoolBalance?: typeof import("./methods/insurance.js").getPoolBalance;
   private _getCoverage?: typeof import("./methods/insurance.js").getCoverage;
   private _isEnrolled?: typeof import("./methods/insurance.js").isEnrolled;
@@ -210,6 +211,24 @@ export class ILNClient {
         .getContractStats;
     }
     return this._getContractStats(this.rpc, this.contractId, this.networkPassphrase);
+  }
+
+  /**
+   * Fetch the top payers leaderboard.
+   *
+   * Read-only; does not require a signer.
+   *
+   * @param limit - Maximum number of entries to return (default 10)
+   * @returns Array of TopPayerEntry sorted by descending score
+   */
+  async getTopPayers(
+    limit: number = 10
+  ): Promise<import("./methods/topPayers.js").TopPayerEntry[]> {
+    if (!this._getTopPayers) {
+      this._getTopPayers = (await import("./methods/topPayers.js"))
+        .getTopPayers;
+    }
+    return this._getTopPayers(this.rpc, this.contractId, limit, this.networkPassphrase);
   }
 
   /**
@@ -345,6 +364,10 @@ class ILNSingleton {
 
   async getContractStats() {
     return this.client.getContractStats();
+  }
+
+  async getTopPayers(limit: number = 10) {
+    return this.client.getTopPayers(limit);
   }
 
   async getInsurancePoolBalance(insurancePoolContractId: string) {
