@@ -118,7 +118,7 @@ help:
 	@echo ""
 	@grep -E '^## ' Makefile | sed 's/^## /  /'
 	@echo ""
-.PHONY: help install build build-rust build-sdk build-insurance test test-rust test-e2e fuzz lint \
+.PHONY: help install build build-rust build-sdk test test-rust test-e2e fuzz test-fuzz lint \
         fmt fmt-check clippy deploy-testnet seed reset reset-testnet docs spec \
         changelog soroban-optimize health
 
@@ -169,6 +169,9 @@ test-e2e: ## Run the end-to-end test suite (tests/e2e)
 	cd tests/e2e && $(PKG) run test:e2e
 
 fuzz: ## Run the property/fuzz test suite
+	cargo test -p iln_fuzz
+
+test-fuzz: ## Run fuzz tests for the iln_fuzz crate
 	cargo test -p iln_fuzz
 
 lint: fmt-check clippy ## Lint everything (rustfmt check + clippy)
