@@ -153,6 +153,11 @@ build-rust: ## Build optimized contract WASM (wasm32v1-none release)
 build-sdk: ## Build the @iln/sdk TypeScript package
 	cd sdk && $(PKG) run build
 
+build-insurance: ## Build the insurance pool contract to optimised WASM
+	cargo build --target wasm32v1-none --release -p insurance_pool
+	@echo "--- Built insurance_pool WASM artefact ---"
+	@ls -lh target/wasm32v1-none/release/insurance_pool.wasm
+
 soroban-optimize: ## Build WASM via the wasm32-unknown-unknown target
 	cargo build --release --target wasm32-unknown-unknown
 
