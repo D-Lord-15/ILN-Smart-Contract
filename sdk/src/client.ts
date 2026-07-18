@@ -93,6 +93,7 @@ export class ILNClient {
   private _isEnrolled?: typeof import("./methods/insurance.js").isEnrolled;
   private _getPremiumsPaid?: typeof import("./methods/insurance.js").getPremiumsPaid;
   private _getInsurancePoolInfo?: typeof import("./methods/insurance.js").getInsurancePoolInfo;
+  private _getDistributionAccrual?: typeof import("./methods/distribution.js").getDistributionAccrual;
 
   constructor(config: ILNClientConfig) {
     this.rpc = new SorobanRpc.Server(config.rpcUrl);
@@ -286,6 +287,22 @@ export class ILNClient {
     }
     return this._getInsurancePoolInfo(this.rpc, insurancePoolContractId, lpAddress, this.networkPassphrase);
   }
+
+  /**
+   * Fetch a participant's accrued distribution tokens.
+   *
+   * @param distributionContractId - Deployed distribution contract address
+   * @param participantAddress - Stellar address of the participant
+   */
+  async getDistributionAccrual(
+    distributionContractId: string,
+    participantAddress: string
+  ): Promise<number> {
+    if (!this._getDistributionAccrual) {
+      this._getDistributionAccrual = (await import("./methods/distribution.js")).getDistributionAccrual;
+    }
+    return this._getDistributionAccrual(this.rpc, distributionContractId, participantAddress, this.networkPassphrase);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -348,6 +365,10 @@ class ILNSingleton {
 
   async getInsurancePoolInfo(insurancePoolContractId: string, lpAddress: string) {
     return this.client.getInsurancePoolInfo(insurancePoolContractId, lpAddress);
+  }
+
+  async getDistributionAccrual(distributionContractId: string, participantAddress: string) {
+    return this.client.getDistributionAccrual(distributionContractId, participantAddress);
   }
 }
 
