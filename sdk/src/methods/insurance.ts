@@ -24,6 +24,7 @@ async function simulateCall(
   server: SorobanRpc.Server,
   contractId: string,
   methodName: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   args: any[] = [],
   networkPassphrase: string = Networks.TESTNET
 ) {
