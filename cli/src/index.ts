@@ -2,8 +2,9 @@
 /**
  * ILN CLI entry point.
  *
- * Global flag:
+ * Global flags:
  *   --profile <name>   Use a named keypair profile (issue #246)
+ *   --json             Output machine-readable JSON for all commands
  */
 import { Command } from "commander";
 import { makeConfigCommand } from "./commands/config.js";
@@ -24,7 +25,8 @@ program
   .name("iln")
   .description("Invoice Liquidity Network CLI")
   .version("0.1.0")
-  .option("--profile <name>", "Named keypair profile to use for this command");
+  .option("--profile <name>", "Named keypair profile to use for this command")
+  .option("--json", "Output machine-readable JSON");
 
 program.addCommand(makeConfigCommand());
 program.addCommand(makeExportCommand());
