@@ -8,7 +8,6 @@ export { fundInvoice, computeEffectiveYieldBps } from "./methods/fundInvoice.js"
 export { getReputation } from "./methods/reputation.js";
 export { getContractStats } from "./methods/stats.js";
 export { getTopPayers } from "./methods/topPayers.js";
-export { getVersion } from "./methods/version.js";
 export {
   getAllowance,
   buildApproveTransaction,

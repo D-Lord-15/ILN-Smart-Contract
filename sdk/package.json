@@ -44,10 +44,9 @@
   },
   "devDependencies": {
     "@iln/test-utils": "workspace:*",
-    "@size-limit/file": "^11.1.6",
     "@types/node": "^20.0.0",
     "@vitest/coverage-v8": "^1.6.1",
-    "fast-check": "^4.9.0",
+    "@size-limit/file": "^11.1.6",
     "git-cliff": "^2.2.1",
     "size-limit": "^11.1.6",
     "tsup": "^8.0.2",

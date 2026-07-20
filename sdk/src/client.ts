@@ -95,7 +95,6 @@ export class ILNClient {
   private _getPremiumsPaid?: typeof import("./methods/insurance.js").getPremiumsPaid;
   private _getInsurancePoolInfo?: typeof import("./methods/insurance.js").getInsurancePoolInfo;
   private _getDistributionAccrual?: typeof import("./methods/distribution.js").getDistributionAccrual;
-  private _getVersion?: typeof import("./methods/version.js").getVersion;
 
   constructor(config: ILNClientConfig) {
     this.rpc = new SorobanRpc.Server(config.rpcUrl);
@@ -212,20 +211,6 @@ export class ILNClient {
         .getContractStats;
     }
     return this._getContractStats(this.rpc, this.contractId, this.networkPassphrase);
-  }
-
-  /**
-   * Fetch the contract version.
-   *
-   * Read-only; does not require a signer.
-   *
-   * @returns Contract version string (e.g. "1.0.0")
-   */
-  async getVersion(): Promise<string> {
-    if (!this._getVersion) {
-      this._getVersion = (await import("./methods/version.js")).getVersion;
-    }
-    return this._getVersion(this);
   }
 
   /**
@@ -379,10 +364,6 @@ class ILNSingleton {
 
   async getContractStats() {
     return this.client.getContractStats();
-  }
-
-  async getVersion() {
-    return this.client.getVersion();
   }
 
   async getTopPayers(limit: number = 10) {
