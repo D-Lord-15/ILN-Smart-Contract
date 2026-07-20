@@ -3,7 +3,16 @@
  */
 
 import { describe, it, expect } from "vitest";
-import * as fc from "fast-check";
+import * as fcModule from "fast-check";
+const fc = {
+  ...fcModule,
+  hexaString: (options?: { minLength?: number; maxLength?: number }) =>
+    fcModule.string({
+      minLength: options?.minLength,
+      maxLength: options?.maxLength,
+      fromChars: "0123456789abcdefABCDEF",
+    }),
+};
 import {
   decodeInvoice,
   decodeReputationScore,

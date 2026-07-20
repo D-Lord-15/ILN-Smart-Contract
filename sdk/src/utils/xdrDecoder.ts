@@ -30,7 +30,7 @@ export function decodeInvoice(raw: Record<string, unknown>): Invoice {
   const dueDate = Number(raw["due_date"]);
   const discountRate = Number(raw["discount_rate"]);
 
-  return {
+  const invoice: Invoice = {
     id: BigInt(String(raw["id"])),
     freelancer: String(raw["freelancer"]),
     payer: String(raw["payer"]),
@@ -39,14 +39,23 @@ export function decodeInvoice(raw: Record<string, unknown>): Invoice {
     dueDate,
     discountRate,
     status: parseInvoiceStatus(raw["status"]),
-    funder: raw["funder"] ? String(raw["funder"]) : undefined,
-    fundedAt: raw["funded_at"] ? Number(raw["funded_at"]) : undefined,
     amountFunded: BigInt(String(raw["amount_funded"])),
     amountPaid: BigInt(String(raw["amount_paid"])),
-    referralCode: raw["referral_code"] ? Buffer.from(raw["referral_code"] as any).toString("hex") : undefined,
     submitterReputation: Number(raw["submitter_reputation"]),
     effectiveYieldBps: computeEffectiveYieldBps(discountRate, dueDate),
   };
+
+  if (raw["funder"]) {
+    invoice.funder = String(raw["funder"]);
+  }
+  if (raw["funded_at"]) {
+    invoice.fundedAt = Number(raw["funded_at"]);
+  }
+  if (raw["referral_code"]) {
+    invoice.referralCode = Buffer.from(raw["referral_code"] as any).toString("hex");
+  }
+
+  return invoice;
 }
 
 /**

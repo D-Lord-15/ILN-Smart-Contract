@@ -16,3 +16,5 @@ sdk/node_modules/
 .turbo-cache
 
 fix.md
+pr.md
+issue.md
