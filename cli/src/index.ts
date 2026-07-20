@@ -18,6 +18,7 @@ import { makeStatusCommand } from "./commands/status.js";
 import { makeReputationCommand } from "./commands/reputation.js";
 import { makeCompletionCommand } from "./commands/completion.js";
 import { makePauseCommand, makeUnpauseCommand } from "./commands/pause.js";
+import { makeTopPayersCommand } from "./commands/top-payers.js";
 
 const program = new Command();
 
@@ -40,5 +41,6 @@ program.addCommand(makeReputationCommand());
 program.addCommand(makeCompletionCommand());
 program.addCommand(makePauseCommand());
 program.addCommand(makeUnpauseCommand());
+program.addCommand(makeTopPayersCommand());
 
 program.parse(process.argv);
