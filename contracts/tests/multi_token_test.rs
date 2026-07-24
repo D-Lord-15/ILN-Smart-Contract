@@ -2,7 +2,7 @@
 
 mod test_context;
 use invoice_liquidity::{
-    ContractError, InvoiceLiquidityContract, InvoiceLiquidityContractClient, InvoiceStatus,
+    ContractError, InvoiceLiquidityContract, InvoiceLiquidityContractClient, InvoiceStatus, ReferralCode,
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -45,8 +45,7 @@ fn assert_lifecycle_for_token(
             &DISCOUNT_RATE,
             &token.address,
             &ReferralCode::None,
-        )
-        .unwrap();
+        );
 
     let invoice = ctx.contract.get_invoice(&invoice_id);
     assert_eq!(
@@ -123,15 +122,15 @@ fn test_integration_submit_unapproved_token_fails() {
     let ctx = setup();
     let unapproved_admin = Address::generate(&ctx.env);
     let unapproved_id = ctx.env.register_stellar_asset_contract_v2(unapproved_admin);
-    let unapproved_address = unapproved_id.address();
+    let token_address = unapproved_id.address();
 
     let result = ctx.contract.try_submit_invoice(
         &ctx.submitter,
         &ctx.payer,
         &INVOICE_AMOUNT,
-        &due_date(ctx),
-        &DISCOUNT_RATE,
-        &unapproved_address,
+        &due_date(&ctx),
+        &100,
+        &token_address,
         &ReferralCode::None,
     );
 
@@ -149,12 +148,11 @@ fn test_integration_fund_removed_token_fails() {
             &ctx.submitter,
             &ctx.payer,
             &INVOICE_AMOUNT,
-            &due_date(ctx),
-            &DISCOUNT_RATE,
+            &due_date(&ctx),
+            &100,
             &ctx.eurc.address,
             &ReferralCode::None,
-        )
-        .unwrap();
+        );
 
     // Admin removes EURC from approved list
     ctx.contract.remove_token(&ctx.eurc.address);
@@ -162,6 +160,6 @@ fn test_integration_fund_removed_token_fails() {
     // LP tries to fund it - should fail with Unauthorized
     let result = ctx
         .contract
-        .try_fund_invoice(&ctx.lp, &invoice_id, &INVOICE_AMOUNT);
+        .try_fund_invoice(&ctx.lp, &invoice_id, &INVOICE_AMOUNT, &false);
     assert_eq!(result, Err(Ok(ContractError::Unauthorized)));
 }
