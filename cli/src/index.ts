@@ -19,6 +19,7 @@ import { makeReputationCommand } from "./commands/reputation.js";
 import { makeCompletionCommand } from "./commands/completion.js";
 import { makePauseCommand, makeUnpauseCommand } from "./commands/pause.js";
 import { makeAppealCommand } from "./commands/appeal.js";
+import { makeReferralCommand } from "./commands/referral.js";
 
 const program = new Command();
 
@@ -42,5 +43,5 @@ program.addCommand(makeCompletionCommand());
 program.addCommand(makePauseCommand());
 program.addCommand(makeUnpauseCommand());
 program.addCommand(makeAppealCommand());
-
+program.addCommand(makeReferralCommand());
 program.parse(process.argv);
