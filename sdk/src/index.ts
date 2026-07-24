@@ -93,3 +93,4 @@ export type {
   EstimateSubmitFeeParams,
   SorobanOperation,
 } from "./utils/feeCalculator.js";
+export { getTokenDecimals } from "./methods/getTokenDecimals.js";
