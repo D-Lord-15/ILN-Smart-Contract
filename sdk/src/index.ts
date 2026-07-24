@@ -144,3 +144,4 @@ export {
 } from "./methods/batch.js";
 export type { BatchContractCall, BatchTransactionOptions, BatchTransactionResult } from "./methods/batch.js";
 export { setAdmin, upgrade, setDistributionContract, addToken, removeToken, updateFeeRate, updateMaxDiscount, setPriceOracle, setMaxOracleAge } from "./methods/admin.js";
+export { getLpScore } from "./methods/getLpScore.js";
