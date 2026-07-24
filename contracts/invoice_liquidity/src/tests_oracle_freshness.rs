@@ -311,3 +311,23 @@ fn test_data_becomes_stale_as_ledger_advances() {
         "oracle data should become stale once ledger advances past max_oracle_age"
     );
 }
+
+// ----------------------------------------------------------------
+// Test 9: no oracle configured → fail-open (require_oracle_verification=true)
+// ----------------------------------------------------------------
+#[test]
+fn test_no_oracle_configured_fails_open() {
+    let t = setup();
+    // Do NOT register any oracle — config.price_oracle is None.
+
+    let invoice_id = make_invoice(&t);
+
+    // When require_oracle_verification=true but no oracle is configured,
+    // the contract should skip the oracle check and succeed (fail-open).
+    t.contract
+        .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &true)
+        .unwrap();
+
+    let invoice = t.contract.get_invoice(&invoice_id).unwrap();
+    assert_eq!(invoice.status, InvoiceStatus::Funded);
+}
