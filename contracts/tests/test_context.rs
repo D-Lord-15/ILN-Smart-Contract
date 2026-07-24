@@ -99,7 +99,6 @@ impl TestContext {
                 &self.usdc.address,
                 &ReferralCode::None,
             )
-            .expect("submit invoice")
     }
 
     pub fn fund_invoice(&self, invoice_id: u64) {
