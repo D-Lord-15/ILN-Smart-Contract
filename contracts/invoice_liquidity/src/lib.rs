@@ -17,8 +17,12 @@ pub mod rate_logic;
 pub mod storage;
 pub mod top_payers;
 use access::*;
-use access::{lock_reentrancy, unlock_reentrancy};
+use access::{check_rate_limit, lock_reentrancy, unlock_reentrancy};
 pub mod constants;
+use constants::{
+    ADMIN_CHANGE_COOLDOWN_LEDGERS, DEFAULT_RATE_LIMIT_LEDGERS, ECONOMIC_PARAM_COOLDOWN_LEDGERS,
+    UPGRADE_COOLDOWN_LEDGERS,
+};
 pub mod oracle_interface;
 #[cfg(test)]
 mod tests_discount_rate;
@@ -215,6 +219,7 @@ impl InvoiceLiquidityContract {
     /// Access: Admin only
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), ContractError> {
         require_admin(&env)?;
+        check_rate_limit(&env, "set_admin", ADMIN_CHANGE_COOLDOWN_LEDGERS)?;
         let old_admin: Address = env.storage().instance().get(&StorageKey::Admin).unwrap();
         env.storage().instance().set(&StorageKey::Admin, &new_admin);
         env.events().publish(
@@ -231,6 +236,7 @@ impl InvoiceLiquidityContract {
     /// Access: Admin only
     pub fn update_fee_rate(env: Env, rate: u32) -> Result<(), ContractError> {
         require_admin(&env)?;
+        check_rate_limit(&env, "update_fee_rate", ECONOMIC_PARAM_COOLDOWN_LEDGERS)?;
 
         let old_rate: u32 = env
             .storage()
@@ -259,6 +265,7 @@ impl InvoiceLiquidityContract {
     /// Access: Admin only
     pub fn update_max_discount(env: Env, rate: u32) -> Result<(), ContractError> {
         require_admin(&env)?;
+        check_rate_limit(&env, "update_max_discount", ECONOMIC_PARAM_COOLDOWN_LEDGERS)?;
 
         let old_rate: u32 = env
             .storage()
@@ -292,6 +299,7 @@ impl InvoiceLiquidityContract {
         distribution_contract: Address,
     ) -> Result<(), ContractError> {
         require_admin(&env)?;
+        check_rate_limit(&env, "set_distribution_contract", DEFAULT_RATE_LIMIT_LEDGERS)?;
 
         env.storage()
             .instance()
@@ -302,6 +310,7 @@ impl InvoiceLiquidityContract {
     /// Access: Admin only
     pub fn set_price_oracle(env: Env, oracle: Address) -> Result<(), ContractError> {
         require_admin(&env)?;
+        check_rate_limit(&env, "set_price_oracle", DEFAULT_RATE_LIMIT_LEDGERS)?;
         let admin = get_admin(&env).ok_or(ContractError::Unauthorized)?;
         crate::config::set_price_oracle(&env, &admin, oracle)
             .map_err(|_| ContractError::Unauthorized)?;
@@ -320,6 +329,7 @@ impl InvoiceLiquidityContract {
     /// Access: Admin only
     pub fn set_max_oracle_age(env: Env, max_age_ledgers: u64) -> Result<(), ContractError> {
         require_admin(&env)?;
+        check_rate_limit(&env, "set_max_oracle_age", DEFAULT_RATE_LIMIT_LEDGERS)?;
         let admin = get_admin(&env).ok_or(ContractError::Unauthorized)?;
         crate::config::set_max_oracle_age(&env, &admin, max_age_ledgers)
             .map_err(|_| ContractError::Unauthorized)?;
@@ -337,6 +347,7 @@ impl InvoiceLiquidityContract {
     /// Access: Admin only
     pub fn add_token(env: Env, token: Address, decimals: u32) -> Result<(), ContractError> {
         require_admin(&env)?;
+        check_rate_limit(&env, "add_token", DEFAULT_RATE_LIMIT_LEDGERS)?;
 
         let token_client = token_client(&env, &token);
         let contract_address = env.current_contract_address();
@@ -396,6 +407,7 @@ impl InvoiceLiquidityContract {
     /// Access: Admin only
     pub fn remove_token(env: Env, token: Address) -> Result<(), ContractError> {
         require_admin(&env)?;
+        check_rate_limit(&env, "remove_token", DEFAULT_RATE_LIMIT_LEDGERS)?;
 
         env.storage()
             .persistent()
@@ -496,6 +508,7 @@ impl InvoiceLiquidityContract {
     /// Access: Admin only
     pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), ContractError> {
         require_admin(&env)?;
+        check_rate_limit(&env, "upgrade", UPGRADE_COOLDOWN_LEDGERS)?;
 
         let admin = get_admin(&env).ok_or(ContractError::Unauthorized)?;
 
@@ -2262,6 +2275,7 @@ impl InvoiceLiquidityContract {
     /// Access: Admin only
     pub fn set_min_payer_reputation(env: Env, value: u32) -> Result<(), ContractError> {
         require_admin(&env)?;
+        check_rate_limit(&env, "set_min_payer_reputation", ECONOMIC_PARAM_COOLDOWN_LEDGERS)?;
         let updated_by = get_admin(&env).ok_or(ContractError::Unauthorized)?;
         let old_value = get_min_payer_reputation(&env);
         set_min_payer_reputation(&env, value);

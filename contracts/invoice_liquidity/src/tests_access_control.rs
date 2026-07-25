@@ -319,3 +319,122 @@ fn test_public_methods() {
     let count = client.get_invoice_count();
     assert_eq!(count, 0);
 }
+
+// ----------------------------------------------------------------
+// Rate Limit Tests (Issue #541)
+// ----------------------------------------------------------------
+
+#[test]
+fn test_update_fee_rate_rate_limited() {
+    let (env, _admin, _, client) = setup_env();
+
+    // First call succeeds
+    let res = client.try_update_fee_rate(&250);
+    assert!(res.is_ok(), "First update_fee_rate should succeed");
+
+    // Immediate second call should be rate-limited
+    let res = client.try_update_fee_rate(&500);
+    assert_eq!(
+        res,
+        Err(Ok(ContractError::RateLimited)),
+        "Second update_fee_rate within cooldown should be rejected"
+    );
+
+    // eslint-disable-next-line spacing
+    // After advancing ledgers past cooldown, the call should succeed again
+    let mut ledger_info = env.ledger().get();
+    ledger_info.sequence_number += 400; // ECONOMIC_PARAM_COOLDOWN_LEDGERS = 360
+    env.ledger().set(ledger_info);
+
+    let res = client.try_update_fee_rate(&500);
+    assert!(res.is_ok(), "update_fee_rate should succeed after cooldown");
+}
+
+#[test]
+fn test_rate_limit_independent_per_function() {
+    let (env, _admin, _, client) = setup_env();
+
+    // Call update_fee_rate — triggers rate limit for that function only
+    let res = client.try_update_fee_rate(&250);
+    assert!(res.is_ok(), "First update_fee_rate should succeed");
+
+    // update_max_discount should NOT be rate-limited (different function key)
+    let res = client.try_update_max_discount(&4000);
+    assert!(res.is_ok(), "update_max_discount should succeed independently");
+
+    // But a second update_fee_rate should be limited
+    let res = client.try_update_fee_rate(&500);
+    assert_eq!(
+        res,
+        Err(Ok(ContractError::RateLimited)),
+        "Second update_fee_rate should be rate-limited"
+    );
+}
+
+#[test]
+fn test_set_admin_rate_limited() {
+    let (env, _admin, _, client) = setup_env();
+    let new_admin = Address::generate(&env);
+
+    // First call succeeds
+    let res = client.try_set_admin(&new_admin);
+    assert!(res.is_ok(), "First set_admin should succeed");
+
+    // Immediate second call should be rate-limited
+    let another_admin = Address::generate(&env);
+    let res = client.try_set_admin(&another_admin);
+    assert_eq!(
+        res,
+        Err(Ok(ContractError::RateLimited)),
+        "Second set_admin within cooldown should be rejected"
+    );
+}
+
+#[test]
+fn test_pause_not_rate_limited() {
+    let (env, _admin, _, client) = setup_env();
+
+    // Emergency functions must NOT be rate-limited
+    let res = client.try_pause();
+    assert!(res.is_ok(), "First pause should succeed");
+
+    let res = client.try_unpause();
+    assert!(res.is_ok(), "Unpause should succeed immediately after pause");
+
+    let res = client.try_pause();
+    assert!(res.is_ok(), "Second pause should succeed immediately");
+}
+
+#[test]
+fn test_resolve_appeal_not_rate_limited() {
+    let (env, _admin, _, client) = setup_env();
+
+    // Dispute resolution functions must NOT be rate-limited
+    // (just test that the function can be called — it will fail with InvoiceNotFound
+    // since no invoice exists, but NOT with RateLimited)
+    let res = client.try_resolve_appeal(&1, &true);
+    assert_ne!(
+        res,
+        Err(Ok(ContractError::RateLimited)),
+        "resolve_appeal should not be rate-limited"
+    );
+    assert_eq!(
+        res,
+        Err(Ok(ContractError::InvoiceNotFound)),
+        "resolve_appeal on non-existent invoice should return InvoiceNotFound"
+    );
+}
+
+#[test]
+fn test_resolve_dispute_not_rate_limited() {
+    let (env, _admin, _, client) = setup_env();
+    let hash = BytesN::from_array(&env, &[0u8; 32]);
+
+    // Dispute resolution must not be rate-limited
+    let res = client.try_resolve_dispute(&1, &hash, &1);
+    assert_ne!(
+        res,
+        Err(Ok(ContractError::RateLimited)),
+        "resolve_dispute should not be rate-limited"
+    );
+}

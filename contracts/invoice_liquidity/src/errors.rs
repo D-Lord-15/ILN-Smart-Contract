@@ -57,4 +57,6 @@ pub enum ContractError {
     AmountTooSmall = 36,
     /// Reentrant call detected — the function was called while already executing (Issue #535).
     Reentrancy = 37,
+    /// Rate-limited function called before the cooldown period elapsed (Issue #541).
+    RateLimited = 38,
 }

@@ -160,3 +160,13 @@ Safe harbor does not cover social engineering, phishing, physical attacks, spam,
 
 - Governance `execute_proposal` in `iln_governance` invokes the ILN contract after changing `ProposalStatus::Passed` but before `ProposalStatus::Executed`. This is an accepted design choice because the ILN contract's admin functions are idempotent and guarded by `require_admin`.
 - Soroban's host function isolation provides inherent reentrancy protection for SAC token transfers, so the guards are defense-in-depth.
+
+## Rate Limiting (Issue #541)
+
+Rate limiting is applied to sensitive admin functions to prevent griefing via rapid parameter changes. See `docs/access-control.md#6-rate-limiting-design-issue-541` for the full design, cooldown table, and implementation details.
+
+Key design decisions:
+- Cooldown is measured in **ledgers** (not timestamps), aligning with Soroban's deterministic execution model.
+- Emergency functions (`pause`, `unpause`, `resolve_appeal`, `resolve_dispute`) are exempt.
+- Rate limits are per-function, so calling `update_fee_rate` does not affect `update_max_discount`.
+- Each rate-limited function is keyed by a `Symbol` in instance storage (`DataKey::RateLimit(Symbol)`).

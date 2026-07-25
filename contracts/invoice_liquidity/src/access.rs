@@ -1,6 +1,6 @@
 use crate::errors::ContractError;
 use crate::invoice::{get_invoice_funders, invoice_exists, load_invoice, StorageKey};
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{Address, Env, Symbol};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Role {
@@ -111,4 +111,43 @@ pub fn unlock_reentrancy(env: &Env) {
     env.storage()
         .instance()
         .set(&StorageKey::ReentrancyLock, &false);
+}
+
+// ----------------------------------------------------------------
+// Rate Limiting (Issue #541)
+// ----------------------------------------------------------------
+//
+// Design:
+//   Each rate-limited function is keyed by a Symbol (its function name).
+//   On each call, we check whether enough ledgers have elapsed since the
+//   last recorded call. If not, the call is rejected with RateLimited.
+//
+//   Cooldown defaults are set per function category:
+//     - Admin transfer: ADMIN_CHANGE_COOLDOWN_LEDGERS (720 ledgers ≈ 1h)
+//     - Contract upgrade: UPGRADE_COOLDOWN_LEDGERS (1440 ledgers ≈ 2h)
+//     - Economic params: ECONOMIC_PARAM_COOLDOWN_LEDGERS (360 ledgers ≈ 30min)
+//     - General: DEFAULT_RATE_LIMIT_LEDGERS (120 ledgers ≈ 10min)
+//
+//   Emergency functions (pause/unpause) are deliberately exempt.
+
+/// Check whether the given rate-limited function may be called.
+/// Returns `RateLimited` if the cooldown has not yet elapsed.
+/// Otherwise records the current ledger as the last call time.
+pub fn check_rate_limit(env: &Env, fn_name: &str, cooldown_ledgers: u64) -> Result<(), ContractError> {
+    let key = StorageKey::RateLimit(Symbol::new(env, fn_name));
+    let last_ledger: u32 = env.storage().instance().get(&key).unwrap_or(0);
+    let current_ledger = env.ledger().sequence();
+
+    if current_ledger < last_ledger.saturating_add(cooldown_ledgers as u32) {
+        return Err(ContractError::RateLimited);
+    }
+
+    env.storage().instance().set(&key, &current_ledger);
+    Ok(())
+}
+
+/// Clear a rate-limit record (for testing or emergency bypass by admin).
+pub fn clear_rate_limit(env: &Env, fn_name: &str) {
+    let key = StorageKey::RateLimit(Symbol::new(env, fn_name));
+    env.storage().instance().remove(&key);
 }
