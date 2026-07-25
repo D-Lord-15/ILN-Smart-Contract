@@ -54,6 +54,8 @@ pub enum DataKey {
     InvoiceNft(u64),
     /// NFT Owner tracking (Issue #423)
     InvoiceNftOwner(u64),
+    /// Reentrancy guard lock (Issue #535)
+    ReentrancyLock,
 }
 
 // ----------------------------------------------------------------

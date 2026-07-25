@@ -81,3 +81,34 @@ pub fn require_governance(_env: &Env) -> Result<(), ContractError> {
     // Currently no governance implemented, always reject
     Err(ContractError::Unauthorized)
 }
+
+// ----------------------------------------------------------------
+// Reentrancy Guard (Issue #535)
+// ----------------------------------------------------------------
+// CEI (Checks-Effects-Interactions) pattern enforcement:
+//   All state-changing functions MUST perform state mutations BEFORE
+//   any external calls (token transfers, cross-contract invocations).
+//   The guards below provide defense-in-depth for critical paths.
+
+/// Activate the reentrancy lock. Returns `Reentrancy` error if already locked.
+pub fn lock_reentrancy(env: &Env) -> Result<(), ContractError> {
+    let locked: bool = env
+        .storage()
+        .instance()
+        .get(&StorageKey::ReentrancyLock)
+        .unwrap_or(false);
+    if locked {
+        return Err(ContractError::Reentrancy);
+    }
+    env.storage()
+        .instance()
+        .set(&StorageKey::ReentrancyLock, &true);
+    Ok(())
+}
+
+/// Deactivate the reentrancy lock.
+pub fn unlock_reentrancy(env: &Env) {
+    env.storage()
+        .instance()
+        .set(&StorageKey::ReentrancyLock, &false);
+}

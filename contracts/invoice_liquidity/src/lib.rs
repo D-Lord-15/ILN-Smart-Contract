@@ -17,6 +17,7 @@ pub mod rate_logic;
 pub mod storage;
 pub mod top_payers;
 use access::*;
+use access::{lock_reentrancy, unlock_reentrancy};
 pub mod constants;
 pub mod oracle_interface;
 #[cfg(test)]
@@ -1058,7 +1059,10 @@ impl InvoiceLiquidityContract {
         fund_amount: i128,
         require_oracle_verification: bool,
     ) -> Result<(), ContractError> {
+        lock_reentrancy(&env)?;
+
         if is_paused(&env) {
+            unlock_reentrancy(&env);
             return Err(ContractError::ContractPaused);
         }
 
@@ -1265,6 +1269,7 @@ impl InvoiceLiquidityContract {
             },
         );
 
+        unlock_reentrancy(&env);
         Ok(())
     }
 
@@ -1395,11 +1400,15 @@ impl InvoiceLiquidityContract {
     // ------------------------------------------------------------
     /// Access: Submitter only
     pub fn cancel_invoice(env: Env, invoice_id: u64) -> Result<(), ContractError> {
+        lock_reentrancy(&env)?;
+
         if is_paused(&env) {
+            unlock_reentrancy(&env);
             return Err(ContractError::ContractPaused);
         }
 
         if !invoice_exists(&env, invoice_id) {
+            unlock_reentrancy(&env);
             return Err(ContractError::InvoiceNotFound);
         }
 
@@ -1411,6 +1420,9 @@ impl InvoiceLiquidityContract {
             InvoiceStatus::Pending => {}
             InvoiceStatus::PartiallyFunded => {
                 let funders = get_invoice_funders(&env, invoice_id);
+                // CEI: update state before external token transfers
+                invoice.status = InvoiceStatus::Cancelled;
+                save_invoice(&env, &invoice);
                 let token = token_client(&env, &invoice.token);
                 let contract_address = env.current_contract_address();
                 for i in 0..funders.len() {
@@ -1445,6 +1457,7 @@ impl InvoiceLiquidityContract {
             },
         );
 
+        unlock_reentrancy(&env);
         Ok(())
     }
 
@@ -1494,11 +1507,15 @@ impl InvoiceLiquidityContract {
     // ------------------------------------------------------------
     /// Access: Payer only
     pub fn mark_paid(env: Env, invoice_id: u64, amount: i128) -> Result<(), ContractError> {
+        lock_reentrancy(&env)?;
+
         if is_paused(&env) {
+            unlock_reentrancy(&env);
             return Err(ContractError::ContractPaused);
         }
 
         if amount <= 0 {
+            unlock_reentrancy(&env);
             return Err(ContractError::InvalidAmount);
         }
 
@@ -1543,10 +1560,11 @@ impl InvoiceLiquidityContract {
             normalize_usdc_amount(amount)
         };
 
+        // CEI: state update before external call
+        invoice.amount_paid += amount;
+
         // Payer sends partial/full amount to the contract
         token.transfer(&invoice.payer, &contract_address, &normalized_amount);
-
-        invoice.amount_paid += amount;
 
         // If not fully paid, save and emit partial event
         if invoice.amount_paid < invoice.amount {
@@ -1565,6 +1583,7 @@ impl InvoiceLiquidityContract {
                     remaining_amount: invoice.amount - invoice.amount_paid,
                 },
             );
+            unlock_reentrancy(&env);
             return Ok(());
         }
 
@@ -1603,6 +1622,11 @@ impl InvoiceLiquidityContract {
         // LP earnings
         let lp_earned = primary_lp_payout - primary_lp_funded;
 
+        // CEI: update state before external token transfers
+        invoice.status = InvoiceStatus::Paid;
+
+        save_invoice(&env, &invoice);
+
         // Distribute proportionally to funders
         for i in 0..funders.len() {
             let (funder_addr, fund_amt) = funders.get(i).unwrap();
@@ -1612,11 +1636,6 @@ impl InvoiceLiquidityContract {
                 token.transfer(&contract_address, &funder_addr, &funder_share);
             }
         }
-
-        // ---- Update invoice ----
-        invoice.status = InvoiceStatus::Paid;
-
-        save_invoice(&env, &invoice);
 
         // Increment total paid counter
         increment_total_paid(&env);
@@ -1654,6 +1673,7 @@ impl InvoiceLiquidityContract {
             },
         );
 
+        unlock_reentrancy(&env);
         Ok(())
     }
 
@@ -1700,7 +1720,10 @@ impl InvoiceLiquidityContract {
     // ----------------------------------------------------------------
     /// Access: LP only
     pub fn claim_default(env: Env, funder: Address, invoice_id: u64) -> Result<(), ContractError> {
+        lock_reentrancy(&env)?;
+
         if is_paused(&env) {
+            unlock_reentrancy(&env);
             return Err(ContractError::ContractPaused);
         }
 
@@ -1746,6 +1769,10 @@ impl InvoiceLiquidityContract {
         let token = token_client(&env, &invoice.token);
         let contract_address = env.current_contract_address();
 
+        // CEI: update state before external token transfers
+        invoice.status = InvoiceStatus::Defaulted;
+        save_invoice(&env, &invoice);
+
         let mut total_refunded = 0;
 
         for i in 0..funders.len() {
@@ -1758,9 +1785,6 @@ impl InvoiceLiquidityContract {
             token.transfer(&contract_address, &funder_addr, &refund);
             total_refunded += refund;
         }
-
-        invoice.status = InvoiceStatus::Defaulted;
-        save_invoice(&env, &invoice);
 
         // --- Update payer reputation ---
         // Snapshot the score BEFORE applying the penalty so appeal_default()
@@ -1793,6 +1817,7 @@ impl InvoiceLiquidityContract {
             },
         );
 
+        unlock_reentrancy(&env);
         Ok(())
     }
 
@@ -2025,9 +2050,12 @@ impl InvoiceLiquidityContract {
         resolution_hash: BytesN<32>,
         resolution: u32,
     ) -> Result<(), ContractError> {
+        lock_reentrancy(&env)?;
+
         require_admin(&env)?;
 
         if !invoice_exists(&env, invoice_id) {
+            unlock_reentrancy(&env);
             return Err(ContractError::InvoiceNotFound);
         }
 
@@ -2040,6 +2068,10 @@ impl InvoiceLiquidityContract {
         match resolution {
             1 => {
                 // Upheld: Payer is right.
+                // CEI: update state before external token transfers
+                invoice.status = InvoiceStatus::Cancelled;
+                save_invoice(&env, &invoice);
+
                 // Refund LPs if it was funded.
                 let funders = get_invoice_funders(&env, invoice_id);
                 if !funders.is_empty() {
@@ -2055,7 +2087,6 @@ impl InvoiceLiquidityContract {
                         token.transfer(&contract_address, &funder_addr, &refund);
                     }
                 }
-                invoice.status = InvoiceStatus::Cancelled;
             }
             2 => {
                 // Rejected: Freelancer is right.
@@ -2087,6 +2118,7 @@ impl InvoiceLiquidityContract {
             },
         );
 
+        unlock_reentrancy(&env);
         Ok(())
     }
 
