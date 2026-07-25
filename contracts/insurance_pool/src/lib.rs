@@ -317,14 +317,15 @@ impl InsurancePoolInterface for InsurancePool {
             .persistent()
             .get(&DataKey::Premiums(lp.clone()))
             .unwrap_or(0);
-        env.storage()
-            .persistent()
-            .set(&DataKey::Premiums(lp.clone()), &(prev_premium + amount));
+        env.storage().persistent().set(
+            &DataKey::Premiums(lp.clone()),
+            &prev_premium.saturating_add(amount),
+        );
 
         let balance: i128 = env.storage().instance().get(&DataKey::Balance).unwrap_or(0);
         env.storage()
             .instance()
-            .set(&DataKey::Balance, &(balance + amount));
+            .set(&DataKey::Balance, &balance.saturating_add(amount));
 
         env.events().publish((symbol_short!("premium"), lp), amount);
     }
