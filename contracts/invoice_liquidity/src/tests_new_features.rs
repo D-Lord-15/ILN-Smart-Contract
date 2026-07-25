@@ -9,9 +9,9 @@
 use super::*;
 use soroban_sdk::{
     contract, contractimpl,
-    testutils::{Address as _, Ledger},
+    testutils::{Address as _, Events as _, Ledger},
     token::{Client as TokenClient, StellarAssetClient},
-    Address, Env,
+    Address, Env, IntoVal,
 };
 
 const INVOICE_AMOUNT: i128 = 1_000_000_000;
@@ -27,6 +27,9 @@ struct TestEnv {
     freelancer: Address,
     payer: Address,
     funder: Address,
+    /// EURC address — approved during `initialize`, distinct from `token`
+    /// (USDC). Used to exercise convert_invoice_token's happy path (#478).
+    eurc_address: Address,
 }
 
 fn setup() -> TestEnv {
@@ -74,6 +77,7 @@ fn setup() -> TestEnv {
         freelancer,
         payer,
         funder,
+        eurc_address,
     }
 }
 
@@ -744,4 +748,150 @@ fn test_batch_submit_mixed_valid_and_invalid_token() {
 
     let result = t.contract.try_submit_invoices_batch(&batch);
     assert_eq!(result, Err(Ok(ContractError::Unauthorized)));
+}
+
+// ── convert_invoice_token tests (#478) ──────────────────────────────────────
+
+#[test]
+fn test_convert_invoice_token_success_in_pending() {
+    let t = setup();
+    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
+    let invoice_id = t.contract.submit_invoice(
+        &t.freelancer,
+        &t.payer,
+        &INVOICE_AMOUNT,
+        &due_date,
+        &DISCOUNT_RATE,
+        &t.token.address,
+        &ReferralCode::None,
+    );
+
+    let result =
+        t.contract
+            .try_convert_invoice_token(&t.freelancer, &invoice_id, &t.eurc_address);
+    assert!(result.is_ok());
+
+    let invoice = t.contract.get_invoice(&invoice_id);
+    assert_eq!(invoice.token, t.eurc_address);
+    assert_eq!(invoice.status, InvoiceStatus::Pending);
+}
+
+#[test]
+fn test_convert_invoice_token_rejects_when_not_pending() {
+    let t = setup();
+    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
+    let invoice_id = t.contract.submit_invoice(
+        &t.freelancer,
+        &t.payer,
+        &INVOICE_AMOUNT,
+        &due_date,
+        &DISCOUNT_RATE,
+        &t.token.address,
+        &ReferralCode::None,
+    );
+
+    // Fully fund the invoice, moving it out of Pending.
+    t.contract
+        .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &false);
+
+    let result =
+        t.contract
+            .try_convert_invoice_token(&t.freelancer, &invoice_id, &t.eurc_address);
+    assert_eq!(result, Err(Ok(ContractError::AlreadyFunded)));
+
+    // Token must be unchanged.
+    let invoice = t.contract.get_invoice(&invoice_id);
+    assert_eq!(invoice.token, t.token.address);
+}
+
+#[test]
+fn test_convert_invoice_token_rejects_unapproved_token() {
+    let t = setup();
+    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
+    let invoice_id = t.contract.submit_invoice(
+        &t.freelancer,
+        &t.payer,
+        &INVOICE_AMOUNT,
+        &due_date,
+        &DISCOUNT_RATE,
+        &t.token.address,
+        &ReferralCode::None,
+    );
+
+    let unapproved_admin = Address::generate(&t.env);
+    let unapproved_contract = t.env.register_stellar_asset_contract_v2(unapproved_admin);
+    let unapproved_address = unapproved_contract.address();
+
+    let result = t.contract.try_convert_invoice_token(
+        &t.freelancer,
+        &invoice_id,
+        &unapproved_address,
+    );
+    assert_eq!(result, Err(Ok(ContractError::Unauthorized)));
+
+    let invoice = t.contract.get_invoice(&invoice_id);
+    assert_eq!(invoice.token, t.token.address);
+}
+
+#[test]
+fn test_convert_invoice_token_rejects_when_expired() {
+    let t = setup();
+    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
+    let invoice_id = t.contract.submit_invoice(
+        &t.freelancer,
+        &t.payer,
+        &INVOICE_AMOUNT,
+        &due_date,
+        &DISCOUNT_RATE,
+        &t.token.address,
+        &ReferralCode::None,
+    );
+
+    // Advance the ledger past the due date.
+    let mut ledger_info = t.env.ledger().get();
+    ledger_info.timestamp = due_date + 1;
+    t.env.ledger().set(ledger_info);
+
+    let result =
+        t.contract
+            .try_convert_invoice_token(&t.freelancer, &invoice_id, &t.eurc_address);
+    assert_eq!(result, Err(Ok(ContractError::InvoiceExpired)));
+
+    // convert_invoice_token flips the invoice to Expired as a side effect,
+    // mirroring update_invoice's expiry-detection behavior.
+    let invoice = t.contract.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Expired);
+}
+
+#[test]
+fn test_convert_invoice_token_emits_token_changed_event() {
+    let t = setup();
+    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
+    let invoice_id = t.contract.submit_invoice(
+        &t.freelancer,
+        &t.payer,
+        &INVOICE_AMOUNT,
+        &due_date,
+        &DISCOUNT_RATE,
+        &t.token.address,
+        &ReferralCode::None,
+    );
+
+    let events_before = t.env.events().all().len();
+
+    t.contract
+        .convert_invoice_token(&t.freelancer, &invoice_id, &t.eurc_address);
+
+    let events = t.env.events().all();
+    assert_eq!(events.len(), events_before + 1, "expected exactly one new event");
+
+    let last_event = events.last().expect("event should have been emitted");
+    let contract_id = last_event.0.clone();
+    let data = last_event.2.clone();
+    assert_eq!(contract_id, t.contract.address);
+
+    let decoded: InvoiceTokenChanged = data.into_val(&t.env);
+    assert_eq!(decoded.invoice_id, invoice_id);
+    assert_eq!(decoded.old_token, t.token.address);
+    assert_eq!(decoded.new_token, t.eurc_address);
 }
