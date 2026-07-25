@@ -141,6 +141,27 @@ fn test_appeal_default_emits_event() {
     assert_eq!(invoice.status, InvoiceStatus::Appealed);
 }
 
+#[test]
+fn test_payer_score_saved_before_default() {
+    let t = setup_appeal();
+    
+    let initial_score = t.contract.payer_score(&t.payer);
+    
+    let id = make_defaulted_invoice(&t);
+    
+    // The invoice is now defaulted. The current score should be reduced.
+    let score_after_default = t.contract.payer_score(&t.payer);
+    assert!(score_after_default < initial_score);
+
+    // If we appeal and it's upheld, the score should return to the original initial_score, 
+    // proving the original score was saved before the penalty was applied.
+    t.contract.appeal_default(&id, &evidence_hash(&t.env));
+    t.contract.resolve_appeal(&id, &true);
+
+    let score_after_upheld = t.contract.payer_score(&t.payer);
+    assert_eq!(score_after_upheld, initial_score);
+}
+
 // ── Resolve: upheld ───────────────────────────────────────────────────────────
 
 #[test]

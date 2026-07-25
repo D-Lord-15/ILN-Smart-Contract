@@ -122,6 +122,60 @@ export async function listInvoicesBySubmitter(
 }
 
 /**
+ * Get invoices submitted by a specific submitter address with pagination.
+ * @param server Soroban RPC server instance
+ * @param contractAddress The contract's address
+ * @param submitter The submitter's address
+ * @param sourceAccount Account used for simulation
+ * @param networkPassphrase The network passphrase
+ * @param page The page number (0-indexed)
+ * @param pageSize The number of items per page
+ * @returns Array of invoices
+ * @throws {ILNError} On simulation errors
+ * @example
+ * ```ts
+ * const invoices = await getSubmitterInvoices(server, contractAddress, "G...", sourceAccount, Networks.TESTNET, 0, 10);
+ * ```
+ */
+export async function getSubmitterInvoices(
+  server: SorobanRpc.Server,
+  contractAddress: string,
+  submitter: string,
+  sourceAccount: Account,
+  networkPassphrase: string,
+  page: number = 0,
+  pageSize: number = 50
+): Promise<Invoice[]> {
+  const contract = new Contract(contractAddress);
+  const op = contract.call(
+    "list_invoices_by_submitter",
+    nativeToScVal(submitter, { type: "address" }),
+    nativeToScVal(page, { type: "u32" }),
+    nativeToScVal(pageSize, { type: "u32" })
+  );
+
+  const tx = new TransactionBuilder(sourceAccount, {
+    fee: BASE_FEE,
+    networkPassphrase,
+  })
+    .addOperation(op)
+    .setTimeout(30)
+    .build();
+
+  const sim = await retry(() => server.simulateTransaction(tx));
+
+  if (SorobanRpc.Api.isSimulationError(sim)) {
+    throw ILNError.fromError(sim.error);
+  }
+  if (!sim.result?.retval) {
+    return [];
+  }
+
+  const rawArr = scValToNative(sim.result.retval) as Record<string, unknown>[];
+  return rawArr.map(raw => decodeInvoice(raw as Record<string, unknown>));
+}
+
+/**
  * List invoices funded by a specific LP address.
  * @param server Soroban RPC server instance
  * @param contractAddress The contract's address

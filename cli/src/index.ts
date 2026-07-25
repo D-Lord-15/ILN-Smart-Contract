@@ -19,6 +19,10 @@ import { makeReputationCommand } from "./commands/reputation.js";
 import { makeCompletionCommand } from "./commands/completion.js";
 import { makePauseCommand, makeUnpauseCommand } from "./commands/pause.js";
 import { makeAppealCommand } from "./commands/appeal.js";
+import { makeReferralCommand } from "./commands/referral.js";
+import { makeInsuranceCommand } from "./commands/insurance.js";
+import { makeDistributionCommand } from "./commands/distribution.js";
+import { makeBatchCommand } from "./commands/batch.js";
 
 const program = new Command();
 
@@ -42,5 +46,8 @@ program.addCommand(makeCompletionCommand());
 program.addCommand(makePauseCommand());
 program.addCommand(makeUnpauseCommand());
 program.addCommand(makeAppealCommand());
-
+program.addCommand(makeReferralCommand());
+program.addCommand(makeInsuranceCommand());
+program.addCommand(makeDistributionCommand());
+program.addCommand(makeBatchCommand());
 program.parse(process.argv);

@@ -1,7 +1,10 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{testutils::Address as _, Address, Env};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger as _},
+    Address, Env,
+};
 
 struct Setup {
     env: Env,
@@ -129,4 +132,79 @@ fn admin_is_recorded() {
     // admin captured at init is the one we passed
     assert!(s.client.is_claimed(&100));
     let _ = &s.admin;
+}
+
+#[test]
+fn coverage_change_requires_timelock_expiry() {
+    let s = setup();
+    let new_coverage = COVERAGE * 2;
+
+    let eta = s.client.propose_coverage_change(&new_coverage);
+    assert_eq!(s.client.get_coverage(), COVERAGE); // unchanged until executed
+    assert_eq!(s.client.get_pending_coverage(), Some((new_coverage, eta)));
+
+    // Too early.
+    let res = s.client.try_execute_coverage_change();
+    assert_eq!(
+        res,
+        Err(Ok(InsuranceError::TimelockNotExpired))
+    );
+
+    s.env.ledger().set_timestamp(eta);
+    s.client.execute_coverage_change();
+
+    assert_eq!(s.client.get_coverage(), new_coverage);
+    assert_eq!(s.client.get_pending_coverage(), None);
+}
+
+#[test]
+fn coverage_change_can_be_cancelled() {
+    let s = setup();
+    s.client.propose_coverage_change(&(COVERAGE * 2));
+    assert!(s.client.get_pending_coverage().is_some());
+
+    s.client.cancel_coverage_change();
+    assert_eq!(s.client.get_pending_coverage(), None);
+
+    let res = s.client.try_execute_coverage_change();
+    assert_eq!(res, Err(Ok(InsuranceError::NoPendingProposal)));
+}
+
+#[test]
+fn admin_transfer_requires_timelock_expiry() {
+    let s = setup();
+    let new_admin = Address::generate(&s.env);
+
+    let eta = s.client.propose_admin_transfer(&new_admin);
+    assert_eq!(s.client.get_pending_admin(), Some((new_admin.clone(), eta)));
+
+    let res = s.client.try_execute_admin_transfer();
+    assert_eq!(
+        res,
+        Err(Ok(InsuranceError::TimelockNotExpired))
+    );
+
+    s.env.ledger().set_timestamp(eta);
+    s.client.execute_admin_transfer();
+
+    assert_eq!(s.client.get_pending_admin(), None);
+
+    // New admin can now propose further changes; old admin no longer can
+    // (require_auth would fail against the new admin in a real invocation --
+    // here we simply confirm the pending state cleared and a new proposal by
+    // the new admin succeeds under mock_all_auths).
+    let _ = s.client.propose_coverage_change(&(COVERAGE * 3));
+}
+
+#[test]
+fn admin_transfer_can_be_cancelled() {
+    let s = setup();
+    let new_admin = Address::generate(&s.env);
+
+    s.client.propose_admin_transfer(&new_admin);
+    s.client.cancel_admin_transfer();
+    assert_eq!(s.client.get_pending_admin(), None);
+
+    let res = s.client.try_execute_admin_transfer();
+    assert_eq!(res, Err(Ok(InsuranceError::NoPendingProposal)));
 }

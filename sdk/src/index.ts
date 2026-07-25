@@ -44,7 +44,7 @@ export type {
   Unsubscribe,
 } from "./events/types.js";
 
-export { getInvoice, listInvoicesBySubmitter, listInvoicesByLP } from "./methods/queries.js";
+export { getInvoice, listInvoicesBySubmitter, listInvoicesByLP, getSubmitterInvoices } from "./methods/queries.js";
 export { getNftMetadata, getNftOwner } from "./methods/nft.js";
 export { submitInvoice } from "./methods/submitInvoice.js";
 export { transferLPPosition } from "./methods/transferLPPosition.js";
@@ -56,6 +56,16 @@ export {
   executeProposal,
   getProposal,
   listProposals,
+  hasVoted,
+  delegateVotes,
+  undelegateVotes,
+  vetoProposal,
+  disableVetoPower,
+  setExecutionDelay,
+  getExecutionDelay,
+  setMinQuorumBps,
+  setMinProposalBalance,
+  GovernanceContractError,
 } from "./methods/governance.js";
 export {
   ProposalAction,
@@ -70,16 +80,46 @@ export type {
 export { ILNError } from "./errors.js";
 export { disputeInvoice, sha256Hex } from "./methods/disputeInvoice.js";
 export type { DisputeInvoiceParams, DisputeInvoiceResult } from "./methods/disputeInvoice.js";
+export { resolveDispute, DisputeRuling } from "./methods/resolveDispute.js";
+export type { ResolveDisputeResult } from "./methods/resolveDispute.js";
 export {
   getPoolBalance,
   getCoverage,
   isEnrolled,
   getPremiumsPaid,
   getInsurancePoolInfo,
+  enrollInsurancePool,
+  depositInsurancePremium,
+  claimInsurance,
+  InsuranceContractError,
 } from "./methods/insurance.js";
 export type { InsurancePoolInfo } from "@invoice-liquidity/types";
-export { getDistributionAccrual } from "./methods/distribution.js";
+export {
+  getDistributionAccrual,
+  accrueLp,
+  accrueSettlement,
+  claimTokens,
+} from "./methods/distribution.js";
+export {
+  submitReputationInvoice,
+  markReputationInvoicePaid,
+  handleDefault,
+  ReputationContractError,
+} from "./methods/reputation.js";
+export type { ReputationBonusInvoice } from "./methods/reputation.js";
 export { getReferralStats } from "./methods/referralStats.js";
+export { appealInvoice, resolveAppeal } from "./methods/appeal.js";
+export type { AppealInvoiceResult, ResolveAppealResult } from "./methods/appeal.js";
+export { submitInvoicesBatch } from "./methods/submitInvoicesBatch.js";
+export type { BatchInvoiceItem, SubmitInvoicesBatchResult } from "./methods/submitInvoicesBatch.js";
+export { joinFundQueue, resolveFundQueue } from "./methods/fundQueue.js";
+export type { JoinFundQueueResult, ResolveFundQueueResult } from "./methods/fundQueue.js";
+export { pause, unpause } from "./methods/adminControls.js";
+export type { PauseResult } from "./methods/adminControls.js";
+export { transferInvoice } from "./methods/transferInvoice.js";
+export type { TransferInvoiceResult } from "./methods/transferInvoice.js";
+export { convertInvoiceToken } from "./methods/convertInvoiceToken.js";
+export type { ConvertInvoiceTokenResult } from "./methods/convertInvoiceToken.js";
 export { TokenRegistry, tokenRegistry } from "./utils/tokenRegistry.js";
 export type { TokenInfo, NetworkName } from "./utils/tokenRegistry.js";
 export {
@@ -93,3 +133,10 @@ export type {
   EstimateSubmitFeeParams,
   SorobanOperation,
 } from "./utils/feeCalculator.js";
+export { getTokenDecimals } from "./methods/getTokenDecimals.js";
+export {
+  buildBatchTransaction,
+  submitBatchTransaction,
+} from "./methods/batch.js";
+export type { BatchContractCall, BatchTransactionOptions, BatchTransactionResult } from "./methods/batch.js";
+export { setAdmin, upgrade } from "./methods/admin.js";

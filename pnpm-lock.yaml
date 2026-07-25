@@ -23,6 +23,9 @@ importers:
 
   cli:
     dependencies:
+      '@iln/sdk':
+        specifier: workspace:*
+        version: link:../sdk
       '@inquirer/prompts':
         specifier: ^8.5.2
         version: 8.5.2(@types/node@20.19.43)

@@ -698,6 +698,7 @@ dependencies = [
 name = "iln_fuzz"
 version = "0.1.0"
 dependencies = [
+ "iln_governance",
  "invoice_liquidity",
  "proptest",
  "rand 0.10.1",

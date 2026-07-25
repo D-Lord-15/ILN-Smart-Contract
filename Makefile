@@ -120,7 +120,8 @@ help:
 	@echo ""
 .PHONY: help install build build-rust build-sdk test test-rust test-e2e fuzz test-fuzz lint \
         fmt fmt-check clippy deploy-testnet seed reset reset-testnet docs spec \
-        changelog soroban-optimize health
+        changelog soroban-optimize health test-insurance test-invoice test-governance test-distribution
+
 
 # Package manager for the TypeScript workspaces (sdk, indexer, notifications,
 # tests/e2e). Prefer pnpm when available, otherwise fall back to npm.
@@ -164,6 +165,15 @@ soroban-optimize: ## Build WASM via the wasm32-unknown-unknown target
 test: test-rust ## Run the Rust unit/integration test suite
 test-rust: ## Run cargo test for the whole workspace
 	cargo test
+
+test-invoice: ## Run tests for the invoice liquidity contract
+	cargo test -p invoice_liquidity
+
+test-governance: ## Run tests for the governance contract
+	cargo test -p iln_governance
+
+test-distribution: ## Run tests for the distribution contract
+	cargo test -p iln_distribution
 
 test-insurance: ## Run tests for the insurance pool contract
 	cargo test -p insurance_pool
