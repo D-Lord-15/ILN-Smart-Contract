@@ -176,3 +176,50 @@ ILNError.InvoiceNotCancellable = InvoiceNotCancellable;
 ILNError.InvalidAddress = InvalidAddress;
 ILNError.InvalidTransfer = InvalidTransfer;
 ILNError.InsufficientAmount = InsufficientAmount;
+
+/**
+ * insurance_pool has its own `InsuranceError` enum
+ * (contracts/insurance_pool/src/lib.rs) whose numeric codes are NOT the same
+ * as invoice_liquidity's `ContractError` codes above (e.g. code 2 is
+ * AlreadyClaimed here, but AlreadyFunded there). Issue #461 asked to add
+ * insurance error codes to `ILNErrorCode` (sdk/src/signers/FreighterSigner.ts)
+ * — that enum is unrelated (wallet-connection UX codes like WalletNotInstalled/
+ * UserRejected), so adding contract error codes there would be incorrect.
+ * This class follows the same dedicated-mapper pattern used for
+ * GovernanceContractError (sdk/src/methods/governance.ts).
+ */
+export class InsuranceContractError extends Error {
+  constructor(message: string, public readonly code?: number) {
+    super(message);
+    this.name = "InsuranceContractError";
+  }
+
+  static NotInitialized = class NotInitialized extends InsuranceContractError {
+    constructor(msg = "Insurance pool not initialized") { super(msg, 1); }
+  };
+  static AlreadyClaimed = class AlreadyClaimed extends InsuranceContractError {
+    constructor(msg = "Claim already processed for this invoice") { super(msg, 2); }
+  };
+  static InvalidAmount = class InvalidAmount extends InsuranceContractError {
+    constructor(msg = "Premium or coverage amount must be positive") { super(msg, 3); }
+  };
+  static PoolEmpty = class PoolEmpty extends InsuranceContractError {
+    constructor(msg = "Insurance pool has no balance available") { super(msg, 4); }
+  };
+  static AlreadyInitialized = class AlreadyInitialized extends InsuranceContractError {
+    constructor(msg = "Insurance pool already initialized") { super(msg, 5); }
+  };
+
+  static fromError(error: unknown): Error {
+    const match = String(error).match(/Error\(Contract, (\d+)\)/);
+    if (!match) return error instanceof Error ? error : new Error(String(error));
+    switch (parseInt(match[1] || "", 10)) {
+      case 1: return new InsuranceContractError.NotInitialized();
+      case 2: return new InsuranceContractError.AlreadyClaimed();
+      case 3: return new InsuranceContractError.InvalidAmount();
+      case 4: return new InsuranceContractError.PoolEmpty();
+      case 5: return new InsuranceContractError.AlreadyInitialized();
+      default: return new InsuranceContractError(`insurance_pool error: ${String(error)}`);
+    }
+  }
+}

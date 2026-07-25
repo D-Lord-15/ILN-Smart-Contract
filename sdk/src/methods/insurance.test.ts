@@ -6,6 +6,7 @@ import {
   getPremiumsPaid,
   getInsurancePoolInfo,
 } from "./insurance.js";
+import { InsuranceContractError } from "../errors.js";
 import { SorobanRpc, Keypair, Address } from "@stellar/stellar-sdk";
 
 // ---------------------------------------------------------------------------
@@ -74,6 +75,13 @@ describe("getPoolBalance", () => {
   it("throws validation error for invalid contractId", async () => {
     const server = serverWith({});
     await expect(getPoolBalance(server, "invalid")).rejects.toThrow("Invalid contract ID");
+  });
+
+  it("throws InsuranceContractError.PoolEmpty on Error(Contract, 4)", async () => {
+    const server = serverWith({ error: "Error(Contract, 4)", _parsed: true });
+    await expect(getPoolBalance(server, CONTRACT_ID)).rejects.toBeInstanceOf(
+      InsuranceContractError.PoolEmpty
+    );
   });
 });
 
