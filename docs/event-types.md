@@ -390,6 +390,84 @@ Emitted when a liquidity provider transfers their funded position in an invoice 
 
 ---
 
+## Insurance pool events
+
+### `Enrolled`
+
+Emitted when a liquidity provider enrolls in the default-protection insurance pool.
+
+**Trigger:** LP calls `enroll()` on the insurance pool contract.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `lpAddress` | `string` | G-address of the LP who enrolled |
+
+**Example:**
+```json
+{
+  "type": "Enrolled",
+  "contractId": "CAINSURANCE...",
+  "ledger": 54300,
+  "ledgerClosedAt": "2026-06-28T12:00:00Z",
+  "txHash": "a1b2c3d4e5f6...",
+  "lpAddress": "GNOPQRS..."
+}
+```
+
+---
+
+### `Premium`
+
+Emitted when a liquidity provider deposits a premium payment into the insurance pool. Auto-enrolls the LP on first payment.
+
+**Trigger:** LP calls `deposit_premium()` on the insurance pool contract.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `lpAddress` | `string` | G-address of the LP paying the premium |
+| `amountStroops` | `string` | Premium amount deposited in stroops |
+
+**Example:**
+```json
+{
+  "type": "Premium",
+  "contractId": "CAINSURANCE...",
+  "ledger": 54310,
+  "ledgerClosedAt": "2026-06-28T12:02:00Z",
+  "txHash": "b2c3d4e5f6a1...",
+  "lpAddress": "GNOPQRS...",
+  "amountStroops": "1000000"
+}
+```
+
+---
+
+### `Claimed`
+
+Emitted when the pool processes an insurance claim for a defaulted invoice, compensating the LP from the accumulated premium balance (up to the coverage cap).
+
+**Trigger:** Admin (in production, the invoice_liquidity contract) calls `claim()` on the insurance pool contract.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `invoiceId` | `string` | ID of the defaulted invoice |
+| `payoutStroops` | `string` | Compensation payout amount in stroops (≤ coverage cap, ≤ pool balance) |
+
+**Example:**
+```json
+{
+  "type": "Claimed",
+  "contractId": "CAINSURANCE...",
+  "ledger": 54500,
+  "ledgerClosedAt": "2026-06-28T12:15:00Z",
+  "txHash": "c3d4e5f6a1b2...",
+  "invoiceId": "inv_01j4zx...",
+  "payoutStroops": "500000"
+}
+```
+
+---
+
 ## Governance events
 
 ### `AdminChanged`
@@ -464,5 +542,8 @@ Emitted when an admin changes a contract configuration parameter.
 | `TokenAdded` | Token | ✓ | ✓ | ✓ |
 | `TokenRemoved` | Token | ✓ | ✓ | ✓ |
 | `LPPositionTransferred` | LP | ✓ | ✓ | ✓ |
+| `Enrolled` | Insurance | ✓ | ✓ | ✓ |
+| `Premium` | Insurance | ✓ | ✓ | ✓ |
+| `Claimed` | Insurance | ✓ | ✓ | ✓ |
 | `AdminChanged` | Governance | ✓ | ✓ | ✓ |
 | `ParameterUpdated` | Governance | ✓ | ✓ | ✓ |
