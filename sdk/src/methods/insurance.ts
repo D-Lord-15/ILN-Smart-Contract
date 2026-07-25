@@ -17,6 +17,7 @@ import {
 } from "@stellar/stellar-sdk";
 import { retry } from "../utils/retry.js";
 import { validateGAddress, validateContractId } from "../utils/validate.js";
+import { InsuranceContractError } from "../errors.js";
 import type { InsurancePoolInfo } from "@invoice-liquidity/types";
 
 /**
@@ -151,7 +152,7 @@ async function simulateCall(
   const sim = await retry(() => server.simulateTransaction(tx));
 
   if (SorobanRpc.Api.isSimulationError(sim)) {
-    throw new Error(`${methodName} simulation failed: ${sim.error}`);
+    throw InsuranceContractError.fromError(sim.error);
   }
 
   return sim.result?.retval;

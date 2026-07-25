@@ -20,6 +20,8 @@ import { makeCompletionCommand } from "./commands/completion.js";
 import { makePauseCommand, makeUnpauseCommand } from "./commands/pause.js";
 import { makeAppealCommand } from "./commands/appeal.js";
 import { makeReferralCommand } from "./commands/referral.js";
+import { makeInsuranceCommand } from "./commands/insurance.js";
+import { makeDistributionCommand } from "./commands/distribution.js";
 
 const program = new Command();
 
@@ -44,4 +46,6 @@ program.addCommand(makePauseCommand());
 program.addCommand(makeUnpauseCommand());
 program.addCommand(makeAppealCommand());
 program.addCommand(makeReferralCommand());
+program.addCommand(makeInsuranceCommand());
+program.addCommand(makeDistributionCommand());
 program.parse(process.argv);
