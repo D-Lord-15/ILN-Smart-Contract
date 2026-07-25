@@ -8,12 +8,18 @@ import { vi, describe, it, expect, beforeEach} from 'vitest';
  * generated via Address.contract() so Contract.call() passes validation.
  */
 
-import { getReputation } from "./reputation.js";
+import {
+  getReputation,
+  submitReputationInvoice,
+  markReputationInvoicePaid,
+  handleDefault,
+  ReputationContractError,
+} from "./reputation.js";
 import type { ReputationProfile } from "./reputation.js";
-import { SorobanRpc, Keypair, Address } from "@stellar/stellar-sdk";
+import { SorobanRpc, Keypair, Address, Account } from "@stellar/stellar-sdk";
 
 // ---------------------------------------------------------------------------
-// vi.mock — patch scValToNative only
+// vi.mock — patch scValToNative + assembleTransaction
 // ---------------------------------------------------------------------------
 
 vi.mock("@stellar/stellar-sdk", async () => {
@@ -21,6 +27,11 @@ vi.mock("@stellar/stellar-sdk", async () => {
   return {
     ...actual,
     scValToNative: vi.fn().mockImplementation(actual.scValToNative),
+    SorobanRpc: {
+      ...(actual.SorobanRpc as object),
+      Api: (actual.SorobanRpc as unknown as { Api: unknown }).Api,
+      assembleTransaction: vi.fn(() => ({ build: () => ({}) })),
+    },
   };
 });
 
@@ -53,6 +64,16 @@ beforeEach(() => {
 function serverWith(sim: unknown): SorobanRpc.Server {
   return {
     simulateTransaction: vi.fn().mockResolvedValue(sim),
+  } as unknown as SorobanRpc.Server;
+}
+
+function writeServer(sim: unknown): SorobanRpc.Server {
+  return {
+    simulateTransaction: vi.fn().mockResolvedValue(sim),
+    sendTransaction: vi.fn().mockResolvedValue({ status: "PENDING", hash: "txABC" }),
+    getTransaction: vi.fn().mockResolvedValue({
+      status: SorobanRpc.Api.GetTransactionStatus.SUCCESS,
+    }),
   } as unknown as SorobanRpc.Server;
 }
 
@@ -158,5 +179,64 @@ describe("getReputation — RPC errors", () => {
     await expect(
       getReputation(server, CONTRACT_ID, VALID_GA)
     ).rejects.toThrow("connect ECONNREFUSED");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// reputation_bonus write operations (#477)
+// ---------------------------------------------------------------------------
+
+describe("submitReputationInvoice", () => {
+  it("submits successfully and returns the tx hash", async () => {
+    const server = writeServer({ result: { retval: {} } });
+    const payer = Keypair.random().publicKey();
+    const account = new Account(VALID_GA, "1");
+    const sign = vi.fn((tx) => tx);
+
+    const result = await submitReputationInvoice(
+      server, CONTRACT_ID, VALID_GA, payer, 1000n, 1_800_000_000n, 500, account, sign
+    );
+    expect(result.txHash).toBe("txABC");
+    expect(sign).toHaveBeenCalled();
+  });
+
+  it("throws for an invalid freelancer or payer address", async () => {
+    const server = writeServer({});
+    const account = new Account(VALID_GA, "1");
+    await expect(
+      submitReputationInvoice(
+        server, CONTRACT_ID, "invalid", VALID_GA, 1000n, 1_800_000_000n, 500, account, vi.fn((tx) => tx)
+      )
+    ).rejects.toThrow("Invalid Stellar address");
+  });
+});
+
+describe("markReputationInvoicePaid", () => {
+  it("submits successfully and returns the tx hash", async () => {
+    const server = writeServer({ result: { retval: {} } });
+    const account = new Account(VALID_GA, "1");
+    const sign = vi.fn((tx) => tx);
+
+    const result = await markReputationInvoicePaid(server, CONTRACT_ID, 7n, account, sign);
+    expect(result.txHash).toBe("txABC");
+  });
+
+  it("maps a contract error code to ReputationContractError.InvoiceNotFound", async () => {
+    const server = serverWith({ error: "HostError: Error(Contract, 2)" });
+    const account = new Account(VALID_GA, "1");
+    await expect(
+      markReputationInvoicePaid(server, CONTRACT_ID, 7n, account, vi.fn((tx) => tx))
+    ).rejects.toThrow(ReputationContractError.InvoiceNotFound);
+  });
+});
+
+describe("handleDefault", () => {
+  it("submits successfully and returns the tx hash", async () => {
+    const server = writeServer({ result: { retval: {} } });
+    const account = new Account(VALID_GA, "1");
+    const sign = vi.fn((tx) => tx);
+
+    const result = await handleDefault(server, CONTRACT_ID, 7n, account, sign);
+    expect(result.txHash).toBe("txABC");
   });
 });
