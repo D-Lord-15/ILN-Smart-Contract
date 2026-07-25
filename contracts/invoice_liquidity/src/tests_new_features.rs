@@ -1057,3 +1057,39 @@ fn test_convert_invoice_token_emits_token_changed_event() {
     assert_eq!(decoded.old_token, t.token.address);
     assert_eq!(decoded.new_token, t.eurc_address);
 }
+
+#[test]
+fn test_get_price_oracle_defaults_to_none() {
+    let t = setup();
+    assert_eq!(t.contract.get_price_oracle(), None);
+}
+
+#[test]
+fn test_set_price_oracle_succeeds_as_admin() {
+    let t = setup();
+    let oracle_id = t.env.register_contract(None, MockPriceOracle);
+
+    let result = t.contract.try_set_price_oracle(&oracle_id);
+    assert!(result.is_ok());
+    assert_eq!(t.contract.get_price_oracle(), Some(oracle_id));
+}
+
+#[test]
+fn test_set_price_oracle_rejects_non_admin() {
+    let t = setup();
+    let oracle_id = t.env.register_contract(None, MockPriceOracle);
+    let imposter = Address::generate(&t.env);
+
+    t.env.mock_auths(&[MockAuth {
+        address: &imposter,
+        invoke: &MockAuthInvoke {
+            contract: &t.contract.address,
+            fn_name: "set_price_oracle",
+            args: (oracle_id.clone(),).into_val(&t.env),
+            sub_invokes: &[],
+        },
+    }]);
+
+    let result = t.contract.try_set_price_oracle(&oracle_id);
+    assert!(result.is_err());
+}
