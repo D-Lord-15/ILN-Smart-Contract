@@ -171,6 +171,32 @@ pub struct ProposalCreated {
     pub voting_end: u64,
 }
 
+/// Emitted once, when the contract is initialised (Issue #538).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct GovernanceInitialized {
+    pub iln_contract: Address,
+    pub gov_token: Address,
+    pub admin: Address,
+}
+
+/// Emitted whenever a governance-controlled numeric parameter changes
+/// (Issue #538: event emission completeness audit).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct GovernanceParameterUpdated {
+    pub param_name: Symbol,
+    pub old_value: i128,
+    pub new_value: i128,
+}
+
+/// Emitted when admin veto power is permanently disabled (Issue #68 / #538).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct VetoPowerDisabled {
+    pub disabled_by: Address,
+}
+
 // ================================================================
 // Storage keys
 // ================================================================
@@ -235,6 +261,15 @@ impl GovContract {
         env.storage()
             .instance()
             .set(&StorageKey::ProposalCount, &0_u64);
+
+        env.events().publish(
+            (Symbol::new(&env, "initialized"), admin.clone()),
+            GovernanceInitialized {
+                iln_contract,
+                gov_token,
+                admin,
+            },
+        );
         Ok(())
     }
 
@@ -261,9 +296,24 @@ impl GovContract {
             .unwrap();
         iln_contract.require_auth();
 
+        let old_value: u32 = env
+            .storage()
+            .instance()
+            .get(&StorageKey::MinQuorumBps)
+            .unwrap_or(DEFAULT_MIN_QUORUM_BPS);
         env.storage()
             .instance()
             .set(&StorageKey::MinQuorumBps, &min_quorum_bps);
+
+        let pn = Symbol::new(&env, "min_quorum_bps");
+        env.events().publish(
+            (Symbol::new(&env, "parameter_updated"), pn.clone()),
+            GovernanceParameterUpdated {
+                param_name: pn,
+                old_value: old_value as i128,
+                new_value: min_quorum_bps as i128,
+            },
+        );
         Ok(())
     }
 
@@ -363,9 +413,24 @@ impl GovContract {
             .unwrap();
         iln_contract.require_auth();
 
+        let old_value: i128 = env
+            .storage()
+            .instance()
+            .get(&StorageKey::MinProposalBalance)
+            .unwrap_or(DEFAULT_MIN_PROPOSAL_BALANCE);
         env.storage()
             .instance()
             .set(&StorageKey::MinProposalBalance, &min_balance);
+
+        let pn = Symbol::new(&env, "min_proposal_balance");
+        env.events().publish(
+            (Symbol::new(&env, "parameter_updated"), pn.clone()),
+            GovernanceParameterUpdated {
+                param_name: pn,
+                old_value,
+                new_value: min_balance,
+            },
+        );
         Ok(())
     }
 
@@ -582,9 +647,24 @@ impl GovContract {
             env.storage().instance().set(&StorageKey::Admin, &admin);
         }
 
+        let old_value: u32 = env
+            .storage()
+            .instance()
+            .get(&StorageKey::ExecutionDelay)
+            .unwrap_or(0_u32);
         env.storage()
             .instance()
             .set(&StorageKey::ExecutionDelay, &delay);
+
+        let pn = Symbol::new(&env, "execution_delay");
+        env.events().publish(
+            (Symbol::new(&env, "parameter_updated"), pn.clone()),
+            GovernanceParameterUpdated {
+                param_name: pn,
+                old_value: old_value as i128,
+                new_value: delay as i128,
+            },
+        );
         Ok(())
     }
 
@@ -807,6 +887,13 @@ impl GovContract {
         env.storage()
             .instance()
             .set(&StorageKey::VetoPowerEnabled, &false);
+
+        env.events().publish(
+            (Symbol::new(&env, "veto_power_disabled"),),
+            VetoPowerDisabled {
+                disabled_by: iln_contract,
+            },
+        );
 
         Ok(())
     }
