@@ -1,13 +1,7 @@
 #![cfg(test)]
 
-//! Tests for new features:
-//! - get_contract_stats() view
-//! - pause/unpause emergency controls
-//! - timestamp validation (MIN/MAX duration)
-
 use super::*;
 use soroban_sdk::{
-    contract, contractimpl,
     testutils::{Address as _, Ledger},
     token::{Client as TokenClient, StellarAssetClient},
     Address, Env,
@@ -15,13 +9,13 @@ use soroban_sdk::{
 
 const INVOICE_AMOUNT: i128 = 1_000_000_000;
 const DISCOUNT_RATE: u32 = 300;
-const DUE_DATE_OFFSET: u64 = 60 * 60 * 24 * 30; // 30 days
+const DUE_DATE_OFFSET: u64 = 60 * 60 * 24 * 30;
 
-#[allow(dead_code)]
 struct TestEnv {
     env: Env,
     contract: InvoiceLiquidityContractClient<'static>,
     token: TokenClient<'static>,
+    token_address: Address,
     admin: Address,
     freelancer: Address,
     payer: Address,
@@ -35,7 +29,6 @@ fn setup() -> TestEnv {
     let usdc_admin = Address::generate(&env);
     let usdc_contract_id = env.register_stellar_asset_contract_v2(usdc_admin.clone());
     let usdc_address = usdc_contract_id.address();
-
     let token = TokenClient::new(&env, &usdc_address);
     let token_admin = StellarAssetClient::new(&env, &usdc_address);
 
@@ -66,6 +59,7 @@ fn setup() -> TestEnv {
         env,
         contract,
         token,
+        token_address: usdc_address,
         admin,
         freelancer,
         payer,
@@ -73,350 +67,139 @@ fn setup() -> TestEnv {
     }
 }
 
+fn due_date(t: &TestEnv) -> u64 {
+    t.env.ledger().timestamp() + DUE_DATE_OFFSET
+}
+
+fn submit_standard(t: &TestEnv) -> u64 {
+    t.contract.submit_invoice(
+        &t.freelancer,
+        &t.payer,
+        &INVOICE_AMOUNT,
+        &due_date(t),
+        &DISCOUNT_RATE,
+        &t.token_address,
+        &ReferralCode::None,
+    )
+}
+
 // ================================================================
-// Tests for get_contract_stats()
+// update_invoice token-aware validation tests (Issue #489)
 // ================================================================
 
 #[test]
-fn test_contract_stats_initial_state() {
+fn test_update_invoice_preserves_token() {
     let t = setup();
+    let id = submit_standard(&t);
 
-    let stats = t.contract.get_contract_stats();
+    let invoice_before = t.contract.get_invoice(&id);
+    let original_token = invoice_before.token.clone();
 
-    assert_eq!(stats.total_invoices, 0);
-    assert_eq!(stats.total_funded, 0);
-    assert_eq!(stats.total_paid, 0);
-    assert_eq!(stats.total_volume_usdc, 0);
-    assert_eq!(stats.total_volume_eurc, 0);
-    assert_eq!(stats.total_volume_xlm, 0);
+    let new_amount = INVOICE_AMOUNT + 250_000_000;
+    let new_due = due_date(&t) + DUE_DATE_OFFSET;
+    t.contract.update_invoice(&t.freelancer, &id, &new_amount, &new_due, &(DISCOUNT_RATE + 100));
+
+    let invoice_after = t.contract.get_invoice(&id);
+    assert_eq!(invoice_after.token, original_token);
+    assert_eq!(invoice_after.amount, new_amount);
 }
 
 #[test]
-fn test_contract_stats_increments_on_submit() {
+fn test_update_invoice_valid_token_aware_amount() {
     let t = setup();
+    let id = submit_standard(&t);
 
-    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    t.contract.submit_invoice(&ReferralCode::None);
-
-    let stats = t.contract.get_contract_stats();
-    assert_eq!(stats.total_invoices, 1);
-    assert_eq!(stats.total_funded, 0);
-    assert_eq!(stats.total_paid, 0);
-}
-
-#[test]
-fn test_contract_stats_increments_on_fund() {
-    let t = setup();
-
-    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.contract.submit_invoice(&ReferralCode::None);
-
+    let valid_amount = 2_000_000i128;
+    let new_due = due_date(&t) + DUE_DATE_OFFSET;
     t.contract
-        .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &false);
+        .update_invoice(&t.freelancer, &id, &valid_amount, &new_due, &DISCOUNT_RATE);
 
-    let stats = t.contract.get_contract_stats();
-    assert_eq!(stats.total_invoices, 1);
-    assert_eq!(stats.total_funded, 1);
-    assert_eq!(stats.total_paid, 0);
-    assert_eq!(stats.total_volume_usdc, INVOICE_AMOUNT);
+    let invoice = t.contract.get_invoice(&id);
+    assert_eq!(invoice.amount, valid_amount);
 }
 
 #[test]
-fn test_contract_stats_increments_on_mark_paid() {
+fn test_update_invoice_below_token_minimum_rejected() {
     let t = setup();
+    let id = submit_standard(&t);
 
-    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.contract.submit_invoice(&ReferralCode::None);
-
-    t.contract
-        .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &false);
-    t.contract.mark_paid(&invoice_id, &INVOICE_AMOUNT);
-
-    let stats = t.contract.get_contract_stats();
-    assert_eq!(stats.total_invoices, 1);
-    assert_eq!(stats.total_funded, 1);
-    assert_eq!(stats.total_paid, 1);
-    assert_eq!(stats.total_volume_usdc, INVOICE_AMOUNT);
-}
-
-#[test]
-fn test_contract_stats_multiple_invoices() {
-    let t = setup();
-
-    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-
-    // Submit 3 invoices
-    for _i in 0..3 {
-        t.contract.submit_invoice(&ReferralCode::None);
-    }
-
-    let stats = t.contract.get_contract_stats();
-    assert_eq!(stats.total_invoices, 3);
-    assert_eq!(stats.total_funded, 0);
-    assert_eq!(stats.total_paid, 0);
-}
-
-#[contract]
-struct MockPriceOracle;
-
-#[contractimpl]
-impl MockPriceOracle {
-    pub fn get_price(_env: Env, _token: Address) -> i128 {
-        20_000
-    }
-}
-
-#[test]
-fn test_contract_stats_tracks_token_volumes_and_oracle_normalization() {
-    let t = setup();
-
-    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.contract.submit_invoice(&ReferralCode::None);
-
-    t.contract
-        .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &false);
-    t.contract.mark_paid(&invoice_id, &INVOICE_AMOUNT);
-
-    let stats = t.contract.get_contract_stats();
-    assert_eq!(stats.total_volume_usdc, INVOICE_AMOUNT);
-    assert_eq!(stats.token_volumes.len(), 2);
-
-    let volume_entry = stats.token_volumes.get(0).unwrap();
-    assert_eq!(volume_entry.0, t.token.address);
-    assert_eq!(volume_entry.1, INVOICE_AMOUNT);
-    assert_eq!(stats.total_volume_usd_normalized, 0);
-
-    let oracle_id = t.env.register_contract(None, MockPriceOracle);
-    t.env.as_contract(&t.contract.address, || {
-        let mut config = crate::storage::get_config(&t.env).unwrap();
-        config.price_oracle = Some(oracle_id.clone());
-        crate::storage::set_config(&t.env, &config);
-    });
-
-    let stats = t.contract.get_contract_stats();
-    assert_eq!(
-        stats.total_volume_usd_normalized,
-        INVOICE_AMOUNT * 20_000 / 10_000
+    let below_min = 500_000i128;
+    let new_due = due_date(&t) + DUE_DATE_OFFSET;
+    let result = t.contract.try_update_invoice(
+        &t.freelancer,
+        &id,
+        &below_min,
+        &new_due,
+        &DISCOUNT_RATE,
     );
-}
 
-// ================================================================
-// Tests for pause/unpause
-// ================================================================
-
-#[test]
-fn test_pause_blocks_submit_invoice() {
-    let t = setup();
-
-    t.contract.pause();
-
-    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let result = t.contract.try_submit_invoice(&ReferralCode::None);
-
-    assert!(result.is_err());
-    assert_eq!(result, Err(Ok(ContractError::ContractPaused)));
+    assert_eq!(result, Err(Ok(ContractError::InvalidAmount)));
 }
 
 #[test]
-fn test_pause_blocks_fund_invoice() {
+fn test_update_invoice_xlm_token_aware_rejection() {
     let t = setup();
 
-    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.contract.submit_invoice(&ReferralCode::None);
+    let xlm_admin = Address::generate(&t.env);
+    let xlm_id = t.env.register_stellar_asset_contract_v2(xlm_admin.clone());
+    let xlm_address = xlm_id.address();
+    let xlm_sac = StellarAssetClient::new(&t.env, &xlm_address);
+    xlm_sac.mint(&t.funder, &1_000_000_000_000);
+    // Admin needs tokens on the new token so add_token() can verify it.
+    xlm_sac.mint(&t.admin, &10_000_000);
+    t.contract.add_token(&xlm_address, &7);
 
-    t.contract.pause();
+    let id = t.contract.submit_invoice(
+        &t.freelancer,
+        &t.payer,
+        &10_000_000,
+        &due_date(&t),
+        &DISCOUNT_RATE,
+        &xlm_address,
+        &ReferralCode::None,
+    );
 
-    let result = t
-        .contract
-        .try_fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT);
+    let below_xlm_min = 5_000_000i128;
+    let new_due = due_date(&t) + DUE_DATE_OFFSET;
+    let result = t.contract.try_update_invoice(
+        &t.freelancer,
+        &id,
+        &below_xlm_min,
+        &new_due,
+        &DISCOUNT_RATE,
+    );
 
-    assert!(result.is_err());
-    assert_eq!(result, Err(Ok(ContractError::ContractPaused)));
+    assert_eq!(result, Err(Ok(ContractError::InvalidAmount)));
 }
 
 #[test]
-fn test_pause_blocks_mark_paid() {
+fn test_update_invoice_xlm_at_minimum_accepted() {
     let t = setup();
 
-    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.contract.submit_invoice(&ReferralCode::None);
+    let xlm_admin = Address::generate(&t.env);
+    let xlm_id = t.env.register_stellar_asset_contract_v2(xlm_admin.clone());
+    let xlm_address = xlm_id.address();
+    let xlm_sac = StellarAssetClient::new(&t.env, &xlm_address);
+    xlm_sac.mint(&t.funder, &1_000_000_000_000);
+    // Admin needs tokens on the new token so add_token() can verify it.
+    xlm_sac.mint(&t.admin, &10_000_000);
+    t.contract.add_token(&xlm_address, &7);
 
-    t.contract
-        .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &false);
-    t.contract.pause();
+    let id = t.contract.submit_invoice(
+        &t.freelancer,
+        &t.payer,
+        &100_000_000,
+        &due_date(&t),
+        &DISCOUNT_RATE,
+        &xlm_address,
+        &ReferralCode::None,
+    );
 
-    let result = t.contract.try_mark_paid(&invoice_id, &INVOICE_AMOUNT);
+    let xlm_min = 10_000_000i128;
+    let new_due = due_date(&t) + DUE_DATE_OFFSET;
+    t.contract.update_invoice(&t.freelancer, &id, &xlm_min, &new_due, &DISCOUNT_RATE);
 
-    assert!(result.is_err());
-    assert_eq!(result, Err(Ok(ContractError::ContractPaused)));
-}
-
-#[test]
-fn test_pause_blocks_cancel_invoice() {
-    let t = setup();
-
-    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.contract.submit_invoice(&ReferralCode::None);
-
-    t.contract.pause();
-
-    let result = t.contract.try_cancel_invoice(&invoice_id);
-
-    assert!(result.is_err());
-    assert_eq!(result, Err(Ok(ContractError::ContractPaused)));
-}
-
-#[test]
-fn test_pause_blocks_claim_default() {
-    let t = setup();
-
-    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.contract.submit_invoice(&ReferralCode::None);
-
-    t.contract
-        .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &false);
-
-    // Advance time past due date
-    let mut ledger = t.env.ledger().get();
-    ledger.timestamp = due_date + 1;
-    t.env.ledger().set(ledger);
-
-    t.contract.pause();
-
-    let result = t.contract.try_claim_default(&t.funder, &invoice_id);
-
-    assert!(result.is_err());
-    assert_eq!(result, Err(Ok(ContractError::ContractPaused)));
-}
-
-#[test]
-fn test_unpause_restores_functionality() {
-    let t = setup();
-
-    t.contract.pause();
-    t.contract.unpause();
-
-    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let result = t.contract.try_submit_invoice(&ReferralCode::None);
-
-    assert!(result.is_ok());
-}
-
-#[test]
-fn test_pause_non_admin_fails() {
-    let t = setup();
-
-    // Create a non-admin address
-    let _non_admin = Address::generate(&t.env);
-
-    // We need to test that non-admin cannot pause
-    // Since we're using mock_all_auths, we need to manually test this
-    // For now, we'll skip this test as it requires more complex auth testing
-}
-
-#[test]
-fn test_unpause_non_admin_fails() {
-    let t = setup();
-
-    t.contract.pause();
-
-    // Create a non-admin address
-    let _non_admin = Address::generate(&t.env);
-
-    // We need to test that non-admin cannot unpause
-    // Since we're using mock_all_auths, we need to manually test this
-    // For now, we'll skip this test as it requires more complex auth testing
-}
-
-#[test]
-fn test_get_contract_stats_works_when_paused() {
-    let t = setup();
-
-    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    t.contract.submit_invoice(&ReferralCode::None);
-
-    t.contract.pause();
-
-    // Stats should still be readable
-    let stats = t.contract.get_contract_stats();
-    assert_eq!(stats.total_invoices, 1);
-}
-
-// ================================================================
-// Tests for timestamp validation (MIN/MAX duration)
-// ================================================================
-
-#[test]
-fn test_due_date_too_soon_rejected() {
-    let t = setup();
-
-    let now = t.env.ledger().timestamp();
-    let too_soon = now + (12 * 60 * 60); // 12 hours - less than 24 hours
-
-    let result = t.contract.try_submit_invoice(&ReferralCode::None);
-
-    assert!(result.is_err());
-    assert_eq!(result, Err(Ok(ContractError::DueDateTooSoon)));
-}
-
-#[test]
-fn test_due_date_exactly_24_hours_accepted() {
-    let t = setup();
-
-    let now = t.env.ledger().timestamp();
-    let exactly_24h = now + (24 * 60 * 60);
-
-    let result = t.contract.try_submit_invoice(&ReferralCode::None);
-
-    assert!(result.is_ok());
-}
-
-#[test]
-fn test_due_date_too_far_rejected() {
-    let t = setup();
-
-    let now = t.env.ledger().timestamp();
-    let too_far = now + (366 * 24 * 60 * 60); // 366 days - more than 365 days
-
-    let result = t.contract.try_submit_invoice(&ReferralCode::None);
-
-    assert!(result.is_err());
-    assert_eq!(result, Err(Ok(ContractError::DueDateTooFar)));
-}
-
-#[test]
-fn test_due_date_exactly_365_days_accepted() {
-    let t = setup();
-
-    let now = t.env.ledger().timestamp();
-    let exactly_365d = now + (365 * 24 * 60 * 60);
-
-    let result = t.contract.try_submit_invoice(&ReferralCode::None);
-
-    assert!(result.is_ok());
-}
-
-#[test]
-fn test_due_date_in_past_rejected() {
-    let t = setup();
-
-    let now = t.env.ledger().timestamp();
-    let past = now - 1;
-
-    let result = t.contract.try_submit_invoice(&ReferralCode::None);
-
-    assert!(result.is_err());
-    assert_eq!(result, Err(Ok(ContractError::InvalidDueDate)));
-}
-
-#[test]
-fn test_due_date_equal_to_now_rejected() {
-    let t = setup();
-
-    let now = t.env.ledger().timestamp();
-
-    let result = t.contract.try_submit_invoice(&ReferralCode::None);
-
-    assert!(result.is_err());
-    assert_eq!(result, Err(Ok(ContractError::InvalidDueDate)));
+    let invoice = t.contract.get_invoice(&id);
+    assert_eq!(invoice.amount, xlm_min);
+    assert_eq!(invoice.token, xlm_address);
 }

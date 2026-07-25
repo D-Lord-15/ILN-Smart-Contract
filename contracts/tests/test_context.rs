@@ -1,13 +1,13 @@
 #![cfg(test)]
 
-use invoice_liquidity::{InvoiceLiquidityContract, InvoiceLiquidityContractClient};
+use invoice_liquidity::{InvoiceLiquidityContract, InvoiceLiquidityContractClient, ReferralCode};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token::{Client as TokenClient, StellarAssetClient},
     Address, Env,
 };
 
-use invoice_liquidity::ReferralCode;
+
 
 const DEFAULT_INVOICE_AMOUNT: i128 = 1_000_000_000;
 const DEFAULT_DISCOUNT_RATE: u32 = 300;

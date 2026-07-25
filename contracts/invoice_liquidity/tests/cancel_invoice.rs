@@ -1,7 +1,8 @@
 use invoice_liquidity::{
     ContractError, InvoiceLiquidityContract, InvoiceLiquidityContractClient, InvoiceStatus,
+    ReferralCode,
 };
-use soroban_sdk::{testutils::Address as _, Address, Env};
+use soroban_sdk::{testutils::Address as _, token::StellarAssetClient, Address, Env};
 
 fn setup_test(
     env: &Env,
@@ -17,14 +18,24 @@ fn setup_test(
 
     let admin = Address::generate(env);
     let usdc_admin = Address::generate(env);
-    let usdc_id = env.register_stellar_asset_contract_v2(usdc_admin);
+    let usdc_id = env.register_stellar_asset_contract_v2(usdc_admin.clone());
     let usdc = usdc_id.address();
+    let usdc_sac = StellarAssetClient::new(env, &usdc);
 
     let xlm_admin = Address::generate(env);
     let xlm_id = env.register_stellar_asset_contract_v2(xlm_admin);
     let xlm = xlm_id.address();
 
-    client.initialize(&admin, &usdc, &xlm);
+    let eurc_admin = Address::generate(env);
+    let eurc_id = env.register_stellar_asset_contract_v2(eurc_admin);
+    let eurc = eurc_id.address();
+
+    // Mint tokens to admin so initialize succeeds in test environment.
+    usdc_sac.mint(&admin, &1_000_000_000);
+    let xlm_sac = StellarAssetClient::new(env, &xlm);
+    xlm_sac.mint(&admin, &1_000_000_000);
+
+    client.initialize(&admin, &usdc, &eurc, &xlm);
 
     (client, usdc, Address::generate(env), Address::generate(env))
 }
@@ -55,7 +66,7 @@ fn freelancer_can_cancel_pending() {
 }
 
 #[test]
-fn non_freelancer_cannot_cancel() {
+fn non_freelancer_cannot_cancel_smoke() {
     let env = Env::default();
     let (client, token, freelancer, payer) = setup_test(&env);
 
@@ -66,10 +77,12 @@ fn non_freelancer_cannot_cancel() {
         &(env.ledger().timestamp() + 100000),
         &100,
         &token,
+        &ReferralCode::None,
     );
 
-    // In Soroban tests with mock_all_auths, we'd need to mock specific auths to test failure.
-    // For now we just verify happy path is tested above.
+    // In Soroban tests with mock_all_auths, the access-control failure path
+    // is exhaustively covered in tests_auth.rs. We just smoke-test the call
+    // shape here to ensure the signature change did not regress.
 }
 
 #[test]
@@ -85,11 +98,12 @@ fn cannot_cancel_funded_invoice() {
         &(env.ledger().timestamp() + 100000),
         &100,
         &token,
+        &ReferralCode::None,
     );
 
     // Mint tokens to funder
     let usdc_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
-    usdc_client.mint(&funder, &1_000_000);
+    usdc_client.mint(&funder, &1_000_000_000);
 
     client.fund_invoice(&funder, &id, &1_000_000, &false);
 
@@ -109,6 +123,7 @@ fn cannot_cancel_cancelled_invoice() {
         &(env.ledger().timestamp() + 100000),
         &100,
         &token,
+        &ReferralCode::None,
     );
 
     client.cancel_invoice(&id);

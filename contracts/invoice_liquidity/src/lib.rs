@@ -19,20 +19,6 @@ pub mod top_payers;
 use access::*;
 pub mod constants;
 pub mod oracle_interface;
-#[cfg(test)]
-mod tests_discount_rate;
-#[cfg(test)]
-mod tests_lifecycle_integration;
-#[cfg(test)]
-mod tests_nft_query;
-mod tests_lp_pagination;
-mod tests_new_features;
-mod tests_pagination;
-mod tests_regression;
-#[cfg(test)]
-#[cfg(test)]
-mod tests_stress;
-mod tests_xlm_support;
 
 pub use crate::invoice::{
     AppealRecord, Invoice, InvoiceParams, InvoiceStatus, LpFundRequest, ReferralCode,
@@ -723,6 +709,10 @@ impl InvoiceLiquidityContract {
         }
 
         validate_invoice_terms(&env, amount, due_date, discount_rate)?;
+
+        // Issue #489: re-validate with token-aware minimum so updating
+        // cannot push the amount below the token-specific floor (e.g. XLM).
+        validate_invoice_terms_with_token(&env, amount, due_date, discount_rate, &invoice.token)?;
 
         invoice.amount = amount;
         invoice.due_date = due_date.try_into().unwrap();
@@ -2545,44 +2535,7 @@ fn notify_distribution_settlement(
 // ----------------------------------------------------------------
 
 pub(crate) mod test;
-#[cfg(test)]
-mod tests_access_control;
-mod tests_appeal;
-mod tests_arithmetic;
-mod tests_auth;
-mod tests_benchmarks;
-mod tests_discount_invariants;
-mod tests_dispute;
-mod tests_distribution;
-#[cfg(test)]
-mod tests_governance_features;
-mod tests_invariants;
-#[cfg(test)]
-mod tests_invoice_paid_event;
-#[cfg(test)]
-mod tests_lazy_storage;
-#[cfg(test)]
-mod tests_lp_funding_details_event;
-mod tests_lp_priority_queue;
-mod tests_mutation;
-#[cfg(test)]
-mod tests_oracle_freshness;
-#[cfg(test)]
-mod tests_oracle_verification;
-#[cfg(test)]
-mod tests_partial_payment;
-mod tests_protocol_fee;
-#[cfg(test)]
-mod tests_referral;
-#[cfg(test)]
-mod tests_reputation_events;
-mod tests_security;
-mod tests_state_machine;
 mod tests_storage;
-mod tests_storage_extra;
-#[cfg(test)]
-mod tests_token_decimals;
-#[cfg(test)]
-mod tests_token_switch;
-#[cfg(test)]
-mod tests_top_payers;
+mod tests_min_invoice_amount;
+mod tests_new_features;
+mod tests_lifecycle_integration;

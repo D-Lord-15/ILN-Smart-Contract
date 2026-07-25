@@ -3,6 +3,7 @@
 mod test_context;
 use invoice_liquidity::{
     ContractError, InvoiceLiquidityContract, InvoiceLiquidityContractClient, InvoiceStatus,
+    ReferralCode,
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -162,6 +163,6 @@ fn test_integration_fund_removed_token_fails() {
     // LP tries to fund it - should fail with Unauthorized
     let result = ctx
         .contract
-        .try_fund_invoice(&ctx.lp, &invoice_id, &INVOICE_AMOUNT);
+        .try_fund_invoice(&ctx.lp, &invoice_id, &INVOICE_AMOUNT, &false);
     assert_eq!(result, Err(Ok(ContractError::Unauthorized)));
 }
