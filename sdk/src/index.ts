@@ -56,6 +56,15 @@ export {
   executeProposal,
   getProposal,
   listProposals,
+  delegateVotes,
+  undelegateVotes,
+  vetoProposal,
+  disableVetoPower,
+  setExecutionDelay,
+  getExecutionDelay,
+  setMinQuorumBps,
+  setMinProposalBalance,
+  GovernanceContractError,
 } from "./methods/governance.js";
 export {
   ProposalAction,
