@@ -91,6 +91,8 @@ export {
   enrollInsurancePool,
   depositInsurancePremium,
   claimInsurance,
+  isInsuranceEnrolled,
+  getInsurancePremiums,
   InsuranceContractError,
 } from "./methods/insurance.js";
 export type { InsurancePoolInfo } from "@invoice-liquidity/types";
