@@ -76,6 +76,26 @@ pub enum ProposalAction {
     AddToken(Address, u32),
     RemoveToken(Address),
     UpdateMaxDiscountRate(u32),
+    /// Issue #545: Update reputation decay parameters on the ILN contract.
+    /// Tuple: (rate_bps, period_ledgers)
+    UpdateDecayParams(u32, u64),
+    /// Issue #544: Update distribution reward parameters.
+    /// Tuple: (half_token, hundred_usdc_stroops, lp_multiplier)
+    UpdateDistributionRewardParams(i128, i128, i128),
+    /// Issue #533: Update fee tier configuration on the ILN contract.
+    UpdateFeeTiers(Vec<FeeTierConfig>),
+    /// Issue #539: Upgrade the ILN contract WASM via governance vote.
+    Upgrade(BytesN<32>),
+}
+
+/// Issue #533: Fee tier configuration.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct FeeTierConfig {
+    /// Minimum invoice amount for this tier (inclusive, in stroops).
+    pub min_amount: i128,
+    /// Fee rate in basis points for this tier.
+    pub fee_rate_bps: u32,
 }
 
 // ================================================================
@@ -223,6 +243,8 @@ pub enum StorageKey {
     VetoPowerEnabled,
     /// Configurable minimum token balance a proposer must hold.
     MinProposalBalance,
+    /// Issue #544: distribution contract address for reward param updates.
+    DistributionContract,
 }
 
 // ================================================================
@@ -239,6 +261,7 @@ impl GovContract {
     pub fn initialize(
         env: Env,
         iln_contract: Address,
+        distribution_contract: Address,
         gov_token: Address,
         admin: Address,
     ) -> Result<(), GovernanceError> {
@@ -248,6 +271,9 @@ impl GovContract {
         env.storage()
             .instance()
             .set(&StorageKey::IlnContract, &iln_contract);
+        env.storage()
+            .instance()
+            .set(&StorageKey::DistributionContract, &distribution_contract);
         env.storage()
             .instance()
             .set(&StorageKey::GovToken, &gov_token);
@@ -775,6 +801,59 @@ impl GovContract {
                     env.invoke_contract::<()>(
                         &iln_contract,
                         &Symbol::new(&env, "update_max_discount"),
+                        args,
+                    );
+                }
+                ProposalAction::UpdateDecayParams(
+                    rate_bps,
+                    period_ledgers,
+                ) => {
+                    let args: Vec<soroban_sdk::Val> = vec![
+                        &env,
+                        rate_bps.into_val(&env),
+                        period_ledgers.into_val(&env),
+                    ];
+                    env.invoke_contract::<()>(
+                        &iln_contract,
+                        &Symbol::new(&env, "update_decay_params"),
+                        args,
+                    );
+                }
+                ProposalAction::UpdateDistributionRewardParams(
+                    half_token,
+                    hundred_usdc_stroops,
+                    lp_multiplier,
+                ) => {
+                    let dist_contract: Address = env
+                        .storage()
+                        .instance()
+                        .get(&StorageKey::DistributionContract)
+                        .unwrap();
+                    let args: Vec<soroban_sdk::Val> = vec![
+                        &env,
+                        half_token.into_val(&env),
+                        hundred_usdc_stroops.into_val(&env),
+                        lp_multiplier.into_val(&env),
+                    ];
+                    env.invoke_contract::<()>(
+                        &dist_contract,
+                        &Symbol::new(&env, "update_reward_params"),
+                        args,
+                    );
+                }
+                ProposalAction::UpdateFeeTiers(tiers) => {
+                    let args: Vec<soroban_sdk::Val> = vec![&env, tiers.into_val(&env)];
+                    env.invoke_contract::<()>(
+                        &iln_contract,
+                        &Symbol::new(&env, "update_fee_tiers"),
+                        args,
+                    );
+                }
+                ProposalAction::Upgrade(new_wasm_hash) => {
+                    let args: Vec<soroban_sdk::Val> = vec![&env, new_wasm_hash.into_val(&env)];
+                    env.invoke_contract::<()>(
+                        &iln_contract,
+                        &Symbol::new(&env, "upgrade"),
                         args,
                     );
                 }

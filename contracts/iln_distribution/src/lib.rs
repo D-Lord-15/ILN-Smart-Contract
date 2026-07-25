@@ -4,8 +4,9 @@ use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, token::StellarAssetClient, Address, Env,
 };
 
-const HALF_TOKEN: i128 = 5_000_000;
-const HUNDRED_USDC_STROOPS: i128 = 1_000_000_000;
+const DEFAULT_HALF_TOKEN: i128 = 5_000_000;
+const DEFAULT_HUNDRED_USDC_STROOPS: i128 = 1_000_000_000;
+const DEFAULT_LP_MULTIPLIER: i128 = 10_000_000;
 
 #[contracttype]
 pub enum StorageKey {
@@ -16,6 +17,10 @@ pub enum StorageKey {
     FreelancerSettled(Address),
     PayerOnTimeSettled(Address),
     Claimed(Address),
+    /// Issue #544: configurable reward parameters
+    HalfToken,
+    HundredUsdcStroops,
+    LpMultiplier,
 }
 
 /// Emitted once, when the contract is initialised (Issue #538).
@@ -171,6 +176,62 @@ impl IlnDistribution {
         Self::total_earned(&env, &participant)
     }
 
+    /// Issue #544: Update reward parameters. Only callable by the ILN contract
+    /// (acting on a governance proposal). The ILN contract address is the
+    /// authority for all state-changing calls to this contract.
+    pub fn update_reward_params(
+        env: Env,
+        half_token: i128,
+        hundred_usdc_stroops: i128,
+        lp_multiplier: i128,
+    ) {
+        Self::require_iln_invoker(&env);
+
+        let old_half = Self::get_half_token(&env);
+        let old_hundred = Self::get_hundred_usdc_stroops(&env);
+        let old_lp = Self::get_lp_multiplier(&env);
+
+        env.storage()
+            .instance()
+            .set(&StorageKey::HalfToken, &half_token);
+        env.storage()
+            .instance()
+            .set(&StorageKey::HundredUsdcStroops, &hundred_usdc_stroops);
+        env.storage()
+            .instance()
+            .set(&StorageKey::LpMultiplier, &lp_multiplier);
+
+        env.events().publish(
+            (symbol_short!("rwrd_upd"),),
+            (
+                old_half, half_token,
+                old_hundred, hundred_usdc_stroops,
+                old_lp, lp_multiplier,
+            ),
+        );
+    }
+
+    fn get_half_token(env: &Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&StorageKey::HalfToken)
+            .unwrap_or(DEFAULT_HALF_TOKEN)
+    }
+
+    fn get_hundred_usdc_stroops(env: &Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&StorageKey::HundredUsdcStroops)
+            .unwrap_or(DEFAULT_HUNDRED_USDC_STROOPS)
+    }
+
+    fn get_lp_multiplier(env: &Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&StorageKey::LpMultiplier)
+            .unwrap_or(DEFAULT_LP_MULTIPLIER)
+    }
+
     fn total_earned(env: &Env, participant: &Address) -> i128 {
         let lp_volume: i128 = env
             .storage()
@@ -188,9 +249,17 @@ impl IlnDistribution {
             .get(&StorageKey::PayerOnTimeSettled(participant.clone()))
             .unwrap_or(0_u64);
 
-        let lp_reward = (lp_volume / HUNDRED_USDC_STROOPS).saturating_mul(10_000_000);
-        let freelancer_reward = (freelancer_settled as i128).saturating_mul(HALF_TOKEN);
-        let payer_reward = (payer_on_time as i128).saturating_mul(HALF_TOKEN);
+        let hundred_usdc = Self::get_hundred_usdc_stroops(env);
+        let lp_mult = Self::get_lp_multiplier(env);
+        let half_token = Self::get_half_token(env);
+
+        let lp_reward = if hundred_usdc > 0 {
+            (lp_volume / hundred_usdc).saturating_mul(lp_mult)
+        } else {
+            0
+        };
+        let freelancer_reward = (freelancer_settled as i128).saturating_mul(half_token);
+        let payer_reward = (payer_on_time as i128).saturating_mul(half_token);
 
         lp_reward
             .saturating_add(freelancer_reward)
@@ -211,6 +280,9 @@ impl IlnDistribution {
 mod test {
     use super::*;
     use soroban_sdk::{testutils::Address as _, token::Client as TokenClient, Address};
+
+    #[cfg(test)]
+    use super::{DEFAULT_HALF_TOKEN as HALF_TOKEN, DEFAULT_HUNDRED_USDC_STROOPS as HUNDRED_USDC_STROOPS};
 
     #[contract]
     pub struct MockIln;
@@ -313,5 +385,68 @@ mod test {
 
         assert_eq!(dist.claim_tokens(&freelancer), HALF_TOKEN);
         assert_eq!(dist.claim_tokens(&payer), 0);
+    }
+
+    #[test]
+    fn update_reward_params_changes_earned_amounts() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let iln_id = env.register_contract(None, MockIln);
+        let dist_id = env.register_contract(None, IlnDistribution);
+        let dist = IlnDistributionClient::new(&env, &dist_id);
+        let iln = MockIlnClient::new(&env, &iln_id);
+
+        let gov_token_id = env.register_stellar_asset_contract_v2(dist_id.clone());
+        let gov_token = gov_token_id.address();
+
+        dist.initialize(&iln_id, &gov_token);
+
+        let freelancer = Address::generate(&env);
+        let payer = Address::generate(&env);
+
+        // Default params: freelancer gets HALF_TOKEN per settlement
+        iln.accrue_settlement(&dist_id, &freelancer, &payer, &true);
+        assert_eq!(dist.get_accrual(&freelancer), HALF_TOKEN);
+        assert_eq!(dist.get_accrual(&payer), HALF_TOKEN);
+
+        // Update params: double the half_token to 10_000_000
+        dist.update_reward_params(&10_000_000, &1_000_000_000, &10_000_000);
+
+        // New accruals use the updated params
+        let freelancer2 = Address::generate(&env);
+        let payer2 = Address::generate(&env);
+        iln.accrue_settlement(&dist_id, &freelancer2, &payer2, &true);
+        assert_eq!(dist.get_accrual(&freelancer2), 10_000_000);
+        assert_eq!(dist.get_accrual(&payer2), 10_000_000);
+    }
+
+    #[test]
+    fn update_reward_params_affects_lp_rewards() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let iln_id = env.register_contract(None, MockIln);
+        let dist_id = env.register_contract(None, IlnDistribution);
+        let dist = IlnDistributionClient::new(&env, &dist_id);
+        let iln = MockIlnClient::new(&env, &iln_id);
+
+        let gov_token_id = env.register_stellar_asset_contract_v2(dist_id.clone());
+        let gov_token = gov_token_id.address();
+
+        dist.initialize(&iln_id, &gov_token);
+
+        let lp = Address::generate(&env);
+
+        // Default: 100 USDC → 10_000_000 tokens
+        iln.accrue_lp(&dist_id, &lp, &HUNDRED_USDC_STROOPS);
+        assert_eq!(dist.get_accrual(&lp), 10_000_000);
+
+        // Update LP multiplier to 20_000_000
+        dist.update_reward_params(&5_000_000, &1_000_000_000, &20_000_000);
+
+        let lp2 = Address::generate(&env);
+        iln.accrue_lp(&dist_id, &lp2, &HUNDRED_USDC_STROOPS);
+        assert_eq!(dist.get_accrual(&lp2), 20_000_000);
     }
 }

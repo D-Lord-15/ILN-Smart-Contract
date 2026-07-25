@@ -21,6 +21,16 @@ impl MockIln {
     pub fn add_token(_env: Env, _token: Address) {}
     pub fn remove_token(_env: Env, _token: Address) {}
     pub fn update_max_discount(_env: Env, _rate: u32) {}
+    pub fn update_decay_params(_env: Env, _rate_bps: u32, _period_ledgers: u64) {}
+    pub fn update_fee_tiers(_env: Env, _tiers: Vec<FeeTierConfig>) {}
+    pub fn update_reward_params(
+        _env: Env,
+        _half_token: i128,
+        _hundred_usdc_stroops: i128,
+        _lp_multiplier: i128,
+    ) {
+    }
+    pub fn upgrade(_env: Env, _new_wasm_hash: BytesN<32>) {}
 }
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
@@ -59,11 +69,12 @@ fn setup() -> GovTestEnv {
     gov_token_admin.mint(&proposer, &1_000);
 
     let iln_contract = env.register_contract(None, MockIln);
+    let dist_contract = env.register_contract(None, MockIln);
 
     let contract_id = env.register_contract(None, GovContract);
     let contract = GovContractClient::new(&env, &contract_id);
 
-    contract.initialize(&iln_contract, &token_addr, &admin);
+    contract.initialize(&iln_contract, &dist_contract, &token_addr, &admin);
 
     let mut ledger = env.ledger().get();
     ledger.timestamp = 1_700_000_000;
@@ -177,9 +188,10 @@ fn test_proposal_action_remove_token_stored_correctly() {
 fn test_double_initialize_rejected() {
     let t = setup();
     let iln = Address::generate(&t.env);
+    let dist = Address::generate(&t.env);
     let token = Address::generate(&t.env);
     let admin = Address::generate(&t.env);
-    t.contract.initialize(&iln, &token, &admin);
+    t.contract.initialize(&iln, &dist, &token, &admin);
 }
 
 #[test]
@@ -803,6 +815,7 @@ fn test_non_admin_veto_fails() {
     let token_id = env.register_stellar_asset_contract_v2(Address::generate(&env));
     let token_addr = token_id.address();
     let iln_id = env.register_contract(None, MockIln);
+    let dist_id = env.register_contract(None, MockIln);
     let admin = Address::generate(&env);
     let non_admin = Address::generate(&env);
 
@@ -811,7 +824,7 @@ fn test_non_admin_veto_fails() {
 
     // Initialize using mock_all_auths scoped to setup only.
     env.mock_all_auths();
-    contract.initialize(&iln_id, &token_addr, &admin);
+    contract.initialize(&iln_id, &dist_id, &token_addr, &admin);
 
     let gov_token_admin = StellarAssetClient::new(&env, &token_addr);
     gov_token_admin.mint(&non_admin, &1_000);
@@ -1247,4 +1260,197 @@ fn test_list_proposals_status_filtering() {
     assert_eq!(all_list.get(0).unwrap().id, id3);
     assert_eq!(all_list.get(1).unwrap().id, id2);
     assert_eq!(all_list.get(2).unwrap().id, id1);
+}
+
+// ── Issue #545: UpdateDecayParams proposal ──────────────────────────────────
+
+#[test]
+fn test_create_and_execute_decay_params_proposal() {
+    let t = setup();
+    let hash = dummy_hash(&t.env);
+
+    let id = t.contract.create_proposal(
+        &t.proposer,
+        &ProposalAction::UpdateDecayParams(100, 5000),
+        &hash,
+        &100_i128,
+    );
+
+    let p = t.contract.get_proposal(&id);
+    assert_eq!(
+        p.action_type,
+        ProposalAction::UpdateDecayParams(100, 5000)
+    );
+    assert_eq!(p.status, ProposalStatus::Active);
+
+    // Vote to pass
+    t.gov_token_admin.mint(&t.voter_a, &10_000);
+    t.contract.cast_vote(&t.voter_a, &id, &true);
+
+    // Advance past voting period
+    t.env
+        .ledger()
+        .set_timestamp(t.env.ledger().timestamp() + VOTING_PERIOD_SECS + 1);
+
+    let total_supply = t.gov_token.balance(&t.voter_a) + t.gov_token.balance(&t.voter_b) + t.gov_token.balance(&t.proposer);
+    let _ = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, total_supply)
+    });
+
+    // Should be passed (pending timelock)
+    assert_eq!(t.contract.get_proposal(&id).status, ProposalStatus::Passed);
+
+    // Execute after timelock
+    let _ = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, total_supply)
+    });
+
+    assert_eq!(t.contract.get_proposal(&id).status, ProposalStatus::Executed);
+}
+
+// ── Issue #544: UpdateDistributionRewardParams proposal ─────────────────────
+
+#[test]
+fn test_create_and_execute_distribution_reward_params_proposal() {
+    let t = setup();
+    let hash = dummy_hash(&t.env);
+
+    let id = t.contract.create_proposal(
+        &t.proposer,
+        &ProposalAction::UpdateDistributionRewardParams(
+            7_500_000,
+            2_000_000_000,
+            15_000_000,
+        ),
+        &hash,
+        &7_500_000_i128,
+    );
+
+    let p = t.contract.get_proposal(&id);
+    assert_eq!(
+        p.action_type,
+        ProposalAction::UpdateDistributionRewardParams(
+            7_500_000,
+            2_000_000_000,
+            15_000_000,
+        )
+    );
+
+    // Vote to pass
+    t.gov_token_admin.mint(&t.voter_a, &10_000);
+    t.contract.cast_vote(&t.voter_a, &id, &true);
+
+    // Advance past voting period
+    t.env
+        .ledger()
+        .set_timestamp(t.env.ledger().timestamp() + VOTING_PERIOD_SECS + 1);
+
+    let total_supply = t.gov_token.balance(&t.voter_a) + t.gov_token.balance(&t.voter_b) + t.gov_token.balance(&t.proposer);
+    let _ = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, total_supply)
+    });
+
+    assert_eq!(t.contract.get_proposal(&id).status, ProposalStatus::Passed);
+
+    let _ = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, total_supply)
+    });
+
+    assert_eq!(t.contract.get_proposal(&id).status, ProposalStatus::Executed);
+}
+
+// ── Issue #533: UpdateFeeTiers proposal ─────────────────────────────────────
+
+#[test]
+fn test_create_and_execute_fee_tiers_proposal() {
+    let t = setup();
+    let hash = dummy_hash(&t.env);
+
+    let tiers = soroban_sdk::vec![
+        &t.env,
+        FeeTierConfig {
+            min_amount: 0,
+            fee_rate_bps: 500,
+        },
+        FeeTierConfig {
+            min_amount: 100_000_000,
+            fee_rate_bps: 300,
+        },
+        FeeTierConfig {
+            min_amount: 1_000_000_000,
+            fee_rate_bps: 100,
+        },
+    ];
+
+    let id = t.contract.create_proposal(
+        &t.proposer,
+        &ProposalAction::UpdateFeeTiers(tiers.clone()),
+        &hash,
+        &0_i128,
+    );
+
+    let p = t.contract.get_proposal(&id);
+    assert_eq!(p.action_type, ProposalAction::UpdateFeeTiers(tiers));
+
+    // Vote to pass
+    t.gov_token_admin.mint(&t.voter_a, &10_000);
+    t.contract.cast_vote(&t.voter_a, &id, &true);
+
+    // Advance past voting period
+    t.env
+        .ledger()
+        .set_timestamp(t.env.ledger().timestamp() + VOTING_PERIOD_SECS + 1);
+
+    let total_supply = t.gov_token.balance(&t.voter_a) + t.gov_token.balance(&t.voter_b) + t.gov_token.balance(&t.proposer);
+    let _ = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, total_supply)
+    });
+
+    assert_eq!(t.contract.get_proposal(&id).status, ProposalStatus::Passed);
+
+    let _ = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, total_supply)
+    });
+
+    assert_eq!(t.contract.get_proposal(&id).status, ProposalStatus::Executed);
+}
+
+// ── Issue #539: Upgrade proposal action ────────────────────────────────────
+
+#[test]
+fn test_upgrade_proposal_creates_and_executes() {
+    let t = setup();
+
+    let new_wasm_hash = BytesN::from_array(&t.env, &[0xABu8; 32]);
+
+    let id = t.contract.create_proposal(
+        &t.proposer,
+        &ProposalAction::Upgrade(new_wasm_hash.clone()),
+        &dummy_hash(&t.env),
+        &0_i128,
+    );
+
+    let p = t.contract.get_proposal(&id);
+    assert_eq!(p.action_type, ProposalAction::Upgrade(new_wasm_hash));
+
+    // Vote to pass
+    t.gov_token_admin.mint(&t.voter_a, &10_000);
+    t.contract.cast_vote(&t.voter_a, &id, &true);
+
+    // Advance past voting period
+    t.env
+        .ledger()
+        .set_timestamp(t.env.ledger().timestamp() + VOTING_PERIOD_SECS + 1);
+
+    let total_supply = t.gov_token.balance(&t.voter_a) + t.gov_token.balance(&t.voter_b) + t.gov_token.balance(&t.proposer);
+
+    let _ = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, total_supply)
+    });
+    assert_eq!(t.contract.get_proposal(&id).status, ProposalStatus::Passed);
+
+    let _ = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, total_supply)
+    });
+    assert_eq!(t.contract.get_proposal(&id).status, ProposalStatus::Executed);
 }
