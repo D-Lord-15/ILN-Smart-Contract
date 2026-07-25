@@ -4,7 +4,7 @@
 
 set -euo pipefail
 
-BASELINE_FILE="${1:-contracts/invoice_liquidity/benchmarks/baseline.json}"
+BASELINE_FILE="${1:-docs/benchmarks.json}"
 REGRESSION_THRESHOLD="${BENCHMARK_REGRESSION_THRESHOLD:-10}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 

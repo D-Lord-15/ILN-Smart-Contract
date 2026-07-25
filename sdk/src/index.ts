@@ -139,3 +139,4 @@ export {
   submitBatchTransaction,
 } from "./methods/batch.js";
 export type { BatchContractCall, BatchTransactionOptions, BatchTransactionResult } from "./methods/batch.js";
+export { setAdmin, upgrade } from "./methods/admin.js";
