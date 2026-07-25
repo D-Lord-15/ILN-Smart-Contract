@@ -76,7 +76,7 @@ export type {
   CreateProposalResult,
 } from "./types/governance.js";
 
-export { ILNError, InsuranceContractError } from "./errors.js";
+export { ILNError } from "./errors.js";
 export { disputeInvoice, sha256Hex } from "./methods/disputeInvoice.js";
 export type { DisputeInvoiceParams, DisputeInvoiceResult } from "./methods/disputeInvoice.js";
 export { resolveDispute, DisputeRuling } from "./methods/resolveDispute.js";
@@ -113,6 +113,12 @@ export { submitInvoicesBatch } from "./methods/submitInvoicesBatch.js";
 export type { BatchInvoiceItem, SubmitInvoicesBatchResult } from "./methods/submitInvoicesBatch.js";
 export { joinFundQueue, resolveFundQueue } from "./methods/fundQueue.js";
 export type { JoinFundQueueResult, ResolveFundQueueResult } from "./methods/fundQueue.js";
+export { pause, unpause } from "./methods/adminControls.js";
+export type { PauseResult } from "./methods/adminControls.js";
+export { transferInvoice } from "./methods/transferInvoice.js";
+export type { TransferInvoiceResult } from "./methods/transferInvoice.js";
+export { convertInvoiceToken } from "./methods/convertInvoiceToken.js";
+export type { ConvertInvoiceTokenResult } from "./methods/convertInvoiceToken.js";
 export { TokenRegistry, tokenRegistry } from "./utils/tokenRegistry.js";
 export type { TokenInfo, NetworkName } from "./utils/tokenRegistry.js";
 export {
