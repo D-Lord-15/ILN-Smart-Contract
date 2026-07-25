@@ -105,6 +105,12 @@ export {
 } from "./methods/reputation.js";
 export type { ReputationBonusInvoice } from "./methods/reputation.js";
 export { getReferralStats } from "./methods/referralStats.js";
+export { appealInvoice, resolveAppeal } from "./methods/appeal.js";
+export type { AppealInvoiceResult, ResolveAppealResult } from "./methods/appeal.js";
+export { submitInvoicesBatch } from "./methods/submitInvoicesBatch.js";
+export type { BatchInvoiceItem, SubmitInvoicesBatchResult } from "./methods/submitInvoicesBatch.js";
+export { joinFundQueue, resolveFundQueue } from "./methods/fundQueue.js";
+export type { JoinFundQueueResult, ResolveFundQueueResult } from "./methods/fundQueue.js";
 export { TokenRegistry, tokenRegistry } from "./utils/tokenRegistry.js";
 export type { TokenInfo, NetworkName } from "./utils/tokenRegistry.js";
 export {
