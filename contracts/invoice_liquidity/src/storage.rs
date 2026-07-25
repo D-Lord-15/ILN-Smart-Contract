@@ -280,7 +280,7 @@ pub fn increment_total_invoices(env: &Env) {
         .unwrap_or(0);
     env.storage()
         .persistent()
-        .set(&DataKey::TotalInvoices, &(current + 1));
+        .set(&DataKey::TotalInvoices, &current.saturating_add(1));
 }
 
 pub fn increment_total_funded(env: &Env) {
@@ -291,7 +291,7 @@ pub fn increment_total_funded(env: &Env) {
         .unwrap_or(0);
     env.storage()
         .persistent()
-        .set(&DataKey::TotalFunded, &(current + 1));
+        .set(&DataKey::TotalFunded, &current.saturating_add(1));
 }
 
 pub fn increment_total_paid(env: &Env) {
@@ -302,7 +302,7 @@ pub fn increment_total_paid(env: &Env) {
         .unwrap_or(0);
     env.storage()
         .persistent()
-        .set(&DataKey::TotalPaid, &(current + 1));
+        .set(&DataKey::TotalPaid, &current.saturating_add(1));
 }
 
 // add_volume moved to invoice.rs where the configured token addresses are available

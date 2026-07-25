@@ -171,6 +171,32 @@ pub struct ProposalCreated {
     pub voting_end: u64,
 }
 
+/// Emitted once, when the contract is initialised (Issue #538).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct GovernanceInitialized {
+    pub iln_contract: Address,
+    pub gov_token: Address,
+    pub admin: Address,
+}
+
+/// Emitted whenever a governance-controlled numeric parameter changes
+/// (Issue #538: event emission completeness audit).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct GovernanceParameterUpdated {
+    pub param_name: Symbol,
+    pub old_value: i128,
+    pub new_value: i128,
+}
+
+/// Emitted when admin veto power is permanently disabled (Issue #68 / #538).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct VetoPowerDisabled {
+    pub disabled_by: Address,
+}
+
 // ================================================================
 // Storage keys
 // ================================================================
@@ -235,6 +261,15 @@ impl GovContract {
         env.storage()
             .instance()
             .set(&StorageKey::ProposalCount, &0_u64);
+
+        env.events().publish(
+            (Symbol::new(&env, "initialized"), admin.clone()),
+            GovernanceInitialized {
+                iln_contract,
+                gov_token,
+                admin,
+            },
+        );
         Ok(())
     }
 
@@ -261,9 +296,24 @@ impl GovContract {
             .unwrap();
         iln_contract.require_auth();
 
+        let old_value: u32 = env
+            .storage()
+            .instance()
+            .get(&StorageKey::MinQuorumBps)
+            .unwrap_or(DEFAULT_MIN_QUORUM_BPS);
         env.storage()
             .instance()
             .set(&StorageKey::MinQuorumBps, &min_quorum_bps);
+
+        let pn = Symbol::new(&env, "min_quorum_bps");
+        env.events().publish(
+            (Symbol::new(&env, "parameter_updated"), pn.clone()),
+            GovernanceParameterUpdated {
+                param_name: pn,
+                old_value: old_value as i128,
+                new_value: min_quorum_bps as i128,
+            },
+        );
         Ok(())
     }
 
@@ -298,10 +348,10 @@ impl GovContract {
             .instance()
             .get(&StorageKey::ProposalCount)
             .unwrap_or(0);
-        let id = count + 1;
+        let id = count.saturating_add(1);
 
         let now = env.ledger().timestamp();
-        let voting_end = now + VOTING_PERIOD_SECS;
+        let voting_end = now.saturating_add(VOTING_PERIOD_SECS);
 
         let proposal = GovernanceProposal {
             id,
@@ -363,9 +413,24 @@ impl GovContract {
             .unwrap();
         iln_contract.require_auth();
 
+        let old_value: i128 = env
+            .storage()
+            .instance()
+            .get(&StorageKey::MinProposalBalance)
+            .unwrap_or(DEFAULT_MIN_PROPOSAL_BALANCE);
         env.storage()
             .instance()
             .set(&StorageKey::MinProposalBalance, &min_balance);
+
+        let pn = Symbol::new(&env, "min_proposal_balance");
+        env.events().publish(
+            (Symbol::new(&env, "parameter_updated"), pn.clone()),
+            GovernanceParameterUpdated {
+                param_name: pn,
+                old_value,
+                new_value: min_balance,
+            },
+        );
         Ok(())
     }
 
@@ -526,16 +591,16 @@ impl GovContract {
             .get(&StorageKey::DelegatedToMe(voter.clone()))
             .unwrap_or(0_i128);
 
-        let weight = own_balance + delegated;
+        let weight = own_balance.saturating_add(delegated);
 
         if weight == 0 {
             return Err(GovernanceError::NoVotingPower);
         }
 
         if support {
-            proposal.votes_for += weight;
+            proposal.votes_for = proposal.votes_for.saturating_add(weight);
         } else {
-            proposal.votes_against += weight;
+            proposal.votes_against = proposal.votes_against.saturating_add(weight);
         }
 
         env.storage().temporary().set(&voted_key, &true);
@@ -582,9 +647,24 @@ impl GovContract {
             env.storage().instance().set(&StorageKey::Admin, &admin);
         }
 
+        let old_value: u32 = env
+            .storage()
+            .instance()
+            .get(&StorageKey::ExecutionDelay)
+            .unwrap_or(0_u32);
         env.storage()
             .instance()
             .set(&StorageKey::ExecutionDelay, &delay);
+
+        let pn = Symbol::new(&env, "execution_delay");
+        env.events().publish(
+            (Symbol::new(&env, "parameter_updated"), pn.clone()),
+            GovernanceParameterUpdated {
+                param_name: pn,
+                old_value: old_value as i128,
+                new_value: delay as i128,
+            },
+        );
         Ok(())
     }
 
@@ -614,7 +694,7 @@ impl GovContract {
         }
 
         if proposal.status == ProposalStatus::Active {
-            let total_votes = proposal.votes_for + proposal.votes_against;
+            let total_votes = proposal.votes_for.saturating_add(proposal.votes_against);
             let min_quorum_bps: u32 = env
                 .storage()
                 .instance()
@@ -649,7 +729,7 @@ impl GovContract {
                 .instance()
                 .get(&StorageKey::ExecutionDelay)
                 .unwrap_or(0_u32);
-            proposal.eta_ledger = env.ledger().sequence() + delay;
+            proposal.eta_ledger = env.ledger().sequence().saturating_add(delay);
 
             env.storage()
                 .persistent()
@@ -808,6 +888,13 @@ impl GovContract {
             .instance()
             .set(&StorageKey::VetoPowerEnabled, &false);
 
+        env.events().publish(
+            (Symbol::new(&env, "veto_power_disabled"),),
+            VetoPowerDisabled {
+                disabled_by: iln_contract,
+            },
+        );
+
         Ok(())
     }
 
@@ -846,7 +933,7 @@ impl GovContract {
         }
 
         let actual_page_size = if page_size > 20 { 20 } else { page_size };
-        let skip = (page * actual_page_size) as u64;
+        let skip = page.saturating_mul(actual_page_size) as u64;
         let mut skipped = 0_u64;
 
         for id in (1..=count).rev() {
@@ -920,7 +1007,7 @@ impl GovContract {
     fn adjust_delegated_to_me(env: &Env, addr: &Address, delta: i128) {
         let key = StorageKey::DelegatedToMe(addr.clone());
         let current: i128 = env.storage().persistent().get(&key).unwrap_or(0_i128);
-        let updated = current + delta;
+        let updated = current.saturating_add(delta);
         if updated <= 0 {
             env.storage().persistent().remove(&key);
         } else {

@@ -30,6 +30,28 @@ generated for cross-contract calls):
 Auxiliary views on the contract: `get_premiums_paid(lp)`, `get_coverage()`,
 `is_claimed(invoice_id)`, plus `initialize(admin, coverage)`.
 
+### Timelocked admin actions (Issue #542)
+
+Coverage cap changes and admin transfers are sensitive to LPs, so they are
+queued behind a `TIMELOCK_DELAY_SECONDS` (3 days) delay rather than applying
+immediately:
+
+| Method | Auth | Description |
+|--------|------|-------------|
+| `propose_coverage_change(new_coverage) -> u64` | admin | Queue a new coverage cap; returns the ledger timestamp (ETA) at which it becomes executable. |
+| `execute_coverage_change()` | — | Apply the pending coverage change once its ETA has passed. Callable by anyone. |
+| `cancel_coverage_change()` | admin | Cancel a pending coverage change before it executes. |
+| `propose_admin_transfer(new_admin) -> u64` | admin | Queue an admin transfer; returns the ETA. |
+| `execute_admin_transfer()` | — | Apply the pending admin transfer once its ETA has passed. Callable by anyone. |
+| `cancel_admin_transfer()` | admin | Cancel a pending admin transfer before it executes. |
+| `get_pending_coverage() -> Option<(i128, u64)>` | — | View the pending coverage proposal, if any. |
+| `get_pending_admin() -> Option<(Address, u64)>` | — | View the pending admin proposal, if any. |
+
+Each proposal overwrites any previously pending proposal of the same kind.
+`execute_*` is intentionally open to any caller (like `execute_proposal` in
+`iln_governance`) since the timelock itself — not caller identity — is the
+security boundary once a change has been proposed by the admin.
+
 ## Stub semantics (what ships here)
 
 The stub in `contracts/insurance_pool/src/lib.rs` is a **correct, fully-tested**
@@ -88,5 +110,5 @@ if let Some(pool) = storage::get_insurance_pool(&env) {
 - Real SAC token custody for premiums and payouts.
 - Risk-priced premiums and coverage (vs. flat cap).
 - Pool solvency guards and payout prioritization across simultaneous defaults.
-- Governance parameters (premium schedule, coverage ratio) + admin rotation.
+- Governance parameters (premium schedule, coverage ratio).
 - End-to-end integration tests across `invoice_liquidity` ⇄ `insurance_pool`.
