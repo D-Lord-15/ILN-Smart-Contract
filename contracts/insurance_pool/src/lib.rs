@@ -101,6 +101,9 @@ impl InsurancePool {
         storage.set(&DataKey::Admin, &admin);
         storage.set(&DataKey::Balance, &0i128);
         storage.set(&DataKey::Coverage, &coverage);
+
+        env.events()
+            .publish((symbol_short!("init"), admin), coverage);
         Ok(())
     }
 
