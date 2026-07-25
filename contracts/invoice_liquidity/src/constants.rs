@@ -3,3 +3,20 @@ pub const DEFAULT_PAYER_SCORE: u32 = 50;
 pub const DEFAULT_LP_SCORE: u32 = 50;
 pub const TOP_PAYERS_CAPACITY: u32 = 50;
 pub const CONTRACT_VERSION: &str = "1.0.0";
+
+// ----------------------------------------------------------------
+// Rate Limiting Defaults (Issue #541)
+// ----------------------------------------------------------------
+
+/// Default minimum delay between sensitive admin operations in ledgers.
+/// At ~5 seconds per ledger, 120 ledgers ≈ 10 minutes.
+pub const DEFAULT_RATE_LIMIT_LEDGERS: u64 = 120;
+
+/// Rate limit cooldown for `set_admin` — 1 hour (720 ledgers at 5s).
+pub const ADMIN_CHANGE_COOLDOWN_LEDGERS: u64 = 720;
+
+/// Rate limit cooldown for `upgrade` — 2 hours (1440 ledgers at 5s).
+pub const UPGRADE_COOLDOWN_LEDGERS: u64 = 1440;
+
+/// Rate limit cooldown for economic parameters — 30 minutes (360 ledgers).
+pub const ECONOMIC_PARAM_COOLDOWN_LEDGERS: u64 = 360;

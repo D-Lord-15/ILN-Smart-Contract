@@ -17,7 +17,12 @@ pub mod rate_logic;
 pub mod storage;
 pub mod top_payers;
 use access::*;
+use access::{check_rate_limit, lock_reentrancy, unlock_reentrancy};
 pub mod constants;
+use constants::{
+    ADMIN_CHANGE_COOLDOWN_LEDGERS, DEFAULT_RATE_LIMIT_LEDGERS, ECONOMIC_PARAM_COOLDOWN_LEDGERS,
+    UPGRADE_COOLDOWN_LEDGERS,
+};
 pub mod oracle_interface;
 #[cfg(test)]
 mod tests_discount_rate;
@@ -226,6 +231,7 @@ impl InvoiceLiquidityContract {
     /// Access: Admin only
     pub fn set_admin(env: Env, new_admin: Address) -> Result<(), ContractError> {
         require_admin(&env)?;
+        check_rate_limit(&env, "set_admin", ADMIN_CHANGE_COOLDOWN_LEDGERS)?;
         let old_admin: Address = env.storage().instance().get(&StorageKey::Admin).unwrap();
         env.storage().instance().set(&StorageKey::Admin, &new_admin);
         env.events().publish(
@@ -242,6 +248,7 @@ impl InvoiceLiquidityContract {
     /// Access: Admin only
     pub fn update_fee_rate(env: Env, rate: u32) -> Result<(), ContractError> {
         require_admin(&env)?;
+        check_rate_limit(&env, "update_fee_rate", ECONOMIC_PARAM_COOLDOWN_LEDGERS)?;
 
         let old_rate: u32 = env
             .storage()
@@ -270,6 +277,7 @@ impl InvoiceLiquidityContract {
     /// Access: Admin only
     pub fn update_max_discount(env: Env, rate: u32) -> Result<(), ContractError> {
         require_admin(&env)?;
+        check_rate_limit(&env, "update_max_discount", ECONOMIC_PARAM_COOLDOWN_LEDGERS)?;
 
         let old_rate: u32 = env
             .storage()
@@ -303,6 +311,7 @@ impl InvoiceLiquidityContract {
         distribution_contract: Address,
     ) -> Result<(), ContractError> {
         require_admin(&env)?;
+        check_rate_limit(&env, "set_distribution_contract", DEFAULT_RATE_LIMIT_LEDGERS)?;
 
         let old_distribution_contract: Option<Address> = env
             .storage()
@@ -330,6 +339,7 @@ impl InvoiceLiquidityContract {
     /// Access: Admin only
     pub fn set_price_oracle(env: Env, oracle: Address) -> Result<(), ContractError> {
         require_admin(&env)?;
+        check_rate_limit(&env, "set_price_oracle", DEFAULT_RATE_LIMIT_LEDGERS)?;
         let admin = get_admin(&env).ok_or(ContractError::Unauthorized)?;
         let old_oracle = crate::storage::get_config(&env).and_then(|c| c.price_oracle);
         crate::config::set_price_oracle(&env, &admin, oracle.clone())
@@ -358,6 +368,7 @@ impl InvoiceLiquidityContract {
     /// Access: Admin only
     pub fn set_max_oracle_age(env: Env, max_age_ledgers: u64) -> Result<(), ContractError> {
         require_admin(&env)?;
+        check_rate_limit(&env, "set_max_oracle_age", DEFAULT_RATE_LIMIT_LEDGERS)?;
         let admin = get_admin(&env).ok_or(ContractError::Unauthorized)?;
         let old_max_age = crate::storage::get_config(&env)
             .map(|c| c.max_oracle_age_ledgers)
@@ -393,6 +404,7 @@ impl InvoiceLiquidityContract {
     /// Access: Admin only
     pub fn add_token(env: Env, token: Address, decimals: u32) -> Result<(), ContractError> {
         require_admin(&env)?;
+        check_rate_limit(&env, "add_token", DEFAULT_RATE_LIMIT_LEDGERS)?;
 
         let token_client = token_client(&env, &token);
         let contract_address = env.current_contract_address();
@@ -452,6 +464,7 @@ impl InvoiceLiquidityContract {
     /// Access: Admin only
     pub fn remove_token(env: Env, token: Address) -> Result<(), ContractError> {
         require_admin(&env)?;
+        check_rate_limit(&env, "remove_token", DEFAULT_RATE_LIMIT_LEDGERS)?;
 
         env.storage()
             .persistent()
@@ -552,6 +565,7 @@ impl InvoiceLiquidityContract {
     /// Access: Admin only
     pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), ContractError> {
         require_admin(&env)?;
+        check_rate_limit(&env, "upgrade", UPGRADE_COOLDOWN_LEDGERS)?;
 
         let admin = get_admin(&env).ok_or(ContractError::Unauthorized)?;
 
@@ -1115,7 +1129,10 @@ impl InvoiceLiquidityContract {
         fund_amount: i128,
         require_oracle_verification: bool,
     ) -> Result<(), ContractError> {
+        lock_reentrancy(&env)?;
+
         if is_paused(&env) {
+            unlock_reentrancy(&env);
             return Err(ContractError::ContractPaused);
         }
 
@@ -1326,6 +1343,7 @@ impl InvoiceLiquidityContract {
             },
         );
 
+        unlock_reentrancy(&env);
         Ok(())
     }
 
@@ -1456,11 +1474,15 @@ impl InvoiceLiquidityContract {
     // ------------------------------------------------------------
     /// Access: Submitter only
     pub fn cancel_invoice(env: Env, invoice_id: u64) -> Result<(), ContractError> {
+        lock_reentrancy(&env)?;
+
         if is_paused(&env) {
+            unlock_reentrancy(&env);
             return Err(ContractError::ContractPaused);
         }
 
         if !invoice_exists(&env, invoice_id) {
+            unlock_reentrancy(&env);
             return Err(ContractError::InvoiceNotFound);
         }
 
@@ -1472,6 +1494,9 @@ impl InvoiceLiquidityContract {
             InvoiceStatus::Pending => {}
             InvoiceStatus::PartiallyFunded => {
                 let funders = get_invoice_funders(&env, invoice_id);
+                // CEI: update state before external token transfers
+                invoice.status = InvoiceStatus::Cancelled;
+                save_invoice(&env, &invoice);
                 let token = token_client(&env, &invoice.token);
                 let contract_address = env.current_contract_address();
                 for i in 0..funders.len() {
@@ -1506,6 +1531,7 @@ impl InvoiceLiquidityContract {
             },
         );
 
+        unlock_reentrancy(&env);
         Ok(())
     }
 
@@ -1555,11 +1581,15 @@ impl InvoiceLiquidityContract {
     // ------------------------------------------------------------
     /// Access: Payer only
     pub fn mark_paid(env: Env, invoice_id: u64, amount: i128) -> Result<(), ContractError> {
+        lock_reentrancy(&env)?;
+
         if is_paused(&env) {
+            unlock_reentrancy(&env);
             return Err(ContractError::ContractPaused);
         }
 
         if amount <= 0 {
+            unlock_reentrancy(&env);
             return Err(ContractError::InvalidAmount);
         }
 
@@ -1604,6 +1634,9 @@ impl InvoiceLiquidityContract {
             normalize_usdc_amount(amount)
         };
 
+        // CEI: state update before external call
+        invoice.amount_paid += amount;
+
         // Payer sends partial/full amount to the contract
         token.transfer(&invoice.payer, &contract_address, &normalized_amount);
 
@@ -1629,6 +1662,7 @@ impl InvoiceLiquidityContract {
                     remaining_amount: invoice.amount.saturating_sub(invoice.amount_paid),
                 },
             );
+            unlock_reentrancy(&env);
             return Ok(());
         }
 
@@ -1667,6 +1701,11 @@ impl InvoiceLiquidityContract {
         // LP earnings
         let lp_earned = primary_lp_payout.saturating_sub(primary_lp_funded);
 
+        // CEI: update state before external token transfers
+        invoice.status = InvoiceStatus::Paid;
+
+        save_invoice(&env, &invoice);
+
         // Distribute proportionally to funders
         for i in 0..funders.len() {
             let (funder_addr, fund_amt) = funders.get(i).unwrap();
@@ -1676,11 +1715,6 @@ impl InvoiceLiquidityContract {
                 token.transfer(&contract_address, &funder_addr, &funder_share);
             }
         }
-
-        // ---- Update invoice ----
-        invoice.status = InvoiceStatus::Paid;
-
-        save_invoice(&env, &invoice);
 
         // Increment total paid counter
         increment_total_paid(&env);
@@ -1718,6 +1752,7 @@ impl InvoiceLiquidityContract {
             },
         );
 
+        unlock_reentrancy(&env);
         Ok(())
     }
 
@@ -1764,7 +1799,10 @@ impl InvoiceLiquidityContract {
     // ----------------------------------------------------------------
     /// Access: LP only
     pub fn claim_default(env: Env, funder: Address, invoice_id: u64) -> Result<(), ContractError> {
+        lock_reentrancy(&env)?;
+
         if is_paused(&env) {
+            unlock_reentrancy(&env);
             return Err(ContractError::ContractPaused);
         }
 
@@ -1810,6 +1848,11 @@ impl InvoiceLiquidityContract {
         let token = token_client(&env, &invoice.token);
         let contract_address = env.current_contract_address();
 
+        // CEI: update state before external token transfers
+        invoice.status = InvoiceStatus::Defaulted;
+        save_invoice(&env, &invoice);
+
+        let mut total_refunded = 0;
         let mut total_refunded: i128 = 0;
 
         for i in 0..funders.len() {
@@ -1822,9 +1865,6 @@ impl InvoiceLiquidityContract {
             token.transfer(&contract_address, &funder_addr, &refund);
             total_refunded = total_refunded.saturating_add(refund);
         }
-
-        invoice.status = InvoiceStatus::Defaulted;
-        save_invoice(&env, &invoice);
 
         // --- Update payer reputation ---
         // Snapshot the score BEFORE applying the penalty so appeal_default()
@@ -1857,6 +1897,7 @@ impl InvoiceLiquidityContract {
             },
         );
 
+        unlock_reentrancy(&env);
         Ok(())
     }
 
@@ -1953,6 +1994,8 @@ impl InvoiceLiquidityContract {
     /// * `upheld=false` → reject the appeal; invoice remains Defaulted (status reverts from Appealed).
     /// Access: Admin only
     pub fn resolve_appeal(env: Env, invoice_id: u64, upheld: bool) -> Result<(), ContractError> {
+        require_admin(&env)?;
+
         if !invoice_exists(&env, invoice_id) {
             return Err(ContractError::InvoiceNotFound);
         }
@@ -2089,9 +2132,12 @@ impl InvoiceLiquidityContract {
         resolution_hash: BytesN<32>,
         resolution: u32,
     ) -> Result<(), ContractError> {
+        lock_reentrancy(&env)?;
+
         require_admin(&env)?;
 
         if !invoice_exists(&env, invoice_id) {
+            unlock_reentrancy(&env);
             return Err(ContractError::InvoiceNotFound);
         }
 
@@ -2104,6 +2150,10 @@ impl InvoiceLiquidityContract {
         match resolution {
             1 => {
                 // Upheld: Payer is right.
+                // CEI: update state before external token transfers
+                invoice.status = InvoiceStatus::Cancelled;
+                save_invoice(&env, &invoice);
+
                 // Refund LPs if it was funded.
                 let funders = get_invoice_funders(&env, invoice_id);
                 if !funders.is_empty() {
@@ -2119,7 +2169,6 @@ impl InvoiceLiquidityContract {
                         token.transfer(&contract_address, &funder_addr, &refund);
                     }
                 }
-                invoice.status = InvoiceStatus::Cancelled;
             }
             2 => {
                 // Rejected: Freelancer is right.
@@ -2151,6 +2200,7 @@ impl InvoiceLiquidityContract {
             },
         );
 
+        unlock_reentrancy(&env);
         Ok(())
     }
 
@@ -2294,6 +2344,7 @@ impl InvoiceLiquidityContract {
     /// Access: Admin only
     pub fn set_min_payer_reputation(env: Env, value: u32) -> Result<(), ContractError> {
         require_admin(&env)?;
+        check_rate_limit(&env, "set_min_payer_reputation", ECONOMIC_PARAM_COOLDOWN_LEDGERS)?;
         let updated_by = get_admin(&env).ok_or(ContractError::Unauthorized)?;
         let old_value = get_min_payer_reputation(&env);
         set_min_payer_reputation(&env, value);
