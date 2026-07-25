@@ -532,12 +532,12 @@ impl InvoiceLiquidityContract {
         let invoice_ids = get_submitter_invoices(&env, &submitter);
         let total_invoices = invoice_ids.len();
 
-        let start = page * page_size;
+        let start = page.saturating_mul(page_size);
         if start >= total_invoices {
             return Vec::new(&env);
         }
 
-        let end = (start + page_size).min(total_invoices);
+        let end = start.saturating_add(page_size).min(total_invoices);
         let mut result = Vec::new(&env);
 
         for i in start..end {
@@ -558,12 +558,12 @@ impl InvoiceLiquidityContract {
         let invoice_ids = get_lp_invoices(&env, &lp);
         let total_invoices = invoice_ids.len();
 
-        let start = page * page_size;
+        let start = page.saturating_mul(page_size);
         if start >= total_invoices {
             return Vec::new(&env);
         }
 
-        let end = (start + page_size).min(total_invoices);
+        let end = start.saturating_add(page_size).min(total_invoices);
         let mut result = Vec::new(&env);
 
         for i in start..end {
@@ -1150,7 +1150,11 @@ impl InvoiceLiquidityContract {
             InvoiceStatus::Cancelled => return Err(ContractError::AlreadyCancelled),
         }
 
-        if invoice.amount_funded + fund_amount > invoice.amount {
+        let prospective_funded = invoice
+            .amount_funded
+            .checked_add(fund_amount)
+            .ok_or(ContractError::ArithmeticOverflow)?;
+        if prospective_funded > invoice.amount {
             return Err(ContractError::OverfundingRejected);
         }
 
@@ -1171,7 +1175,7 @@ impl InvoiceLiquidityContract {
             .checked_mul(discount_rate_as_i128(invoice.discount_rate))
             .unwrap_or(0)
             / 10_000;
-        let cost = normalized_fund_amount - fund_discount;
+        let cost = normalized_fund_amount.saturating_sub(fund_discount);
 
         token.transfer(&funder, &contract_address, &cost);
 
@@ -1181,7 +1185,7 @@ impl InvoiceLiquidityContract {
         for i in 0..funders.len() {
             let (addr, amt) = funders.get(i).unwrap();
             if addr == funder {
-                funders.set(i, (addr, amt + fund_amount));
+                funders.set(i, (addr, amt.saturating_add(fund_amount)));
                 found = true;
                 break;
             }
@@ -1192,7 +1196,7 @@ impl InvoiceLiquidityContract {
         save_invoice_funders(&env, invoice_id, &funders);
 
         // --- Update invoice state ---
-        invoice.amount_funded += fund_amount;
+        invoice.amount_funded = prospective_funded;
 
         if invoice.amount_funded == invoice.amount {
             // Fully funded — pay out to freelancer
@@ -1201,7 +1205,7 @@ impl InvoiceLiquidityContract {
                 .checked_mul(discount_rate_as_i128(invoice.discount_rate))
                 .unwrap_or(0)
                 / 10_000;
-            let freelancer_payout = invoice.amount - discount_amount;
+            let freelancer_payout = invoice.amount.saturating_sub(discount_amount);
 
             token.transfer(&contract_address, &invoice.freelancer, &freelancer_payout);
 
@@ -1211,7 +1215,7 @@ impl InvoiceLiquidityContract {
 
             // Boost LP score on successful funding
             let current_lp_score = get_lp_score(&env, &funder);
-            set_lp_score(&env, &funder, current_lp_score + 1);
+            set_lp_score(&env, &funder, current_lp_score.saturating_add(1));
         } else {
             invoice.status = InvoiceStatus::PartiallyFunded;
         }
@@ -1419,7 +1423,7 @@ impl InvoiceLiquidityContract {
                         .checked_mul(discount_rate_as_i128(invoice.discount_rate))
                         .unwrap_or(0)
                         / 10_000;
-                    let refund = fund_amt - fund_discount;
+                    let refund = fund_amt.saturating_sub(fund_discount);
                     token.transfer(&contract_address, &funder_addr, &refund);
                 }
             }
@@ -1521,7 +1525,7 @@ impl InvoiceLiquidityContract {
             InvoiceStatus::Cancelled => return Err(ContractError::AlreadyCancelled),
         }
 
-        let remaining = invoice.amount - invoice.amount_paid;
+        let remaining = invoice.amount.saturating_sub(invoice.amount_paid);
         if amount > remaining {
             return Err(ContractError::OverpaymentRejected);
         }
@@ -1546,7 +1550,10 @@ impl InvoiceLiquidityContract {
         // Payer sends partial/full amount to the contract
         token.transfer(&invoice.payer, &contract_address, &normalized_amount);
 
-        invoice.amount_paid += amount;
+        invoice.amount_paid = invoice
+            .amount_paid
+            .checked_add(amount)
+            .ok_or(ContractError::ArithmeticOverflow)?;
 
         // If not fully paid, save and emit partial event
         if invoice.amount_paid < invoice.amount {
@@ -1562,7 +1569,7 @@ impl InvoiceLiquidityContract {
                     payer: invoice.payer.clone(),
                     amount_paid_now: amount,
                     total_amount_paid: invoice.amount_paid,
-                    remaining_amount: invoice.amount - invoice.amount_paid,
+                    remaining_amount: invoice.amount.saturating_sub(invoice.amount_paid),
                 },
             );
             return Ok(());
@@ -1586,7 +1593,7 @@ impl InvoiceLiquidityContract {
             token.transfer(&contract_address, &admin, &protocol_fee);
         }
 
-        let distribute_amount = invoice.amount - protocol_fee;
+        let distribute_amount = invoice.amount.saturating_sub(protocol_fee);
 
         // Legacy compatibility: use first LP for event emission
         let primary_lp = funders.get(0).unwrap().0.clone();
@@ -1601,7 +1608,7 @@ impl InvoiceLiquidityContract {
             / invoice.amount;
 
         // LP earnings
-        let lp_earned = primary_lp_payout - primary_lp_funded;
+        let lp_earned = primary_lp_payout.saturating_sub(primary_lp_funded);
 
         // Distribute proportionally to funders
         for i in 0..funders.len() {
@@ -1626,7 +1633,7 @@ impl InvoiceLiquidityContract {
 
         // --- Update payer reputation ---
         let current_score = get_payer_score(&env, &invoice.payer);
-        set_payer_score(&env, &invoice.payer, current_score + 1);
+        set_payer_score(&env, &invoice.payer, current_score.saturating_add(1));
 
         // Increment detailed reputation invoices_paid count for both payer and freelancer
         increment_invoices_paid(&env, &invoice.payer);
@@ -1746,7 +1753,7 @@ impl InvoiceLiquidityContract {
         let token = token_client(&env, &invoice.token);
         let contract_address = env.current_contract_address();
 
-        let mut total_refunded = 0;
+        let mut total_refunded: i128 = 0;
 
         for i in 0..funders.len() {
             let (funder_addr, fund_amt) = funders.get(i).unwrap();
@@ -1754,9 +1761,9 @@ impl InvoiceLiquidityContract {
                 .checked_mul(discount_rate_as_i128(invoice.discount_rate))
                 .unwrap_or(0)
                 / 10_000;
-            let refund = fund_amt - fund_discount;
+            let refund = fund_amt.saturating_sub(fund_discount);
             token.transfer(&contract_address, &funder_addr, &refund);
-            total_refunded += refund;
+            total_refunded = total_refunded.saturating_add(refund);
         }
 
         invoice.status = InvoiceStatus::Defaulted;
@@ -1842,7 +1849,7 @@ impl InvoiceLiquidityContract {
 
         // Appeal must be filed within the appeal window after default.
         // A default can only occur after due_date, so we measure from due_date.
-        if now > u64::from(invoice.due_date) + APPEAL_WINDOW_SECONDS {
+        if now > u64::from(invoice.due_date).saturating_add(APPEAL_WINDOW_SECONDS) {
             return Err(ContractError::AppealWindowClosed);
         }
 
@@ -2051,7 +2058,7 @@ impl InvoiceLiquidityContract {
                             .checked_mul(discount_rate_as_i128(invoice.discount_rate))
                             .unwrap_or(0)
                             / 10_000;
-                        let refund = fund_amt - fund_discount;
+                        let refund = fund_amt.saturating_sub(fund_discount);
                         token.transfer(&contract_address, &funder_addr, &refund);
                     }
                 }
@@ -2110,7 +2117,9 @@ impl InvoiceLiquidityContract {
 
         let now_ledger = env.ledger().sequence();
 
-        if u64::from(now_ledger) < u64::from(dispute.disputed_at) + config.dispute_timeout_ledgers {
+        if u64::from(now_ledger)
+            < u64::from(dispute.disputed_at).saturating_add(config.dispute_timeout_ledgers)
+        {
             return Err(ContractError::Unauthorized); // Or a more specific error like TimeoutNotReached
         }
 
@@ -2281,7 +2290,7 @@ impl InvoiceLiquidityContract {
 
     /// Access: Anyone
     pub fn get_invoice_count(env: Env) -> u64 {
-        crate::invoice::read_next_invoice_id(&env) - 1
+        crate::invoice::read_next_invoice_id(&env).saturating_sub(1)
     }
 
     // ----------------------------------------------------------------
@@ -2465,11 +2474,11 @@ fn validate_invoice_terms_for_min(
         return Err(ContractError::InvalidDueDate);
     }
 
-    if due_date < now + MIN_INVOICE_DURATION {
+    if due_date < now.saturating_add(MIN_INVOICE_DURATION) {
         return Err(ContractError::DueDateTooSoon);
     }
 
-    if due_date > now + MAX_INVOICE_DURATION {
+    if due_date > now.saturating_add(MAX_INVOICE_DURATION) {
         return Err(ContractError::DueDateTooFar);
     }
 

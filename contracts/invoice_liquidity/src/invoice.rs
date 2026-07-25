@@ -458,19 +458,19 @@ pub fn set_reputation(env: &Env, profile: &ReputationProfile) {
 
 pub fn increment_invoices_submitted(env: &Env, address: &Address) {
     let mut profile = get_reputation(env, address);
-    profile.invoices_submitted += 1;
+    profile.invoices_submitted = profile.invoices_submitted.saturating_add(1);
     set_reputation(env, &profile);
 }
 
 pub fn increment_invoices_paid(env: &Env, address: &Address) {
     let mut profile = get_reputation(env, address);
-    profile.invoices_paid += 1;
+    profile.invoices_paid = profile.invoices_paid.saturating_add(1);
     set_reputation(env, &profile);
 }
 
 pub fn increment_invoices_defaulted(env: &Env, address: &Address) {
     let mut profile = get_reputation(env, address);
-    profile.invoices_defaulted += 1;
+    profile.invoices_defaulted = profile.invoices_defaulted.saturating_add(1);
     set_reputation(env, &profile);
 }
 
@@ -698,7 +698,7 @@ pub fn add_volume(env: &Env, token: &Address, amount: i128) {
         .unwrap_or(0);
     env.storage().persistent().set(
         &StorageKey::TokenVolume(token.clone()),
-        &(current_per_token + amount),
+        &current_per_token.saturating_add(amount),
     );
 
     // Preserve legacy aggregate token counters for compatibility.
@@ -711,7 +711,7 @@ pub fn add_volume(env: &Env, token: &Address, amount: i128) {
                 .unwrap_or(0);
             env.storage()
                 .persistent()
-                .set(&StorageKey::TotalVolumeXlm, &(current + amount));
+                .set(&StorageKey::TotalVolumeXlm, &current.saturating_add(amount));
             return;
         }
     }
@@ -732,7 +732,7 @@ pub fn add_volume(env: &Env, token: &Address, amount: i128) {
                     .unwrap_or(0);
                 env.storage()
                     .persistent()
-                    .set(&StorageKey::TotalVolumeUsdc, &(current + amount));
+                    .set(&StorageKey::TotalVolumeUsdc, &current.saturating_add(amount));
             }
         }
     }
@@ -745,7 +745,7 @@ pub fn add_volume(env: &Env, token: &Address, amount: i128) {
                 .unwrap_or(0);
             env.storage()
                 .persistent()
-                .set(&StorageKey::TotalVolumeXlm, &(current + amount));
+                .set(&StorageKey::TotalVolumeXlm, &current.saturating_add(amount));
         }
     }
     if token_list.len() > 2 {
@@ -758,7 +758,7 @@ pub fn add_volume(env: &Env, token: &Address, amount: i128) {
                     .unwrap_or(0);
                 env.storage()
                     .persistent()
-                    .set(&StorageKey::TotalVolumeEurc, &(current + amount));
+                    .set(&StorageKey::TotalVolumeEurc, &current.saturating_add(amount));
             }
         }
     }
@@ -772,7 +772,7 @@ pub fn increment_total_invoices(env: &Env) {
         .unwrap_or(0);
     env.storage()
         .persistent()
-        .set(&StorageKey::TotalInvoices, &(current + 1));
+        .set(&StorageKey::TotalInvoices, &current.saturating_add(1));
 }
 
 pub fn increment_total_funded(env: &Env) {
@@ -783,7 +783,7 @@ pub fn increment_total_funded(env: &Env) {
         .unwrap_or(0);
     env.storage()
         .persistent()
-        .set(&StorageKey::TotalFunded, &(current + 1));
+        .set(&StorageKey::TotalFunded, &current.saturating_add(1));
 }
 
 pub fn increment_total_paid(env: &Env) {
@@ -794,7 +794,7 @@ pub fn increment_total_paid(env: &Env) {
         .unwrap_or(0);
     env.storage()
         .persistent()
-        .set(&StorageKey::TotalPaid, &(current + 1));
+        .set(&StorageKey::TotalPaid, &current.saturating_add(1));
 }
 
 // (add_volume is implemented earlier using the configured token addresses)
