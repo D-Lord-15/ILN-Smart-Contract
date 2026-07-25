@@ -86,6 +86,12 @@ export interface ContractStats {
     /** Total volume normalized to USD (depends on oracle price feed). */
     totalVolumeUsdNormalized: bigint;
 }
+export interface InsurancePoolInfo {
+    poolBalance: bigint;
+    coverage: bigint;
+    isEnrolled: boolean;
+    premiumsPaid: bigint;
+}
 export type SupportedToken = 'USDC' | 'EURC' | 'XLM' | string;
 export interface TokenConfig {
     address: string;
