@@ -134,3 +134,8 @@ export type {
   SorobanOperation,
 } from "./utils/feeCalculator.js";
 export { getTokenDecimals } from "./methods/getTokenDecimals.js";
+export {
+  buildBatchTransaction,
+  submitBatchTransaction,
+} from "./methods/batch.js";
+export type { BatchContractCall, BatchTransactionOptions, BatchTransactionResult } from "./methods/batch.js";

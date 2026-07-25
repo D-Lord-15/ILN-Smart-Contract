@@ -118,6 +118,130 @@ Safe harbor does not cover social engineering, phishing, physical attacks, spam,
 5. Coordinate disclosure with the reporter.
 6. Publish advisory notes when appropriate, including affected versions, impact, fixed versions, and user actions.
 
+## Comprehensive Security Audit Checklist
+
+This checklist guides auditors and maintainers through a structured security review of contract, SDK, and infrastructure changes.
+
+### Soroban Contract Security Audit
+
+#### Authorization & Access Control
+- [ ] All state-mutating functions explicitly check caller identity or role via `require_auth()`.
+- [ ] Administrative functions (pause, fee updates, admin changes) are protected by a single-signature or multisig gate.
+- [ ] LP and payer operations respect role isolation (LP cannot approve themselves without queue resolution, payers cannot modify terms).
+- [ ] Insurance pool admin role is restricted to the configured contract address; no user can claim without admin authorization.
+- [ ] All Soroban SDK method calls (`invoke_contract`, `transfer`, `invoke_host_function`) are preceded by caller validation.
+- **Audit command**: `cargo test --manifest-path contracts/invoice_liquidity/Cargo.toml -- --nocapture | grep -E "(auth|unauthorized)"`
+
+#### Arithmetic & Overflow
+- [ ] All arithmetic operations that could overflow use checked methods or explicit bounds.
+- [ ] Discount calculations clamp discount rate between 0 and max (configurable, default 10000 bps).
+- [ ] LP yield and LP payout are bounded by invoice amount; no calculation can produce negative or zero-exceeding payouts.
+- [ ] Premium and balance arithmetic in the insurance pool uses checked addition/subtraction.
+- [ ] Score calculations bound results to 0-100 range; no overflow from weighting.
+- **Audit command**: `cargo clippy --manifest-path contracts/invoice_liquidity/Cargo.toml -- -W clippy::arithmetic_side_effects`
+
+#### Reentrancy & Cross-Contract Safety
+- [ ] No external contract calls are made before state updates (checks-effects-interactions pattern).
+- [ ] Invoice state transitions are atomic; partial updates roll back on error.
+- [ ] LP yield claims and default refunds are processed in a single transaction; split claims are not possible.
+- [ ] Recursive contract calls (e.g., nested `invoke_contract` in event handlers) are not made.
+- [ ] Insurance pool claims cannot be re-triggered for the same invoice (`is_claimed` prevents double-processing).
+- **Audit command**: `grep -r "invoke_contract" contracts/ | grep -v "tests" | wc -l`
+
+#### Storage & State Collision
+- [ ] Storage key structure avoids collisions (enums with address/ID suffixes for per-user keys).
+- [ ] Storage lifetime (instance vs persistent) is appropriate (admins/config in instance; per-user in persistent).
+- [ ] Ledger expiration is configured (TTL for persistent keys, instance keys are immortal).
+- [ ] No parallel mutation of the same invoice state during queue resolution or funding.
+- [ ] Stale storage reads are prevented by checking expected invariants (e.g., invoice must exist before update).
+- **Audit command**: `rg "DataKey::" contracts/invoice_liquidity/src/ | sort | uniq -c | sort -rn`
+
+#### Front-Running & Oracle Risks
+- [ ] Discount rate calculations use a configured static max, not real-time oracle prices (oracle reads are not live pricing).
+- [ ] Reputation score calculations are deterministic based on historical invoice state, not time-dependent.
+- [ ] No timestamp-dependent price or exchange-rate assumptions in accounting (all payments are in native tokens).
+- [ ] Fund queue resolution selects the highest-reputation LP in a single atomic transaction; no two LPs can be selected for the same invoice.
+- [ ] Default detection does not rely on external oracle timestamps; invoices expire by absolute `dueDate`.
+- **Audit command**: `grep -r "env.ledger\(\).timestamp\(\)" contracts/ | wc -l`
+
+#### Oracle Integration & Manipulation
+- [ ] Oracle calls (if any) are wrapped in error handlers that degrade gracefully.
+- [ ] Pulled prices are checked against sane bounds (e.g., XLM price bounded 0.05-5 USD for testnet).
+- [ ] Oracle endpoint changes are gated by governance (ProposalAction::UpdateOracle requires proposal + vote).
+- [ ] Prices used in discount or settlement math are from a single consistent oracle call per transaction.
+- **Audit command**: `grep -r "get_price\|oracle\|price_feed" contracts/ --include="*.rs" | grep -v "test" | wc -l`
+
+#### Upgrade & Migration Safety
+- [ ] Contract upgrade requires admin authorization via `set_admin()` and wasm upload proposal.
+- [ ] Storage schema is versioned; upgrade code validates old state before mutation.
+- [ ] No breaking changes to storage keys or enum discriminants without a migration step.
+- [ ] Invoices in-flight during an upgrade maintain their state; no data is lost.
+- [ ] Paused contracts cannot be upgraded; admin must explicitly unpause post-upgrade and validate state.
+- **Audit command**: `grep -r "Migration\|Upgrade\|version" contracts/invoice_liquidity/src/ --include="*.rs" | head -20`
+
+#### Settlement & Accounting
+- [ ] Invoice amounts, LP yields, LP payouts, and default refunds sum to zero (conservation of funds).
+- [ ] Partial payments increment `amountPaid` but do not change `amountFunded`; funding and payment are independent.
+- [ ] Discount rate logic is deterministic: `effectiveYieldBps = max(discountRate, minYield) * (daysUntilDue / 365)` (no time-dependent rounding).
+- [ ] Default compensation is bounded by coverage cap and pool balance.
+- [ ] All settlement math uses integer arithmetic (stroops); decimal representation is in SDK, not contract.
+- **Audit command**: `grep -A 10 "amountPaid\|amountFunded\|yield\|payout" contracts/invoice_liquidity/src/settlement.rs 2>/dev/null | head -30`
+
+#### Emergency & Governance
+- [ ] Pause/unpause operations can be called only by admin; no unpause delay.
+- [ ] Governance proposals require a vote quorum and timeout; no single vote can pass.
+- [ ] Rejected proposals cannot be re-executed or re-voted on.
+- [ ] Admin changes emit an event; no silent handoff.
+- [ ] Paused invoices cannot be paid, funded, or claimed; paused pool cannot process new premiums.
+- **Audit command**: `grep -r "pause\|unpause" contracts/ --include="*.rs" | grep -v "test" | wc -l`
+
+### SDK Security Audit
+
+#### Transaction Construction & Signing
+- [ ] Batch operations (if implemented) construct a single Soroban transaction envelope with multiple invoke operations.
+- [ ] Network passphrase is validated against the RPC server before signing.
+- [ ] XDR encoding of contract arguments (addresses, amounts, timestamps) is verified by decoding and re-checking.
+- [ ] Signer is stored in client config and passed consistently; no global signer state.
+
+#### Client-Side Validation
+- [ ] Addresses are validated as valid Stellar G… format before submission.
+- [ ] Amounts are checked for non-negative values and no overflow.
+- [ ] Timestamps are reasonable (not in the distant past or future).
+- [ ] Contract ID is validated as a Soroban contract address (not an account).
+
+### Automated Checks
+
+Run these commands regularly to catch common issues:
+
+```bash
+# Rust formatting and linting
+cd contracts && cargo fmt --check && cargo clippy -- -D warnings
+
+# Run all contract tests with coverage
+cargo test --manifest-path contracts/invoice_liquidity/Cargo.toml --release
+
+# Security-focused clippy rules
+cargo clippy --manifest-path contracts/invoice_liquidity/Cargo.toml -- \
+  -W clippy::arithmetic_side_effects \
+  -W clippy::panicking_unwrap \
+  -W clippy::unimplemented
+
+# Check for common Soroban security issues
+rg "unwrap\(\)|expect\(" contracts/ --type rust | grep -v test | wc -l
+rg "env.events().publish\(" contracts/ --type rust | wc -l
+rg "require_auth\(\)" contracts/ --type rust | grep -v test | wc -l
+
+# Ensure all state mutations are guarded
+rg "storage.*set\(" contracts/ --type rust | wc -l
+rg "require_auth|assert" contracts/ --type rust | grep -v test | wc -l
+
+# Validate SDK type definitions
+cd sdk && npm run build && npm run test
+
+# Lint and format TypeScript
+cd sdk && npm run fmt:check && npm run lint
+```
+
 ## Security Checklist For Releases
 
 - Contract changes include authorization, storage layout, and state-transition review.
@@ -125,4 +249,5 @@ Safe harbor does not cover social engineering, phishing, physical attacks, spam,
 - Indexer changes include input-validation and API-abuse review.
 - Notifications changes include HMAC, SSRF, rate-limit, and circuit-breaker tests.
 - CI confirms Rust tests, Node tests, formatting, linting where available, and coverage thresholds.
+- All items in the [Comprehensive Security Audit Checklist](#comprehensive-security-audit-checklist) above are reviewed before mainnet release.
 - Mainnet releases require the [Mainnet Launch Checklist](mainnet-launch-checklist.md) to be signed off.
