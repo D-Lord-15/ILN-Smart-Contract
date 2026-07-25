@@ -49,11 +49,12 @@ use soroban_sdk::{
 
 use crate::storage::get_admin;
 use events::{
-    AdminChanged, AppealResolved, ContractPaused, ContractUnpaused, ContractUpgraded,
-    DefaultAppealed, DisputeResolved, FundQueueResolved, FundRequested, InvoiceCancelled,
-    InvoiceDefaulted, InvoiceDisputed, InvoiceExpired, InvoiceFunded, InvoicePaid,
-    InvoicePartiallyPaid, InvoiceSubmitted, InvoiceTokenChanged, InvoiceTransferred,
-    InvoiceUpdated, LPPositionTransferred, ParameterUpdated, TokenAdded, TokenRemoved,
+    AdminChanged, AppealResolved, ContractInitialized, ContractPaused, ContractUnpaused,
+    ContractUpgraded, DefaultAppealed, DisputeResolved, DistributionContractUpdated,
+    FundQueueResolved, FundRequested, InvoiceCancelled, InvoiceDefaulted, InvoiceDisputed,
+    InvoiceExpired, InvoiceFunded, InvoicePaid, InvoicePartiallyPaid, InvoiceSubmitted,
+    InvoiceTokenChanged, InvoiceTransferred, InvoiceUpdated, LPPositionTransferred,
+    ParameterUpdated, PriceOracleUpdated, TokenAdded, TokenRemoved,
 };
 use invoice::{
     add_invoice_to_lp, add_invoice_to_submitter, add_volume, get_appeal, get_contract_stats,
@@ -199,6 +200,17 @@ impl InvoiceLiquidityContract {
             .persistent()
             .set(&crate::storage::DataKey::TokenList, &list);
 
+        env.events().publish(
+            (Symbol::new(&env, "initialized"), admin.clone()),
+            ContractInitialized {
+                admin,
+                usdc_token: list.get(0).unwrap(),
+                xlm_token: list.get(1).unwrap(),
+                eurc_token: list.get(2).unwrap(),
+                timestamp: env.ledger().timestamp(),
+            },
+        );
+
         Ok(())
     }
 
@@ -292,9 +304,26 @@ impl InvoiceLiquidityContract {
     ) -> Result<(), ContractError> {
         require_admin(&env)?;
 
+        let old_distribution_contract: Option<Address> = env
+            .storage()
+            .instance()
+            .get(&StorageKey::DistributionContract);
         env.storage()
             .instance()
             .set(&StorageKey::DistributionContract, &distribution_contract);
+
+        let updated_by = get_admin(&env).ok_or(ContractError::Unauthorized)?;
+        env.events().publish(
+            (
+                Symbol::new(&env, "distribution_contract_updated"),
+                updated_by.clone(),
+            ),
+            DistributionContractUpdated {
+                old_distribution_contract,
+                new_distribution_contract: distribution_contract,
+                updated_by,
+            },
+        );
         Ok(())
     }
 
@@ -302,8 +331,18 @@ impl InvoiceLiquidityContract {
     pub fn set_price_oracle(env: Env, oracle: Address) -> Result<(), ContractError> {
         require_admin(&env)?;
         let admin = get_admin(&env).ok_or(ContractError::Unauthorized)?;
-        crate::config::set_price_oracle(&env, &admin, oracle)
+        let old_oracle = crate::storage::get_config(&env).and_then(|c| c.price_oracle);
+        crate::config::set_price_oracle(&env, &admin, oracle.clone())
             .map_err(|_| ContractError::Unauthorized)?;
+
+        env.events().publish(
+            (Symbol::new(&env, "price_oracle_updated"), admin.clone()),
+            PriceOracleUpdated {
+                old_oracle,
+                new_oracle: oracle,
+                updated_by: admin,
+            },
+        );
         Ok(())
     }
 
@@ -320,8 +359,26 @@ impl InvoiceLiquidityContract {
     pub fn set_max_oracle_age(env: Env, max_age_ledgers: u64) -> Result<(), ContractError> {
         require_admin(&env)?;
         let admin = get_admin(&env).ok_or(ContractError::Unauthorized)?;
+        let old_max_age = crate::storage::get_config(&env)
+            .map(|c| c.max_oracle_age_ledgers)
+            .unwrap_or(DEFAULT_MAX_ORACLE_AGE_LEDGERS);
         crate::config::set_max_oracle_age(&env, &admin, max_age_ledgers)
             .map_err(|_| ContractError::Unauthorized)?;
+
+        let pn = Symbol::new(&env, "max_oracle_age_ledgers");
+        env.events().publish(
+            (
+                Symbol::new(&env, "parameter_updated"),
+                pn.clone(),
+                admin.clone(),
+            ),
+            ParameterUpdated {
+                param_name: pn,
+                old_value: old_max_age as i128,
+                new_value: max_age_ledgers as i128,
+                updated_by: admin,
+            },
+        );
         Ok(())
     }
 

@@ -184,6 +184,38 @@ pub struct ContractUpgraded {
     pub timestamp: u64,
 }
 
+/// Emitted when the admin sets/changes the distribution contract address
+/// (Issue #538: event emission completeness audit).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct DistributionContractUpdated {
+    pub old_distribution_contract: Option<Address>,
+    pub new_distribution_contract: Address,
+    pub updated_by: Address,
+}
+
+/// Emitted when the admin sets/changes the price oracle address
+/// (Issue #538: event emission completeness audit).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct PriceOracleUpdated {
+    pub old_oracle: Option<Address>,
+    pub new_oracle: Address,
+    pub updated_by: Address,
+}
+
+/// Emitted once, when the contract is initialised
+/// (Issue #538: event emission completeness audit).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ContractInitialized {
+    pub admin: Address,
+    pub usdc_token: Address,
+    pub eurc_token: Address,
+    pub xlm_token: Address,
+    pub timestamp: u64,
+}
+
 // ── Issue #36: appeal_default events ──────────────────────────────────────────
 
 /// Emitted when a payer files an appeal against an unfair default marking.
