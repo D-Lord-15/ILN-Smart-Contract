@@ -95,6 +95,7 @@ export class ILNClient {
   private _getPremiumsPaid?: typeof import("./methods/insurance.js").getPremiumsPaid;
   private _getInsurancePoolInfo?: typeof import("./methods/insurance.js").getInsurancePoolInfo;
   private _getDistributionAccrual?: typeof import("./methods/distribution.js").getDistributionAccrual;
+  private _submitBatchTransaction?: typeof import("./methods/batch.js").submitBatchTransaction;
 
   constructor(config: ILNClientConfig) {
     this.rpc = new SorobanRpc.Server(config.rpcUrl);
@@ -322,6 +323,50 @@ export class ILNClient {
     }
     return this._getDistributionAccrual(this.rpc, distributionContractId, participantAddress, this.networkPassphrase);
   }
+
+  /**
+   * Submit a batch of contract calls as a single atomic transaction.
+   *
+   * Combines multiple contract invocations into one transaction, improving UX
+   * and reducing gas costs. All operations succeed or fail together.
+   *
+   * Requires a signer for automatic submission. Returns the transaction hash
+   * if successfully submitted to the network.
+   *
+   * @param calls - Array of contract call specifications
+   * @returns Transaction hash submitted to the network
+   *
+   * @throws If the batch simulation fails or submission is rejected
+   *
+   * @example
+   * ```ts
+   * const txHash = await client.submitBatchTransaction([
+   *   {
+   *     contractId: client.contractId,
+   *     method: "submit_invoice",
+   *     args: [freelancer, payer, token, amount, dueDate, discountRate],
+   *   },
+   *   {
+   *     contractId: client.contractId,
+   *     method: "join_fund_queue",
+   *     args: [invoiceId],
+   *   },
+   * ]);
+   * ```
+   */
+  async submitBatchTransaction(
+    calls: import("./methods/batch.js").BatchContractCall[]
+  ): Promise<string> {
+    if (!this.signer) {
+      throw new Error("Batch transaction submission requires a signer");
+    }
+    if (!this._submitBatchTransaction) {
+      this._submitBatchTransaction = (await import("./methods/batch.js")).submitBatchTransaction;
+    }
+    return this._submitBatchTransaction(calls, this.rpc, this.signer.getPublicKey(), this.signer, {
+      networkPassphrase: this.networkPassphrase,
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -392,6 +437,10 @@ class ILNSingleton {
 
   async getDistributionAccrual(distributionContractId: string, participantAddress: string) {
     return this.client.getDistributionAccrual(distributionContractId, participantAddress);
+  }
+
+  async submitBatchTransaction(calls: import("./methods/batch.js").BatchContractCall[]) {
+    return this.client.submitBatchTransaction(calls);
   }
 }
 

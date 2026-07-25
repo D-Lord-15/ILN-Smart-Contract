@@ -34,6 +34,11 @@ The protocol administrator.
 ### Governance
 Reserved for future DAO or multisig control over core parameter changes. Currently delegates to Admin functionality.
 
+### Insurance Pool Admin
+Authorized to process default claims against the insurance pool (typically the liquidity contract).
+- **Can**: File claims on behalf of defaulted invoices, trigger compensation payouts, and query pool state.
+- **Cannot**: Modify enrollment, adjust premium rates, or drain the pool directly.
+
 ### Anyone
 Publicly accessible read or state-transition functions that do not require specific authorization.
 - **Can**: Read contract stats, query scores, resolve fund queues, and expire timed-out invoices.
@@ -71,8 +76,26 @@ Publicly accessible read or state-transition functions that do not require speci
 | `suggested_discount_rate` | Anyone | Calculates discount rate based on score |
 | `get_invoice` | Anyone | Reads invoice details |
 | `get_invoice_count` | Anyone | Reads total invoice count |
+| `insurance_pool_enroll` | LP | Opts into default-protection insurance |
+| `insurance_pool_deposit_premium` | LP | Pays premium to pool (auto-enrolls) |
+| `insurance_pool_claim` | Insurance Pool Admin | Files a claim for a defaulted invoice |
+| `insurance_pool_get_balance` | Anyone | Reads current pool balance |
+| `insurance_pool_get_coverage` | Anyone | Reads per-claim coverage cap |
+| `insurance_pool_is_enrolled` | Anyone | Checks LP enrollment status |
+| `insurance_pool_get_premiums_paid` | Anyone | Reads cumulative premiums by LP |
 
-## 4. Security Notes
+## 4. Insurance Pool Access Control
+
+The insurance pool operates as a separate contract with its own authorization model:
+
+- **Pool Enrollment**: LPs call `enroll()` or implicitly auto-enroll on first premium deposit.
+- **Premium Deposits**: Any LP can call `deposit_premium()` to add funds to the pool (requires LP signature).
+- **Claims**: Only the configured pool admin (the liquidity contract in production) can call `claim()` to trigger compensation for a confirmed default.
+- **Queries**: Pool state (balance, coverage, enrollment, premiums) is publicly readable to support analytics and integrations.
+
+This isolation ensures that the insurance pool cannot be drained except through claims authorized by the main contract, and that no single LP can block others from withdrawing coverage.
+
+## 5. Security Notes
 
 - **Principle of Least Privilege**: Each instruction relies only on the minimal authority required to execute.
 - **Centralized Verification**: Extracted inline logic ensures uniform verification logic and robust testing.
