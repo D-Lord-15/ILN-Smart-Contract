@@ -338,17 +338,69 @@ export async function getProposal(
 }
 
 /**
+ * Check if an address has voted on a proposal (read-only; no signer required).
+ * @param voter The address to check
+ * @param proposalId The proposal ID
+ * @returns true if the address has voted, false otherwise
+ */
+export async function hasVoted(
+  server: SorobanRpc.Server,
+  contractAddress: string,
+  voter: string,
+  proposalId: bigint,
+  sourceAccount: Account,
+  networkPassphrase: string
+): Promise<boolean> {
+  const contract = new Contract(contractAddress);
+  const op = contract.call(
+    "has_voted",
+    nativeToScVal(voter, { type: "address" }),
+    nativeToScVal(proposalId, { type: "u64" })
+  );
+
+  const tx = new TransactionBuilder(sourceAccount, {
+    fee: BASE_FEE,
+    networkPassphrase,
+  })
+    .addOperation(op)
+    .setTimeout(30)
+    .build();
+
+  const sim = await retry(() => server.simulateTransaction(tx));
+  if (SorobanRpc.Api.isSimulationError(sim)) {
+    throw GovernanceContractError.fromError(sim.error);
+  }
+  if (!sim.result?.retval) {
+    return false;
+  }
+
+  return scValToNative(sim.result.retval) as boolean;
+}
+
+/**
  * List proposals, optionally filtered by status and/or proposer (read-only).
+ * @param status Optional proposal status to filter by
+ * @param page Page number (0-indexed, defaults to 0)
+ * @param pageSize Results per page (defaults to 20, max 20)
+ * @param filter Optional additional client-side filters (proposer)
  */
 export async function listProposals(
   server: SorobanRpc.Server,
   contractAddress: string,
   sourceAccount: Account,
   networkPassphrase: string,
+  status?: ProposalStatus,
+  page: number = 0,
+  pageSize: number = 20,
   filter?: ProposalFilter
 ): Promise<Proposal[]> {
   const contract = new Contract(contractAddress);
-  const op = contract.call("list_proposals");
+  const op = contract.call(
+    "list_proposals",
+    nativeToScVal(status, { type: "option" }),
+    nativeToScVal(page, { type: "u32" }),
+    nativeToScVal(pageSize, { type: "u32" })
+  );
 
   const tx = new TransactionBuilder(sourceAccount, {
     fee: BASE_FEE,
@@ -369,9 +421,6 @@ export async function listProposals(
   const rawArr = scValToNative(sim.result.retval) as Record<string, unknown>[];
   let proposals = rawArr.map(raw => decodeGovernanceProposal(raw as Record<string, unknown>));
 
-  if (filter?.status) {
-    proposals = proposals.filter(p => p.status === filter.status);
-  }
   if (filter?.proposer) {
     proposals = proposals.filter(p => p.proposer === filter.proposer);
   }

@@ -56,6 +56,7 @@ export {
   executeProposal,
   getProposal,
   listProposals,
+  hasVoted,
   delegateVotes,
   undelegateVotes,
   vetoProposal,
