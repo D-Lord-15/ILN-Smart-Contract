@@ -66,26 +66,6 @@ fn freelancer_can_cancel_pending() {
 }
 
 #[test]
-fn non_freelancer_cannot_cancel_smoke() {
-    let env = Env::default();
-    let (client, token, freelancer, payer) = setup_test(&env);
-
-    let _id = client.submit_invoice(
-        &freelancer,
-        &payer,
-        &1_000_000,
-        &(env.ledger().timestamp() + 100000),
-        &100,
-        &token,
-        &ReferralCode::None,
-    );
-
-    // In Soroban tests with mock_all_auths, the access-control failure path
-    // is exhaustively covered in tests_auth.rs. We just smoke-test the call
-    // shape here to ensure the signature change did not regress.
-}
-
-#[test]
 fn cannot_cancel_funded_invoice() {
     let env = Env::default();
     let (client, token, freelancer, payer) = setup_test(&env);
