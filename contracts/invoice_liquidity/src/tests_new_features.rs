@@ -750,6 +750,168 @@ fn test_batch_submit_mixed_valid_and_invalid_token() {
     assert_eq!(result, Err(Ok(ContractError::Unauthorized)));
 }
 
+// ================================================================
+// Tests for transfer_lp_position with various funding states (#479)
+// ================================================================
+
+#[test]
+fn test_transfer_lp_position_rejects_non_funded_invoice() {
+    let t = setup();
+    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
+    let invoice_id = t.contract.submit_invoice(
+        &t.freelancer,
+        &t.payer,
+        &INVOICE_AMOUNT,
+        &due_date,
+        &DISCOUNT_RATE,
+        &t.token.address,
+        &ReferralCode::None,
+    );
+
+    let new_lp = Address::generate(&t.env);
+    let result = t.contract.try_transfer_lp_position(&invoice_id, &new_lp);
+    assert_eq!(result, Err(Ok(ContractError::NotFunded)));
+}
+
+#[test]
+fn test_transfer_lp_position_rejects_partially_funded_invoice() {
+    let t = setup();
+    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
+    let invoice_id = t.contract.submit_invoice(
+        &t.freelancer,
+        &t.payer,
+        &INVOICE_AMOUNT,
+        &due_date,
+        &DISCOUNT_RATE,
+        &t.token.address,
+        &ReferralCode::None,
+    );
+
+    // Partially fund the invoice (half the amount).
+    let partial_amount = INVOICE_AMOUNT / 2;
+    t.contract
+        .fund_invoice(&t.funder, &invoice_id, &partial_amount, &false);
+
+    let invoice = t.contract.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::PartiallyFunded);
+
+    let new_lp = Address::generate(&t.env);
+    let result = t.contract.try_transfer_lp_position(&invoice_id, &new_lp);
+    assert_eq!(result, Err(Ok(ContractError::NotFunded)));
+}
+
+#[test]
+fn test_transfer_lp_position_succeeds_for_fully_funded_invoice() {
+    let t = setup();
+    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
+    let invoice_id = t.contract.submit_invoice(
+        &t.freelancer,
+        &t.payer,
+        &INVOICE_AMOUNT,
+        &due_date,
+        &DISCOUNT_RATE,
+        &t.token.address,
+        &ReferralCode::None,
+    );
+
+    t.contract
+        .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &false);
+
+    let invoice = t.contract.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Funded);
+
+    let new_lp = Address::generate(&t.env);
+    t.contract.transfer_lp_position(&invoice_id, &new_lp);
+
+    let updated = t.contract.get_invoice(&invoice_id);
+    assert_eq!(updated.funder, Some(new_lp));
+}
+
+#[test]
+fn test_transfer_lp_position_rejects_same_lp() {
+    let t = setup();
+    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
+    let invoice_id = t.contract.submit_invoice(
+        &t.freelancer,
+        &t.payer,
+        &INVOICE_AMOUNT,
+        &due_date,
+        &DISCOUNT_RATE,
+        &t.token.address,
+        &ReferralCode::None,
+    );
+
+    t.contract
+        .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &false);
+
+    // Transfer to the same LP should fail.
+    let result = t.contract.try_transfer_lp_position(&invoice_id, &t.funder);
+    assert_eq!(result, Err(Ok(ContractError::Unauthorized)));
+}
+
+#[test]
+fn test_transfer_lp_position_updates_funders_list() {
+    let t = setup();
+    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
+    let invoice_id = t.contract.submit_invoice(
+        &t.freelancer,
+        &t.payer,
+        &INVOICE_AMOUNT,
+        &due_date,
+        &DISCOUNT_RATE,
+        &t.token.address,
+        &ReferralCode::None,
+    );
+
+    t.contract
+        .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &false);
+
+    let new_lp = Address::generate(&t.env);
+    t.contract.transfer_lp_position(&invoice_id, &new_lp);
+
+    // Verify old LP's invoices list no longer contains this invoice.
+    let old_lp_invoices = t.contract.list_invoices_by_lp(&t.funder, &0, &50);
+    assert!(
+        old_lp_invoices.iter().all(|inv| inv.id != invoice_id),
+        "old LP should not have this invoice in their list"
+    );
+
+    // Verify new LP's invoices list contains this invoice.
+    let new_lp_invoices = t.contract.list_invoices_by_lp(&new_lp, &0, &50);
+    assert!(
+        new_lp_invoices.iter().any(|inv| inv.id == invoice_id),
+        "new LP should have this invoice in their list"
+    );
+}
+
+#[test]
+fn test_transfer_lp_position_emits_event() {
+    let t = setup();
+    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
+    let invoice_id = t.contract.submit_invoice(
+        &t.freelancer,
+        &t.payer,
+        &INVOICE_AMOUNT,
+        &due_date,
+        &DISCOUNT_RATE,
+        &t.token.address,
+        &ReferralCode::None,
+    );
+
+    t.contract
+        .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &false);
+
+    let events_before = t.env.events().all().len();
+    let new_lp = Address::generate(&t.env);
+    t.contract.transfer_lp_position(&invoice_id, &new_lp);
+
+    let events = t.env.events().all();
+    assert!(
+        events.len() > events_before,
+        "expected at least one new event"
+    );
+}
+
 // ── convert_invoice_token tests (#478) ──────────────────────────────────────
 
 #[test]
