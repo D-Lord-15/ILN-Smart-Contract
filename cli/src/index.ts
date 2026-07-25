@@ -22,6 +22,7 @@ import { makeAppealCommand } from "./commands/appeal.js";
 import { makeReferralCommand } from "./commands/referral.js";
 import { makeInsuranceCommand } from "./commands/insurance.js";
 import { makeDistributionCommand } from "./commands/distribution.js";
+import { makeBatchCommand } from "./commands/batch.js";
 
 const program = new Command();
 
@@ -48,4 +49,5 @@ program.addCommand(makeAppealCommand());
 program.addCommand(makeReferralCommand());
 program.addCommand(makeInsuranceCommand());
 program.addCommand(makeDistributionCommand());
+program.addCommand(makeBatchCommand());
 program.parse(process.argv);
