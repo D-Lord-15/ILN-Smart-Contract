@@ -56,6 +56,15 @@ export {
   executeProposal,
   getProposal,
   listProposals,
+  delegateVotes,
+  undelegateVotes,
+  vetoProposal,
+  disableVetoPower,
+  setExecutionDelay,
+  getExecutionDelay,
+  setMinQuorumBps,
+  setMinProposalBalance,
+  GovernanceContractError,
 } from "./methods/governance.js";
 export {
   ProposalAction,
@@ -78,9 +87,25 @@ export {
   isEnrolled,
   getPremiumsPaid,
   getInsurancePoolInfo,
+  enrollInsurancePool,
+  depositInsurancePremium,
+  claimInsurance,
+  InsuranceContractError,
 } from "./methods/insurance.js";
 export type { InsurancePoolInfo } from "@invoice-liquidity/types";
-export { getDistributionAccrual } from "./methods/distribution.js";
+export {
+  getDistributionAccrual,
+  accrueLp,
+  accrueSettlement,
+  claimTokens,
+} from "./methods/distribution.js";
+export {
+  submitReputationInvoice,
+  markReputationInvoicePaid,
+  handleDefault,
+  ReputationContractError,
+} from "./methods/reputation.js";
+export type { ReputationBonusInvoice } from "./methods/reputation.js";
 export { getReferralStats } from "./methods/referralStats.js";
 export { TokenRegistry, tokenRegistry } from "./utils/tokenRegistry.js";
 export type { TokenInfo, NetworkName } from "./utils/tokenRegistry.js";
