@@ -72,7 +72,50 @@ Publicly accessible read or state-transition functions that do not require speci
 | `get_invoice` | Anyone | Reads invoice details |
 | `get_invoice_count` | Anyone | Reads total invoice count |
 
-## 4. Security Notes
+### Additional Admin Functions (Dispute Resolution)
+
+| Instruction | Allowed Role(s) | Description |
+| ----------- | --------------- | ----------- |
+| `resolve_appeal` | Admin | Approves or rejects a default appeal (must call `require_admin`) |
+| `resolve_dispute` | Admin | Resolves a dispute on an invoice |
+| `auto_resolve_dispute` | Anyone | Auto-resolves a dispute after timeout elapsed |
+| `set_min_payer_reputation` | Admin | Sets minimum payer reputation threshold |
+| `set_price_oracle` | Admin | Updates the price oracle address |
+| `set_max_oracle_age` | Admin | Updates the maximum oracle age |
+| `upgrade` | Admin | Emits upgrade event for WASM hash change |
+| `update_config` | Admin | Updates reputation and token configuration |
+
+### Governance Contract Admin Functions
+
+| Instruction | Allowed Role(s) | Description |
+| ----------- | --------------- | ----------- |
+| `set_execution_delay` | Admin | Sets timelock delay for proposal execution |
+| `veto_proposal` | Admin | Vetoes an active/passed proposal |
+| `set_min_quorum_bps` | ILN Contract | Updates quorum threshold |
+| `set_min_proposal_balance` | ILN Contract | Updates minimum proposer balance |
+| `disable_veto_power` | ILN Contract | Permanently disables admin veto |
+
+### Insurance Pool Contract Admin Functions
+
+| Instruction | Allowed Role(s) | Description |
+| ----------- | --------------- | ----------- |
+| `claim` | Admin (liquidity contract) | Files a claim for defaulted invoice |
+
+## 5. Audit Findings (Issue #540)
+
+The following findings were identified and resolved during the access control audit:
+
+### Finding AC-01: Missing `require_admin` in `resolve_appeal`
+- **Severity:** High
+- **Location:** `contracts/invoice_liquidity/src/lib.rs:resolve_appeal`
+- **Description:** The function lacked an explicit `require_admin` guard. Although only the payer of the specific invoice could trigger appeals, the resolution function could be called by anyone, allowing unauthorized state transitions from `Appealed` to `Defaulted`.
+- **Resolution:** Added `require_admin(&env)?;` as the first statement in the function body.
+- **Commit:** This commit.
+
+### Finding AC-02: All other admin functions properly guarded
+- All admin-privileged functions in the Invoice Liquidity, Insurance Pool, and Governance contracts include explicit authorization checks at entry. No additional missing guards were found.
+
+## 6. Security Notes
 
 - **Principle of Least Privilege**: Each instruction relies only on the minimal authority required to execute.
 - **Centralized Verification**: Extracted inline logic ensures uniform verification logic and robust testing.
