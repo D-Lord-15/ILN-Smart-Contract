@@ -10,8 +10,6 @@ import {
   claimInsurance,
   InsuranceContractError,
 } from "./insurance.js";
-import { InsuranceContractError } from "../errors.js";
-import { SorobanRpc, Keypair, Address } from "@stellar/stellar-sdk";
 import { SorobanRpc, Keypair, Address, Account } from "@stellar/stellar-sdk";
 
 // ---------------------------------------------------------------------------

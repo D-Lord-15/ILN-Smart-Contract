@@ -76,7 +76,7 @@ export type {
   CreateProposalResult,
 } from "./types/governance.js";
 
-export { ILNError, InsuranceContractError } from "./errors.js";
+export { ILNError } from "./errors.js";
 export { disputeInvoice, sha256Hex } from "./methods/disputeInvoice.js";
 export type { DisputeInvoiceParams, DisputeInvoiceResult } from "./methods/disputeInvoice.js";
 export { resolveDispute, DisputeRuling } from "./methods/resolveDispute.js";
