@@ -1,6 +1,8 @@
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracttype, token::StellarAssetClient, Address, Env};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, symbol_short, token::StellarAssetClient, Address, Env,
+};
 
 const HALF_TOKEN: i128 = 5_000_000;
 const HUNDRED_USDC_STROOPS: i128 = 1_000_000_000;
@@ -14,6 +16,39 @@ pub enum StorageKey {
     FreelancerSettled(Address),
     PayerOnTimeSettled(Address),
     Claimed(Address),
+}
+
+/// Emitted once, when the contract is initialised (Issue #538).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ContractInitialized {
+    pub iln_contract: Address,
+    pub gov_token: Address,
+}
+
+/// Emitted when an LP's funded volume accrual increases (Issue #538).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct LpVolumeAccrued {
+    pub lp: Address,
+    pub amount_usdc_equivalent: i128,
+}
+
+/// Emitted when a settlement is recorded for a freelancer/payer (Issue #538).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct SettlementAccrued {
+    pub freelancer: Address,
+    pub payer: Address,
+    pub settled_on_time: bool,
+}
+
+/// Emitted when a participant claims accrued governance tokens (Issue #538).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct TokensClaimed {
+    pub claimer: Address,
+    pub amount: i128,
 }
 
 #[contract]
@@ -35,6 +70,14 @@ impl IlnDistribution {
         env.storage()
             .instance()
             .set(&StorageKey::GovToken, &gov_token);
+
+        env.events().publish(
+            (symbol_short!("init"),),
+            ContractInitialized {
+                iln_contract,
+                gov_token,
+            },
+        );
     }
 
     pub fn accrue_lp(env: Env, lp: Address, amount_usdc_equivalent: i128) {
@@ -44,17 +87,25 @@ impl IlnDistribution {
             return;
         }
 
-        let key = StorageKey::LpFundedVolume(lp);
+        let key = StorageKey::LpFundedVolume(lp.clone());
         let current: i128 = env.storage().persistent().get(&key).unwrap_or(0);
         env.storage()
             .persistent()
             .set(&key, &current.saturating_add(amount_usdc_equivalent));
+
+        env.events().publish(
+            (symbol_short!("lp_accr"), lp.clone()),
+            LpVolumeAccrued {
+                lp,
+                amount_usdc_equivalent,
+            },
+        );
     }
 
     pub fn accrue_settlement(env: Env, freelancer: Address, payer: Address, settled_on_time: bool) {
         Self::require_iln_invoker(&env);
 
-        let freelancer_key = StorageKey::FreelancerSettled(freelancer);
+        let freelancer_key = StorageKey::FreelancerSettled(freelancer.clone());
         let freelancer_count: u64 = env
             .storage()
             .persistent()
@@ -65,12 +116,25 @@ impl IlnDistribution {
             .set(&freelancer_key, &freelancer_count.saturating_add(1));
 
         if settled_on_time {
-            let payer_key = StorageKey::PayerOnTimeSettled(payer);
+            let payer_key = StorageKey::PayerOnTimeSettled(payer.clone());
             let payer_count: u64 = env.storage().persistent().get(&payer_key).unwrap_or(0_u64);
             env.storage()
                 .persistent()
                 .set(&payer_key, &payer_count.saturating_add(1));
         }
+
+        env.events().publish(
+            (
+                symbol_short!("settled"),
+                freelancer.clone(),
+                payer.clone(),
+            ),
+            SettlementAccrued {
+                freelancer,
+                payer,
+                settled_on_time,
+            },
+        );
     }
 
     pub fn claim_tokens(env: Env, claimer: Address) -> i128 {
@@ -91,6 +155,14 @@ impl IlnDistribution {
         env.storage()
             .persistent()
             .set(&claimed_key, &already_claimed.saturating_add(claimable));
+
+        env.events().publish(
+            (symbol_short!("claimed"), claimer.clone()),
+            TokensClaimed {
+                claimer,
+                amount: claimable,
+            },
+        );
 
         claimable
     }
