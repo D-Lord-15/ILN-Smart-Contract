@@ -298,10 +298,10 @@ impl GovContract {
             .instance()
             .get(&StorageKey::ProposalCount)
             .unwrap_or(0);
-        let id = count + 1;
+        let id = count.saturating_add(1);
 
         let now = env.ledger().timestamp();
-        let voting_end = now + VOTING_PERIOD_SECS;
+        let voting_end = now.saturating_add(VOTING_PERIOD_SECS);
 
         let proposal = GovernanceProposal {
             id,
@@ -526,16 +526,16 @@ impl GovContract {
             .get(&StorageKey::DelegatedToMe(voter.clone()))
             .unwrap_or(0_i128);
 
-        let weight = own_balance + delegated;
+        let weight = own_balance.saturating_add(delegated);
 
         if weight == 0 {
             return Err(GovernanceError::NoVotingPower);
         }
 
         if support {
-            proposal.votes_for += weight;
+            proposal.votes_for = proposal.votes_for.saturating_add(weight);
         } else {
-            proposal.votes_against += weight;
+            proposal.votes_against = proposal.votes_against.saturating_add(weight);
         }
 
         env.storage().temporary().set(&voted_key, &true);
@@ -614,7 +614,7 @@ impl GovContract {
         }
 
         if proposal.status == ProposalStatus::Active {
-            let total_votes = proposal.votes_for + proposal.votes_against;
+            let total_votes = proposal.votes_for.saturating_add(proposal.votes_against);
             let min_quorum_bps: u32 = env
                 .storage()
                 .instance()
@@ -649,7 +649,7 @@ impl GovContract {
                 .instance()
                 .get(&StorageKey::ExecutionDelay)
                 .unwrap_or(0_u32);
-            proposal.eta_ledger = env.ledger().sequence() + delay;
+            proposal.eta_ledger = env.ledger().sequence().saturating_add(delay);
 
             env.storage()
                 .persistent()
@@ -846,7 +846,7 @@ impl GovContract {
         }
 
         let actual_page_size = if page_size > 20 { 20 } else { page_size };
-        let skip = (page * actual_page_size) as u64;
+        let skip = page.saturating_mul(actual_page_size) as u64;
         let mut skipped = 0_u64;
 
         for id in (1..=count).rev() {
@@ -920,7 +920,7 @@ impl GovContract {
     fn adjust_delegated_to_me(env: &Env, addr: &Address, delta: i128) {
         let key = StorageKey::DelegatedToMe(addr.clone());
         let current: i128 = env.storage().persistent().get(&key).unwrap_or(0_i128);
-        let updated = current + delta;
+        let updated = current.saturating_add(delta);
         if updated <= 0 {
             env.storage().persistent().remove(&key);
         } else {
