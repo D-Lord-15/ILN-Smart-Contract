@@ -48,7 +48,7 @@ impl IlnDistribution {
         let current: i128 = env.storage().persistent().get(&key).unwrap_or(0);
         env.storage()
             .persistent()
-            .set(&key, &(current + amount_usdc_equivalent));
+            .set(&key, &current.saturating_add(amount_usdc_equivalent));
     }
 
     pub fn accrue_settlement(env: Env, freelancer: Address, payer: Address, settled_on_time: bool) {
@@ -62,14 +62,14 @@ impl IlnDistribution {
             .unwrap_or(0_u64);
         env.storage()
             .persistent()
-            .set(&freelancer_key, &(freelancer_count + 1));
+            .set(&freelancer_key, &freelancer_count.saturating_add(1));
 
         if settled_on_time {
             let payer_key = StorageKey::PayerOnTimeSettled(payer);
             let payer_count: u64 = env.storage().persistent().get(&payer_key).unwrap_or(0_u64);
             env.storage()
                 .persistent()
-                .set(&payer_key, &(payer_count + 1));
+                .set(&payer_key, &payer_count.saturating_add(1));
         }
     }
 
@@ -80,7 +80,7 @@ impl IlnDistribution {
         let claimed_key = StorageKey::Claimed(claimer.clone());
         let already_claimed: i128 = env.storage().persistent().get(&claimed_key).unwrap_or(0);
 
-        let claimable = total_earned - already_claimed;
+        let claimable = total_earned.saturating_sub(already_claimed);
         if claimable <= 0 {
             return 0;
         }
@@ -90,7 +90,7 @@ impl IlnDistribution {
 
         env.storage()
             .persistent()
-            .set(&claimed_key, &(already_claimed + claimable));
+            .set(&claimed_key, &already_claimed.saturating_add(claimable));
 
         claimable
     }
@@ -116,11 +116,13 @@ impl IlnDistribution {
             .get(&StorageKey::PayerOnTimeSettled(participant.clone()))
             .unwrap_or(0_u64);
 
-        let lp_reward = lp_volume / HUNDRED_USDC_STROOPS * 10_000_000;
-        let freelancer_reward = (freelancer_settled as i128) * HALF_TOKEN;
-        let payer_reward = (payer_on_time as i128) * HALF_TOKEN;
+        let lp_reward = (lp_volume / HUNDRED_USDC_STROOPS).saturating_mul(10_000_000);
+        let freelancer_reward = (freelancer_settled as i128).saturating_mul(HALF_TOKEN);
+        let payer_reward = (payer_on_time as i128).saturating_mul(HALF_TOKEN);
 
-        lp_reward + freelancer_reward + payer_reward
+        lp_reward
+            .saturating_add(freelancer_reward)
+            .saturating_add(payer_reward)
     }
 
     fn require_iln_invoker(env: &Env) {
