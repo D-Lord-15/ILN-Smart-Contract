@@ -477,9 +477,9 @@ CD3TE3IAHM737P236XZL2OYU275ZKD6MN7YH7PYYAXYIGEH55OPEWYJC
 ### Benchmark regression guard
 
 The `scripts/check_benchmark_regression.sh` script compares instruction counts
-against stored baselines.  CI runs it as a warning-only step, but a large
-regression in `invoice_liquidity` will be flagged during review.  Run it
-locally after performance-sensitive changes:
+against stored baselines for `invoice_liquidity` and `iln_governance`.  CI
+runs it as a warning-only step, but a large regression will be flagged during
+review.  Run it locally after performance-sensitive changes:
 
 ```bash
 bash scripts/check_benchmark_regression.sh
