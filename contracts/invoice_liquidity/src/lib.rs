@@ -305,6 +305,58 @@ impl InvoiceLiquidityContract {
         Ok(())
     }
 
+    /// Update reputation decay parameters. Admin or governance only.
+    /// Access: Admin only
+    pub fn update_decay_params(
+        env: Env,
+        rate_bps: u32,
+        period_ledgers: u64,
+    ) -> Result<(), ContractError> {
+        require_admin(&env)?;
+        check_rate_limit(&env, "update_decay_params", ECONOMIC_PARAM_COOLDOWN_LEDGERS)?;
+        let admin = get_admin(&env).ok_or(ContractError::Unauthorized)?;
+
+        let mut config = crate::storage::get_config(&env).ok_or(ContractError::Unauthorized)?;
+        let old_rate = config.decay_rate_bps;
+        let old_period = config.decay_period_ledgers;
+
+        config.decay_rate_bps = rate_bps;
+        config.decay_period_ledgers = period_ledgers;
+        crate::storage::set_config(&env, &config);
+
+        let pn_rate = Symbol::new(&env, "decay_rate_bps");
+        env.events().publish(
+            (
+                Symbol::new(&env, "parameter_updated"),
+                pn_rate.clone(),
+                admin.clone(),
+            ),
+            ParameterUpdated {
+                param_name: pn_rate,
+                old_value: old_rate as i128,
+                new_value: rate_bps as i128,
+                updated_by: admin.clone(),
+            },
+        );
+
+        let pn_period = Symbol::new(&env, "decay_period_ledgers");
+        env.events().publish(
+            (
+                Symbol::new(&env, "parameter_updated"),
+                pn_period.clone(),
+                admin.clone(),
+            ),
+            ParameterUpdated {
+                param_name: pn_period,
+                old_value: old_period as i128,
+                new_value: period_ledgers as i128,
+                updated_by: admin,
+            },
+        );
+
+        Ok(())
+    }
+
     /// Access: Admin only
     pub fn set_distribution_contract(
         env: Env,
@@ -539,28 +591,21 @@ impl InvoiceLiquidityContract {
     }
 
     // ------------------------------------------------------------
-    // upgrade (Issue #48)
+    // upgrade (Issue #48, #539)
     // ------------------------------------------------------------
     /// Upgrade the contract to a new WASM hash.
     ///
-    /// Only the admin can trigger an upgrade. This function emits an event
-    /// but does not directly perform the upgrade—that is done by the network
-    /// after the contract is authorized to update its code hash via governance.
+    /// Only the admin can trigger an upgrade. The function performs the
+    /// actual on-chain WASM replacement via the Soroban deployer API,
+    /// records the upgrade in storage, and emits an event for audit.
     ///
     /// # Arguments
     /// - `env`: The Soroban environment
     /// - `new_wasm_hash`: The hash of the new WASM binary to upgrade to (32 bytes)
     ///
     /// # Returns
-    /// - `Ok(())` if the upgrade event was successfully published
+    /// - `Ok(())` if the upgrade succeeded
     /// - `Err(ContractError)` if called by non-admin
-    ///
-    /// # Notes
-    /// This function:
-    /// - Requires admin authentication
-    /// - Emits a ContractUpgraded event for audit trail
-    /// - Does NOT perform the actual upgrade (handled by Soroban runtime)
-    /// - Should only be called after off-chain governance approval
     ///
     /// Access: Admin only
     pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), ContractError> {
@@ -568,6 +613,10 @@ impl InvoiceLiquidityContract {
         check_rate_limit(&env, "upgrade", UPGRADE_COOLDOWN_LEDGERS)?;
 
         let admin = get_admin(&env).ok_or(ContractError::Unauthorized)?;
+
+        // Issue #539: Actually perform the upgrade via the Soroban deployer.
+        env.deployer()
+            .update_current_contract_wasm(new_wasm_hash.clone());
 
         env.events().publish(
             (Symbol::new(&env, "upgraded"), admin.clone()),
@@ -579,6 +628,122 @@ impl InvoiceLiquidityContract {
         );
 
         Ok(())
+    }
+
+    // Issue #539: Return the current on-chain storage schema version.
+    pub fn get_storage_version(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&crate::storage::DataKey::StorageVersion)
+            .unwrap_or(1)
+    }
+
+    // Issue #539: Migrate storage from an older schema version to the current
+    // version. Can only be called by admin. This allows incremental storage
+    // layout changes to be applied atomically after an upgrade.
+    pub fn migrate(env: Env) -> Result<u32, ContractError> {
+        require_admin(&env)?;
+
+        let current: u32 = env
+            .storage()
+            .instance()
+            .get(&crate::storage::DataKey::StorageVersion)
+            .unwrap_or(1);
+
+        if current >= crate::constants::CURRENT_STORAGE_VERSION {
+            return Ok(current);
+        }
+
+        // Add migration steps here as the storage schema evolves.
+        // Example for v1 → v2:
+        // if current < 2 {
+        //     // migrate from v1 to v2
+        // }
+
+        env.storage().instance().set(
+            &crate::storage::DataKey::StorageVersion,
+            &crate::constants::CURRENT_STORAGE_VERSION,
+        );
+
+        env.events().publish(
+            (Symbol::new(&env, "migrated"),),
+            (
+                current,
+                crate::constants::CURRENT_STORAGE_VERSION,
+                env.ledger().timestamp(),
+            ),
+        );
+
+        Ok(crate::constants::CURRENT_STORAGE_VERSION)
+    }
+
+    /// Update the fee tier configuration. Admin or governance only.
+    ///
+    /// Fee tiers must be sorted by `min_amount` in ascending order. Each tier
+    /// specifies a minimum invoice amount (inclusive) and a fee rate in basis
+    /// points. The effective fee for an invoice is the fee rate of the first
+    /// tier whose `min_amount` is <= the invoice amount.
+    ///
+    /// An empty list disables tiered fees and falls back to the flat FeeRate.
+    /// Access: Admin only
+    pub fn update_fee_tiers(
+        env: Env,
+        tiers: Vec<(i128, u32)>,
+    ) -> Result<(), ContractError> {
+        require_admin(&env)?;
+        check_rate_limit(&env, "update_fee_tiers", ECONOMIC_PARAM_COOLDOWN_LEDGERS)?;
+        let admin = get_admin(&env).ok_or(ContractError::Unauthorized)?;
+
+        env.storage()
+            .instance()
+            .set(&StorageKey::FeeTiers, &tiers);
+
+        env.events().publish(
+            (
+                Symbol::new(&env, "fee_tiers_updated"),
+                admin.clone(),
+            ),
+            tiers.len(),
+        );
+
+        Ok(())
+    }
+
+    /// Return the configured fee tiers.
+    /// Access: Anyone
+    pub fn get_fee_tiers(env: Env) -> Vec<(i128, u32)> {
+        env.storage()
+            .instance()
+            .get(&StorageKey::FeeTiers)
+            .unwrap_or(Vec::new(&env))
+    }
+
+    /// Compute the effective fee rate (in basis points) for a given invoice amount.
+    /// Falls back to the flat FeeRate when no tiers are configured.
+    fn effective_fee_rate(env: &Env, invoice_amount: i128) -> u32 {
+        let tiers: Vec<(i128, u32)> = env
+            .storage()
+            .instance()
+            .get(&StorageKey::FeeTiers)
+            .unwrap_or(Vec::new(env));
+
+        if !tiers.is_empty() {
+            // Tiers are stored sorted ascending by min_amount.
+            // Walk backwards to find the last tier whose min_amount <= invoice_amount.
+            let mut best_rate: u32 = 0;
+            for i in 0..tiers.len() {
+                let (min_amount, rate) = tiers.get(i).unwrap();
+                if invoice_amount >= min_amount {
+                    best_rate = rate;
+                }
+            }
+            best_rate
+        } else {
+            env.storage()
+                .instance()
+                .get(&StorageKey::FeeRate)
+                .unwrap_or(0)
+        }
     }
 
     // ------------------------------------------------------------
@@ -1676,12 +1841,8 @@ impl InvoiceLiquidityContract {
         }
 
         // --- FULL PAYMENT LOGIC ---
-        // Calculate protocol fee and deduct it
-        let fee_rate: u32 = env
-            .storage()
-            .instance()
-            .get(&crate::storage::DataKey::FeeRate)
-            .unwrap_or(0);
+        // Calculate protocol fee using tiered fee rate if configured
+        let fee_rate = Self::effective_fee_rate(&env, invoice.amount);
         let protocol_fee = invoice.amount.checked_mul(fee_rate as i128).unwrap_or(0) / 10_000;
 
         if protocol_fee > 0 {

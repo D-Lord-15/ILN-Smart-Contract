@@ -355,6 +355,9 @@ mod test {
     use super::*;
     use soroban_sdk::{testutils::Address as _, token::Client as TokenClient, Address};
 
+    #[cfg(test)]
+    use super::{HALF_TOKEN, HUNDRED_USDC_STROOPS};
+
     #[contract]
     pub struct MockIln;
 

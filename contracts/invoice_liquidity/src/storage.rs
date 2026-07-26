@@ -54,6 +54,10 @@ pub enum DataKey {
     InvoiceNft(u64),
     /// NFT Owner tracking (Issue #423)
     InvoiceNftOwner(u64),
+    /// Issue #533: Fee tier configuration — ordered list of (min_amount, fee_rate_bps).
+    FeeTiers,
+    /// Issue #539: Storage version tracking for migration safety.
+    StorageVersion,
     /// Reentrancy guard lock (Issue #535)
     ReentrancyLock,
     /// Last ledger sequence when each rate-limited function was called (Issue #541).
