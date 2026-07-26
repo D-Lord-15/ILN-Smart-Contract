@@ -1010,6 +1010,7 @@ impl InvoiceLiquidityContract {
 
     /// Register an LP's intent to fund an invoice.
     /// The LP's current reputation score is snapshotted for ordering.
+    /// Queue is kept sorted by score (descending) for O(1) resolution.
     /// Access: LP only
     pub fn join_fund_queue(env: Env, lp: Address, invoice_id: u64) -> Result<(), ContractError> {
         require_lp(&env, &lp)?;
@@ -1045,10 +1046,22 @@ impl InvoiceLiquidityContract {
         }
 
         let score = get_lp_score(&env, &lp);
-        queue.push_back(LpFundRequest {
+        let new_request = LpFundRequest {
             lp: lp.clone(),
             score,
-        });
+        };
+
+        // Insert in sorted position (descending score).
+        // This maintains the invariant: queue[0] always has the highest score.
+        let mut insert_pos = queue.len();
+        for i in 0..queue.len() {
+            if queue.get(i).unwrap().score < score {
+                insert_pos = i;
+                break;
+            }
+        }
+
+        queue.insert(insert_pos, new_request);
         save_fund_queue(&env, invoice_id, &queue);
 
         env.events().publish(
@@ -1066,6 +1079,9 @@ impl InvoiceLiquidityContract {
     /// Select the highest-reputation LP from the queue as the approved funder.
     /// Returns the winning LP address.
     /// Can be called by anyone once at least one LP has joined the queue.
+    ///
+    /// **Optimization Note**: The queue is maintained in sorted order (descending score)
+    /// by `join_fund_queue`, so this operation is O(1) — just returning the first element.
     /// Access: Anyone
     pub fn resolve_fund_queue(env: Env, invoice_id: u64) -> Result<Address, ContractError> {
         if !invoice_exists(&env, invoice_id) {
@@ -1082,17 +1098,10 @@ impl InvoiceLiquidityContract {
             return Err(ContractError::NotFunded); // no one in queue
         }
 
-        // Find the LP with the highest score (ties broken by first-come-first-served).
-        let mut best_lp = queue.get(0).unwrap().lp.clone();
-        let mut best_score = queue.get(0).unwrap().score;
-
-        for i in 1..queue.len() {
-            let entry = queue.get(i).unwrap();
-            if entry.score > best_score {
-                best_score = entry.score;
-                best_lp = entry.lp.clone();
-            }
-        }
+        // Queue is sorted by score (descending), so highest score is at index 0.
+        let best_entry = queue.get(0).unwrap();
+        let best_lp = best_entry.lp.clone();
+        let best_score = best_entry.score;
 
         save_queue_resolution(&env, invoice_id, &best_lp);
 

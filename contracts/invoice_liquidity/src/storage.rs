@@ -277,6 +277,75 @@ pub fn get_pre_default_payer_score(env: &Env, invoice_id: u64) -> Option<u32> {
 // Contract Stats Helpers
 // ----------------------------------------------------------------
 
+/// In-memory stats accumulator for optimizing batch updates.
+/// Use this struct to accumulate multiple stat changes and commit
+/// them with a single storage operation for better gas efficiency.
+#[derive(Clone, Debug)]
+pub struct StatsAccumulator {
+    pub invoices_delta: i64,
+    pub funded_delta: i64,
+    pub paid_delta: i64,
+}
+
+impl StatsAccumulator {
+    pub fn new() -> Self {
+        StatsAccumulator {
+            invoices_delta: 0,
+            funded_delta: 0,
+            paid_delta: 0,
+        }
+    }
+
+    pub fn add_invoice(&mut self) {
+        self.invoices_delta = self.invoices_delta.saturating_add(1);
+    }
+
+    pub fn add_funded(&mut self) {
+        self.funded_delta = self.funded_delta.saturating_add(1);
+    }
+
+    pub fn add_paid(&mut self) {
+        self.paid_delta = self.paid_delta.saturating_add(1);
+    }
+
+    /// Commit accumulated deltas to persistent storage.
+    /// This is more efficient than calling increment_* functions multiple times.
+    pub fn commit(self, env: &Env) {
+        if self.invoices_delta > 0 {
+            let current: u64 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::TotalInvoices)
+                .unwrap_or(0);
+            env.storage().persistent().set(
+                &DataKey::TotalInvoices,
+                &current.saturating_add(self.invoices_delta as u64),
+            );
+        }
+        if self.funded_delta > 0 {
+            let current: u64 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::TotalFunded)
+                .unwrap_or(0);
+            env.storage().persistent().set(
+                &DataKey::TotalFunded,
+                &current.saturating_add(self.funded_delta as u64),
+            );
+        }
+        if self.paid_delta > 0 {
+            let current: u64 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::TotalPaid)
+                .unwrap_or(0);
+            env.storage()
+                .persistent()
+                .set(&DataKey::TotalPaid, &current.saturating_add(self.paid_delta as u64));
+        }
+    }
+}
+
 pub fn increment_total_invoices(env: &Env) {
     let current: u64 = env
         .storage()
@@ -311,3 +380,27 @@ pub fn increment_total_paid(env: &Env) {
 }
 
 // add_volume moved to invoice.rs where the configured token addresses are available
+
+/// Get current total invoices count.
+pub fn get_total_invoices(env: &Env) -> u64 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::TotalInvoices)
+        .unwrap_or(0)
+}
+
+/// Get current total funded count.
+pub fn get_total_funded(env: &Env) -> u64 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::TotalFunded)
+        .unwrap_or(0)
+}
+
+/// Get current total paid count.
+pub fn get_total_paid(env: &Env) -> u64 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::TotalPaid)
+        .unwrap_or(0)
+}
