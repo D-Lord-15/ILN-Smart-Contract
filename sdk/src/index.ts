@@ -44,7 +44,9 @@ export type {
   Unsubscribe,
 } from "./events/types.js";
 
+export { getInvoice, listInvoicesBySubmitter, listInvoicesByLP, getSubmitterInvoices, getPayerScore } from "./methods/queries.js";
 export { getInvoice, listInvoicesBySubmitter, listInvoicesByLP, getSubmitterInvoices } from "./methods/queries.js";
+export { getLpInvoices } from "./methods/lpInvoices.js";
 export { getNftMetadata, getNftOwner } from "./methods/nft.js";
 export { submitInvoice } from "./methods/submitInvoice.js";
 export { transferLPPosition } from "./methods/transferLPPosition.js";
@@ -141,4 +143,4 @@ export {
   submitBatchTransaction,
 } from "./methods/batch.js";
 export type { BatchContractCall, BatchTransactionOptions, BatchTransactionResult } from "./methods/batch.js";
-export { setAdmin, upgrade, setDistributionContract } from "./methods/admin.js";
+export { setAdmin, upgrade, setDistributionContract, addToken, removeToken, updateFeeRate, updateMaxDiscount, setPriceOracle, setMaxOracleAge } from "./methods/admin.js";

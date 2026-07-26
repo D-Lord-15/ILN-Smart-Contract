@@ -11,6 +11,7 @@ import type { Invoice, InvoiceState } from "@invoice-liquidity/types";
 import { ILNError } from "../errors.js";
 import { decodeInvoice } from "../utils/xdrDecoder.js";
 import { retry } from "../utils/retry.js";
+import { validateGAddress } from "../utils/validate.js";
 
 /**
  * Fetch a single invoice by its ID.
@@ -227,4 +228,57 @@ export async function listInvoicesByLP(
 
   const rawArr = scValToNative(sim.result.retval) as Record<string, unknown>[];
   return rawArr.map(raw => decodeInvoice(raw as Record<string, unknown>));
+}
+
+/**
+ * Get a payer's reputation score (0-100, default 50).
+ *
+ * Wraps the `payer_score(payer)` view function. Performs a read-only
+ * simulation — no on-chain mutation, no transaction fees.
+ * @param server Soroban RPC server instance
+ * @param contractAddress The contract's address
+ * @param payer The payer's Stellar G... address
+ * @param sourceAccount Account used for simulation (does not consume sequence or fees)
+ * @param networkPassphrase The network passphrase
+ * @returns The payer's reputation score
+ * @throws {ILNError.InvalidAddress} If payer is not a valid Stellar address
+ * @throws {ILNError} On other simulation errors
+ * @example
+ * ```ts
+ * const score = await getPayerScore(server, contractAddress, "G...", sourceAccount, Networks.TESTNET);
+ * ```
+ */
+export async function getPayerScore(
+  server: SorobanRpc.Server,
+  contractAddress: string,
+  payer: string,
+  sourceAccount: Account,
+  networkPassphrase: string
+): Promise<number> {
+  validateGAddress(payer);
+
+  const contract = new Contract(contractAddress);
+  const op = contract.call(
+    "payer_score",
+    nativeToScVal(payer, { type: "address" })
+  );
+
+  const tx = new TransactionBuilder(sourceAccount, {
+    fee: BASE_FEE,
+    networkPassphrase,
+  })
+    .addOperation(op)
+    .setTimeout(30)
+    .build();
+
+  const sim = await retry(() => server.simulateTransaction(tx));
+
+  if (SorobanRpc.Api.isSimulationError(sim)) {
+    throw ILNError.fromError(sim.error);
+  }
+  if (!sim.result?.retval) {
+    return 0;
+  }
+
+  return scValToNative(sim.result.retval) as number;
 }

@@ -31,6 +31,11 @@ impl MockIln {
     ) {
     }
     pub fn upgrade(_env: Env, _new_wasm_hash: BytesN<32>) {}
+    pub fn set_lp_reward_rate(_env: Env, _rate: i128) {}
+    pub fn set_freelancer_reward_rate(_env: Env, _rate: i128) {}
+    pub fn set_payer_reward_rate(_env: Env, _rate: i128) {}
+    pub fn set_coverage_via_governance(_env: Env, _cap: i128) {}
+    pub fn set_premium_rate_via_governance(_env: Env, _rate: u32) {}
 }
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
@@ -1453,4 +1458,95 @@ fn test_upgrade_proposal_creates_and_executes() {
         GovContract::execute_proposal(t.env.clone(), id, total_supply)
     });
     assert_eq!(t.contract.get_proposal(&id).status, ProposalStatus::Executed);
+}
+
+// ── Distribution Reward Rate Governance ────────────────────────────────
+
+/// Proposal to update LP reward rate can be created.
+#[test]
+fn test_create_lp_reward_rate_proposal() {
+    let t = setup();
+    let id = t.contract.create_proposal(
+        &t.proposer,
+        &ProposalAction::UpdateLpRewardRate(15_000_000),
+        &dummy_hash(&t.env),
+        &15_000_000_i128,
+    );
+    let proposal = t.contract.get_proposal(&id);
+    assert_eq!(proposal.proposed_value, 15_000_000);
+    match proposal.action_type {
+        ProposalAction::UpdateLpRewardRate(rate) => assert_eq!(rate, 15_000_000),
+        _ => panic!("Expected UpdateLpRewardRate"),
+    }
+}
+
+/// Proposal to update freelancer reward rate can be created.
+#[test]
+fn test_create_freelancer_reward_rate_proposal() {
+    let t = setup();
+    let id = t.contract.create_proposal(
+        &t.proposer,
+        &ProposalAction::UpdateFreelancerRewardRate(7_000_000),
+        &dummy_hash(&t.env),
+        &7_000_000_i128,
+    );
+    let proposal = t.contract.get_proposal(&id);
+    match proposal.action_type {
+        ProposalAction::UpdateFreelancerRewardRate(rate) => assert_eq!(rate, 7_000_000),
+        _ => panic!("Expected UpdateFreelancerRewardRate"),
+    }
+}
+
+/// Proposal to update payer reward rate can be created.
+#[test]
+fn test_create_payer_reward_rate_proposal() {
+    let t = setup();
+    let id = t.contract.create_proposal(
+        &t.proposer,
+        &ProposalAction::UpdatePayerRewardRate(6_000_000),
+        &dummy_hash(&t.env),
+        &6_000_000_i128,
+    );
+    let proposal = t.contract.get_proposal(&id);
+    match proposal.action_type {
+        ProposalAction::UpdatePayerRewardRate(rate) => assert_eq!(rate, 6_000_000),
+        _ => panic!("Expected UpdatePayerRewardRate"),
+    }
+}
+
+// ── Insurance Pool Parameter Governance ────────────────────────────────
+
+/// Proposal to update insurance coverage cap can be created.
+#[test]
+fn test_create_insurance_coverage_cap_proposal() {
+    let t = setup();
+    let id = t.contract.create_proposal(
+        &t.proposer,
+        &ProposalAction::UpdateInsuranceCoverageCap(50_000_000),
+        &dummy_hash(&t.env),
+        &50_000_000_i128,
+    );
+    let proposal = t.contract.get_proposal(&id);
+    assert_eq!(proposal.proposed_value, 50_000_000);
+    match proposal.action_type {
+        ProposalAction::UpdateInsuranceCoverageCap(cap) => assert_eq!(cap, 50_000_000),
+        _ => panic!("Expected UpdateInsuranceCoverageCap"),
+    }
+}
+
+/// Proposal to update insurance premium rate can be created.
+#[test]
+fn test_create_insurance_premium_rate_proposal() {
+    let t = setup();
+    let id = t.contract.create_proposal(
+        &t.proposer,
+        &ProposalAction::UpdateInsurancePremiumRate(300),
+        &dummy_hash(&t.env),
+        &300_i128,
+    );
+    let proposal = t.contract.get_proposal(&id);
+    match proposal.action_type {
+        ProposalAction::UpdateInsurancePremiumRate(rate) => assert_eq!(rate, 300),
+        _ => panic!("Expected UpdateInsurancePremiumRate"),
+    }
 }

@@ -86,6 +86,16 @@ pub enum ProposalAction {
     UpdateFeeTiers(Vec<FeeTierConfig>),
     /// Issue #539: Upgrade the ILN contract WASM via governance vote.
     Upgrade(BytesN<32>),
+    /// Update LP reward rate (in stroops per 100 USDC volume).
+    UpdateLpRewardRate(i128),
+    /// Update freelancer reward rate (in stroops per settlement).
+    UpdateFreelancerRewardRate(i128),
+    /// Update payer reward rate (in stroops per on-time settlement).
+    UpdatePayerRewardRate(i128),
+    /// Update insurance pool coverage cap (in stroops).
+    UpdateInsuranceCoverageCap(i128),
+    /// Update insurance pool premium rates (in bps).
+    UpdateInsurancePremiumRate(u32),
 }
 
 /// Issue #533: Fee tier configuration.
@@ -854,6 +864,71 @@ impl GovContract {
                     env.invoke_contract::<()>(
                         &iln_contract,
                         &Symbol::new(&env, "upgrade"),
+                        args,
+                    );
+                }
+                ProposalAction::UpdateLpRewardRate(rate) => {
+                    let dist_contract: Address = env
+                        .storage()
+                        .instance()
+                        .get(&StorageKey::DistributionContract)
+                        .unwrap();
+                    let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
+                    env.invoke_contract::<()>(
+                        &dist_contract,
+                        &Symbol::new(&env, "set_lp_reward_rate"),
+                        args,
+                    );
+                }
+                ProposalAction::UpdateFreelancerRewardRate(rate) => {
+                    let dist_contract: Address = env
+                        .storage()
+                        .instance()
+                        .get(&StorageKey::DistributionContract)
+                        .unwrap();
+                    let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
+                    env.invoke_contract::<()>(
+                        &dist_contract,
+                        &Symbol::new(&env, "set_freelancer_reward_rate"),
+                        args,
+                    );
+                }
+                ProposalAction::UpdatePayerRewardRate(rate) => {
+                    let dist_contract: Address = env
+                        .storage()
+                        .instance()
+                        .get(&StorageKey::DistributionContract)
+                        .unwrap();
+                    let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
+                    env.invoke_contract::<()>(
+                        &dist_contract,
+                        &Symbol::new(&env, "set_payer_reward_rate"),
+                        args,
+                    );
+                }
+                ProposalAction::UpdateInsuranceCoverageCap(cap) => {
+                    let insurance_contract: Address = env
+                        .storage()
+                        .instance()
+                        .get(&StorageKey::IlnContract)
+                        .unwrap();
+                    let args: Vec<soroban_sdk::Val> = vec![&env, cap.into_val(&env)];
+                    env.invoke_contract::<()>(
+                        &insurance_contract,
+                        &Symbol::new(&env, "set_coverage_via_governance"),
+                        args,
+                    );
+                }
+                ProposalAction::UpdateInsurancePremiumRate(rate) => {
+                    let insurance_contract: Address = env
+                        .storage()
+                        .instance()
+                        .get(&StorageKey::IlnContract)
+                        .unwrap();
+                    let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
+                    env.invoke_contract::<()>(
+                        &insurance_contract,
+                        &Symbol::new(&env, "set_premium_rate_via_governance"),
                         args,
                     );
                 }
