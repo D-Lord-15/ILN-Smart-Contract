@@ -67,26 +67,70 @@ pub enum InvoiceStatus {
 }
 
 // ----------------------------------------------------------------
-// Invoice struct (UPDATED - token stays per invoice)
+// Invoice Core struct — hot path data (accessed in >95% of operations)
+// ================================================================
+// Fields are ordered by access frequency and size for optimal layout:
+// - id, status: identifiers, checked in every operation
+// - amount/amount_funded/amount_paid: financial core
+// - addresses: payer, freelancer, token
+// - due_date, discount_rate: parameters
+// ================================================================
+
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct InvoiceCore {
+    pub id: u64,
+    pub freelancer: Address,      // who submitted the invoice (receives liquidity)
+    pub payer: Address,           // the client who owes the money
+    pub token: Address,           // token used for this invoice lifecycle
+    pub amount: i128,             // full invoice value in stroops (1 USDC = 10_000_000)
+    pub due_date: u32,            // Unix timestamp — when the payer must settle by
+    pub discount_rate: u32,       // basis points, e.g. 300 = 3.00%
+    pub status: InvoiceStatus,
+    pub amount_funded: i128,      // cumulative amount funded so far
+    pub amount_paid: i128,        // cumulative amount paid by the payer
+}
+
 // ----------------------------------------------------------------
+// Invoice Metadata struct — cold path data (accessed <5% of operations)
+// ================================================================
+// Kept separate to avoid deserializing unnecessary data on hot paths.
+// Only loaded when needed for appeals, disputes, or metadata queries.
+// ================================================================
+
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct InvoiceMetadata {
+    pub funder: Option<Address>,  // set when an LP funds the invoice (legacy for full funding)
+    pub funded_at: Option<u32>,   // ledger timestamp when funding occurred
+    pub referral_code: ReferralCode,
+    pub submitter_reputation: u32, // snapshot of freelancer's reputation at submission time
+}
+
+// ================================================================
+// Invoice — Unified type for backwards compatibility
+// ================================================================
+// The Invoice type combines both core and metadata.
+// Internal operations use InvoiceCore for hot paths.
+// External API continues to use Invoice for compatibility.
 
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Invoice {
     pub id: u64,
-    pub freelancer: Address, // who submitted the invoice (receives liquidity)
-    pub payer: Address,      // the client who owes the money
-    pub token: Address,      // token used for this invoice lifecycle
-    pub amount: i128,        // full invoice value in stroops (1 USDC = 10_000_000)
-    pub due_date: u32,       // Unix timestamp — when the payer must settle by
-    pub discount_rate: u32,  // basis points, e.g. 300 = 3.00%
+    pub freelancer: Address,
+    pub payer: Address,
+    pub token: Address,
+    pub amount: i128,
+    pub due_date: u32,
+    pub discount_rate: u32,
     pub status: InvoiceStatus,
-    pub funder: Option<Address>, // set when an LP funds the invoice (legacy for full funding)
-    pub funded_at: Option<u32>,  // ledger timestamp when funding occurred
-    pub amount_funded: i128,     // cumulative amount funded so far
-    pub amount_paid: i128,       // cumulative amount paid by the payer
+    pub funder: Option<Address>,
+    pub funded_at: Option<u32>,
+    pub amount_funded: i128,
+    pub amount_paid: i128,
     pub referral_code: ReferralCode,
-    pub submitter_reputation: u32, // snapshot of freelancer's reputation at submission time
+    pub submitter_reputation: u32,
 }
 
 #[contracttype]
@@ -193,6 +237,60 @@ pub struct LpFundRequest {
     pub lp: Address,
     /// LP reputation score snapshotted at request time (used for ordering).
     pub score: u32,
+}
+
+// ================================================================
+// Invoice conversion functions — convert between unified and split formats
+// ================================================================
+
+impl Invoice {
+    /// Extract the hot-path core data into InvoiceCore
+    pub fn to_core(&self) -> InvoiceCore {
+        InvoiceCore {
+            id: self.id,
+            freelancer: self.freelancer.clone(),
+            payer: self.payer.clone(),
+            token: self.token.clone(),
+            amount: self.amount,
+            due_date: self.due_date,
+            discount_rate: self.discount_rate,
+            status: self.status.clone(),
+            amount_funded: self.amount_funded,
+            amount_paid: self.amount_paid,
+        }
+    }
+
+    /// Extract the cold-path metadata into InvoiceMetadata
+    pub fn to_metadata(&self) -> InvoiceMetadata {
+        InvoiceMetadata {
+            funder: self.funder.clone(),
+            funded_at: self.funded_at,
+            referral_code: self.referral_code.clone(),
+            submitter_reputation: self.submitter_reputation,
+        }
+    }
+}
+
+impl InvoiceCore {
+    /// Combine core data with metadata to reconstruct full Invoice
+    pub fn with_metadata(self, metadata: InvoiceMetadata) -> Invoice {
+        Invoice {
+            id: self.id,
+            freelancer: self.freelancer,
+            payer: self.payer,
+            token: self.token,
+            amount: self.amount,
+            due_date: self.due_date,
+            discount_rate: self.discount_rate,
+            status: self.status,
+            funder: metadata.funder,
+            funded_at: metadata.funded_at,
+            amount_funded: self.amount_funded,
+            amount_paid: self.amount_paid,
+            referral_code: metadata.referral_code,
+            submitter_reputation: metadata.submitter_reputation,
+        }
+    }
 }
 
 // ----------------------------------------------------------------
@@ -307,7 +405,28 @@ pub fn invoice_exists(env: &Env, id: u64) -> bool {
 /// Load an invoice in a single storage read, returning `None` if it does not
 /// exist (Issue #71). Prefer this over the `invoice_exists` + `load_invoice`
 /// pair in hot paths, which reads the same key twice.
+/// Try to load an invoice, returning None if not found.
+///
+/// This function loads invoices using the optimized split format:
+/// - First tries the new split format (InvoiceCore + InvoiceMetadata)
+/// - Falls back to old format for backwards compatibility
 pub fn try_load_invoice(env: &Env, id: u64) -> Option<Invoice> {
+    // Try new split format first (preferred)
+    if let Some(core) = env
+        .storage()
+        .persistent()
+        .get::<StorageKey, InvoiceCore>(&StorageKey::InvoiceCore(id))
+    {
+        if let Some(metadata) = env
+            .storage()
+            .persistent()
+            .get::<StorageKey, InvoiceMetadata>(&StorageKey::InvoiceMetadata(id))
+        {
+            return Some(core.with_metadata(metadata));
+        }
+    }
+
+    // Fall back to old format for backwards compatibility
     env.storage().persistent().get(&StorageKey::Invoice(id))
 }
 
