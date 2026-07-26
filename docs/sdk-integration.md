@@ -367,6 +367,54 @@ console.log(`Evidence hash: ${result.evidenceHash}`);
 **Errors:** `ILNError` `NotAuthorized` (caller is not the payer) or
 `InvalidStatus` (invoice not in a disputable state).
 
+### Appeal a dispute ruling
+
+If a dispute ruling is unfavourable, the losing party can file an appeal within
+the appeal window.
+
+```ts
+import { appealInvoice, KeypairSigner } from "@iln/sdk";
+
+const appeal = await appealInvoice({
+  rpc: server,
+  contractAddress: CONTRACT_ID,
+  signer: new KeypairSigner(payerKeypair),
+  invoiceId: 129n,
+  reason: "Ruling ignored submitted evidence — see ticket #8842",
+});
+
+console.log(`Appeal tx: ${appeal.txHash}`);
+```
+
+**Returns:** `AppealInvoiceResult` — `{ txHash: string }`.
+
+**Errors:** `ILNError` `NotAuthorized`, `InvalidStatus` (no ruling to appeal),
+or `AppealWindowClosed` (appeal period has expired).
+
+### Listen for dispute and appeal events
+
+Subscribe to real-time dispute and appeal events to update UIs or trigger
+notifications without polling.
+
+```ts
+import { subscribe } from "@iln/sdk";
+
+const unsubscribe = subscribe(
+  server,
+  CONTRACT_ID,
+  { types: ["invoice_disputed", "dispute_resolved", "invoice_appealed", "appeal_resolved"] },
+  (event) => {
+    console.log(event.type, event.invoiceId, event.ledger);
+  }
+);
+
+// Stop listening when done.
+unsubscribe();
+```
+
+For historical dispute/appeal events, query the indexer's `/events` endpoint
+with a `type` filter; see [docs/events.md](events.md) for the full catalogue.
+
 ---
 
 ## Governance
@@ -421,6 +469,61 @@ const active = await listProposals(server, CONTRACT_ID, account, NETWORK_PASSPHR
 **Errors:** `ILNError` `NotAuthorized`, `AlreadyVoted`, `ProposalNotActive`, or
 `QuorumNotReached` (on execute). See [docs/governance.md](governance.md) for the
 full state machine.
+
+### Delegate votes
+
+Token holders can delegate their voting power to another address, or undelegate
+to reclaim it.
+
+```ts
+import { delegateVotes, undelegateVotes } from "@iln/sdk";
+
+const account = await server.getAccount(memberPublicKey);
+
+// Delegate voting power to a trusted representative.
+const { txHash: delegateTx } = await delegateVotes(
+  server,
+  CONTRACT_ID,
+  delegatePublicKey,
+  account,
+  signTx,
+  NETWORK_PASSPHRASE
+);
+console.log(`Delegated votes in tx ${delegateTx}`);
+
+// Reclaim voting power at any time.
+const { txHash: undelegateTx } = await undelegateVotes(
+  server,
+  CONTRACT_ID,
+  account,
+  signTx,
+  NETWORK_PASSPHRASE
+);
+console.log(`Undelegated votes in tx ${undelegateTx}`);
+```
+
+**Returns:** `{ txHash: string }` for both.
+
+**Errors:** `ILNError` `NotAuthorized` (no active delegation to undo) or
+`InvalidGAddress` (malformed delegate address).
+
+### Listen for governance events
+
+```ts
+import { subscribe } from "@iln/sdk";
+
+const unsubscribe = subscribe(
+  server,
+  CONTRACT_ID,
+  { types: ["proposal_created", "vote_cast", "proposal_executed"] },
+  (event) => {
+    console.log(event.type, event.ledger);
+  }
+);
+
+// Stop listening when done.
+unsubscribe();
+```
 
 ---
 
