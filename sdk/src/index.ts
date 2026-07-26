@@ -22,7 +22,7 @@ export {
 } from "./utils/validate.js";
 export { KeypairSigner } from "./signers/KeypairSigner.js";
 export { FreighterSigner, ILNErrorCode } from "./signers/FreighterSigner.js";
-export { subscribe, parseContractEvent, matchesFilter } from "./events/subscribe.js";
+export { subscribe, parseContractEvent, matchesFilter, replay } from "./events/subscribe.js";
 export { ILNClient, iln } from "./client.js";
 export type { ISigner } from "./signers/ISigner.js";
 export type { ILNClientConfig } from "./client.js";
@@ -79,7 +79,7 @@ export type {
   CreateProposalResult,
 } from "./types/governance.js";
 
-export { ILNError } from "./errors.js";
+export { ILNError, ValidationError, AuthorizationError, InvoiceStateError, ContractExecutionError, NetworkError } from "./errors.js";
 export { disputeInvoice, sha256Hex } from "./methods/disputeInvoice.js";
 export type { DisputeInvoiceParams, DisputeInvoiceResult } from "./methods/disputeInvoice.js";
 export { resolveDispute, DisputeRuling } from "./methods/resolveDispute.js";
