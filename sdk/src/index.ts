@@ -141,4 +141,4 @@ export {
   submitBatchTransaction,
 } from "./methods/batch.js";
 export type { BatchContractCall, BatchTransactionOptions, BatchTransactionResult } from "./methods/batch.js";
-export { setAdmin, upgrade, setDistributionContract } from "./methods/admin.js";
+export { setAdmin, upgrade, setDistributionContract, addToken, removeToken } from "./methods/admin.js";

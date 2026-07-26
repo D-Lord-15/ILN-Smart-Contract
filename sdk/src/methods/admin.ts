@@ -171,3 +171,115 @@ export async function setDistributionContract(
 
   return { txHash: sendResult.hash };
 }
+
+/**
+ * Add an approved token to the ILN invoice_liquidity contract.
+ * Admin only — subject to the default rate limit.
+ */
+export async function addToken(
+  server: SorobanRpc.Server,
+  contractAddress: string,
+  token: string,
+  decimals: number,
+  sourceAccount: Account,
+  signTransaction: (tx: Transaction) => Promise<Transaction> | Transaction,
+  networkPassphrase: string
+): Promise<{ txHash: string }> {
+  validateContractId(token);
+
+  const contract = new Contract(contractAddress);
+  const op = contract.call(
+    "add_token",
+    nativeToScVal(token, { type: "address" }),
+    nativeToScVal(decimals, { type: "u32" })
+  );
+
+  const tx = new TransactionBuilder(sourceAccount, {
+    fee: BASE_FEE,
+    networkPassphrase,
+  })
+    .addOperation(op)
+    .setTimeout(30)
+    .build();
+
+  const sim = await retry(() => server.simulateTransaction(tx));
+  if (SorobanRpc.Api.isSimulationError(sim)) {
+    throw ILNError.fromError(sim.error);
+  }
+
+  const assembledTx = SorobanRpc.assembleTransaction(tx, sim).build();
+  const signedTx = await signTransaction(assembledTx);
+  const sendResult = await retry(() => server.sendTransaction(signedTx));
+  if (sendResult.errorResult) {
+    throw new Error(`Transaction failed: ${sendResult.errorResult}`);
+  }
+
+  let status = await retry(() => server.getTransaction(sendResult.hash));
+  let retries = 0;
+  while (status.status === SorobanRpc.Api.GetTransactionStatus.NOT_FOUND && retries < 15) {
+    await new Promise(r => setTimeout(r, 2000));
+    status = await retry(() => server.getTransaction(sendResult.hash));
+    retries++;
+  }
+
+  if (status.status === SorobanRpc.Api.GetTransactionStatus.FAILED) {
+    throw new Error("Transaction failed during execution");
+  }
+
+  return { txHash: sendResult.hash };
+}
+
+/**
+ * Remove an approved token from the ILN invoice_liquidity contract.
+ * Admin only — subject to the default rate limit.
+ */
+export async function removeToken(
+  server: SorobanRpc.Server,
+  contractAddress: string,
+  token: string,
+  sourceAccount: Account,
+  signTransaction: (tx: Transaction) => Promise<Transaction> | Transaction,
+  networkPassphrase: string
+): Promise<{ txHash: string }> {
+  validateContractId(token);
+
+  const contract = new Contract(contractAddress);
+  const op = contract.call(
+    "remove_token",
+    nativeToScVal(token, { type: "address" })
+  );
+
+  const tx = new TransactionBuilder(sourceAccount, {
+    fee: BASE_FEE,
+    networkPassphrase,
+  })
+    .addOperation(op)
+    .setTimeout(30)
+    .build();
+
+  const sim = await retry(() => server.simulateTransaction(tx));
+  if (SorobanRpc.Api.isSimulationError(sim)) {
+    throw ILNError.fromError(sim.error);
+  }
+
+  const assembledTx = SorobanRpc.assembleTransaction(tx, sim).build();
+  const signedTx = await signTransaction(assembledTx);
+  const sendResult = await retry(() => server.sendTransaction(signedTx));
+  if (sendResult.errorResult) {
+    throw new Error(`Transaction failed: ${sendResult.errorResult}`);
+  }
+
+  let status = await retry(() => server.getTransaction(sendResult.hash));
+  let retries = 0;
+  while (status.status === SorobanRpc.Api.GetTransactionStatus.NOT_FOUND && retries < 15) {
+    await new Promise(r => setTimeout(r, 2000));
+    status = await retry(() => server.getTransaction(sendResult.hash));
+    retries++;
+  }
+
+  if (status.status === SorobanRpc.Api.GetTransactionStatus.FAILED) {
+    throw new Error("Transaction failed during execution");
+  }
+
+  return { txHash: sendResult.hash };
+}
