@@ -89,6 +89,7 @@ export class ILNClient {
   private _getReputation?: typeof import("./methods/reputation.js").getReputation;
   private _getContractStats?: typeof import("./methods/stats.js").getContractStats;
   private _getTopPayers?: typeof import("./methods/topPayers.js").getTopPayers;
+  private _getLpInvoices?: typeof import("./methods/lpInvoices.js").getLpInvoices;
   private _getPoolBalance?: typeof import("./methods/insurance.js").getPoolBalance;
   private _getCoverage?: typeof import("./methods/insurance.js").getCoverage;
   private _isEnrolled?: typeof import("./methods/insurance.js").isEnrolled;
@@ -230,6 +231,28 @@ export class ILNClient {
         .getTopPayers;
     }
     return this._getTopPayers(this.rpc, this.contractId, limit, this.networkPassphrase);
+  }
+
+  /**
+   * Fetch a page of invoices funded by a liquidity provider.
+   *
+   * Read-only; does not require a signer.
+   *
+   * @param lp       - Stellar G… address of the liquidity provider
+   * @param page     - Zero-indexed page number (default 0)
+   * @param pageSize - Number of invoices per page (default 10, capped at 50 by the contract)
+   * @returns Array of invoices for the requested page
+   */
+  async getLpInvoices(
+    lp: string,
+    page: number = 0,
+    pageSize: number = 10
+  ): Promise<import("@invoice-liquidity/types").Invoice[]> {
+    if (!this._getLpInvoices) {
+      this._getLpInvoices = (await import("./methods/lpInvoices.js"))
+        .getLpInvoices;
+    }
+    return this._getLpInvoices(this.rpc, this.contractId, lp, page, pageSize, this.networkPassphrase);
   }
 
   /**
@@ -413,6 +436,10 @@ class ILNSingleton {
 
   async getTopPayers(limit: number = 10) {
     return this.client.getTopPayers(limit);
+  }
+
+  async getLpInvoices(lp: string, page: number = 0, pageSize: number = 10) {
+    return this.client.getLpInvoices(lp, page, pageSize);
   }
 
   async getInsurancePoolBalance(insurancePoolContractId: string) {
