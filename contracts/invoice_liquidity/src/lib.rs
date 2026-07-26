@@ -2823,6 +2823,7 @@ fn notify_distribution_settlement(
 
 pub(crate) mod test;
 mod tests_storage;
+mod tests_storage_layout;
 mod tests_min_invoice_amount;
 mod tests_new_features;
 mod tests_lifecycle_integration;
