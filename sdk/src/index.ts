@@ -141,4 +141,4 @@ export {
   submitBatchTransaction,
 } from "./methods/batch.js";
 export type { BatchContractCall, BatchTransactionOptions, BatchTransactionResult } from "./methods/batch.js";
-export { setAdmin, upgrade, setDistributionContract, addToken, removeToken, updateFeeRate, updateMaxDiscount } from "./methods/admin.js";
+export { setAdmin, upgrade, setDistributionContract, addToken, removeToken, updateFeeRate, updateMaxDiscount, setPriceOracle, setMaxOracleAge } from "./methods/admin.js";
