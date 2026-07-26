@@ -161,6 +161,12 @@ describe("iln singleton", () => {
     );
   });
 
+  it("throws if getLpInvoices is called before configure", async () => {
+    await expect(iln.getLpInvoices("GAA")).rejects.toThrow(
+      "not configured"
+    );
+  });
+
   it("throws if insurance methods are called before configure", async () => {
     const contractId = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4";
     await expect(iln.getInsurancePoolBalance(contractId)).rejects.toThrow(
