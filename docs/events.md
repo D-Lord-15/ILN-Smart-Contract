@@ -451,6 +451,91 @@ events:
 | `cancel_admin_transfer` | ✅ `adm_cncl` topic |
 | `get_*` / `is_*` | 🔍 read-only views |
 
+### PoolInitialized
+
+Topics: `["init", admin]`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `admin` | `Address` | The initial pool admin |
+| `coverage` | `i128` | Flat per-claim coverage cap |
+
+### Enrolled
+
+Topics: `["enrolled", lp]`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `lp` | `Address` | LP enrolled in the pool |
+
+### PremiumDeposited
+
+Topics: `["premium", lp]`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `lp` | `Address` | LP paying the premium |
+| `amount` | `i128` | Premium amount transferred |
+
+### ClaimProcessed
+
+Topics: `["claimed", invoice_id]`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `invoice_id` | `u64` | Defaulted invoice identifier |
+| `payout` | `i128` | Compensation amount paid to LP |
+
+### CoverageChangeProposed
+
+Topics: `["cov_prop"]`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `new_coverage` | `i128` | Proposed new coverage cap |
+| `eta` | `u64` | Timestamp when change becomes executable |
+
+### CoverageChangeExecuted
+
+Topics: `["cov_exec"]`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `new_coverage` | `i128` | New coverage cap now active |
+
+### CoverageChangeCancelled
+
+Topics: `["cov_cncl"]`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| (none) | | |
+
+### AdminTransferProposed
+
+Topics: `["adm_prop", new_admin]`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `new_admin` | `Address` | Proposed new admin |
+| `eta` | `u64` | Timestamp when transfer becomes executable |
+
+### AdminTransferExecuted
+
+Topics: `["adm_exec"]`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `new_admin` | `Address` | New admin now active |
+
+### AdminTransferCancelled
+
+Topics: `["adm_cncl"]`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| (none) | | |
+
 The timelock propose/execute/cancel flow is documented in detail in
 [`insurance-pool-design.md`](./insurance-pool-design.md).
 
@@ -507,6 +592,114 @@ the scope of this event-emission audit, and should be tracked separately.
 | `veto_proposal` | ✅ `ProposalVetoed` |
 | `disable_veto_power` | ✅ `VetoPowerDisabled` (added by this audit) |
 | `get_*` / `list_proposals` / `has_voted` | 🔍 read-only views |
+
+### GovernanceInitialized
+
+Emitted once, when the governance contract is initialised.
+
+Topics: `["initialized", admin]`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `iln_contract` | `Address` | The ILN contract address |
+| `gov_token` | `Address` | The governance token address |
+| `admin` | `Address` | The initial admin address |
+
+### GovernanceParameterUpdated
+
+Emitted whenever a governance-controlled numeric parameter changes.
+
+Topics: `["parameter_updated", param_name]`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `param_name` | `Symbol` | e.g. `"min_quorum_bps"`, `"min_proposal_balance"`, `"execution_delay"` |
+| `old_value` | `i128` | Previous value |
+| `new_value` | `i128` | New value |
+
+### ProposalCreated
+
+Emitted when a new governance proposal is created.
+
+Topics: `["proposal_created", proposal_id, proposer]`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `proposal_id` | `u64` | Unique proposal identifier |
+| `proposer` | `Address` | Address that created the proposal |
+| `action_type` | `ProposalAction` | The type of action proposed |
+| `proposed_value` | `i128` | The proposed value for the action |
+| `voting_end` | `u64` | Timestamp when voting ends |
+
+### VoteCast
+
+Emitted when a vote is cast on a proposal.
+
+Topics: `["vote_cast", proposal_id, voter]`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `proposal_id` | `u64` | Proposal being voted on |
+| `voter` | `Address` | Address casting the vote |
+| `support` | `bool` | True = for, False = against |
+| `weight` | `i128` | Voting weight (own + delegated) |
+
+### ProposalExecuted
+
+Emitted when a passed proposal is executed.
+
+Topics: `["proposal_executed", proposal_id]`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `proposal_id` | `u64` | Executed proposal identifier |
+| `action_type` | `ProposalAction` | The action that was executed |
+| `proposed_value` | `i128` | The value that was applied |
+| `votes_for` | `i128` | Total votes in favour |
+| `votes_against` | `i128` | Total votes against |
+
+### ProposalVetoed
+
+Emitted when the admin vetoes a proposal.
+
+Topics: `["proposal_vetoed", proposal_id, admin]`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `proposal_id` | `u64` | Vetoed proposal identifier |
+| `admin` | `Address` | Admin who vetoed |
+| `reason_hash` | `BytesN<32>` | Hash of off-chain reason |
+
+### VotesDelegated
+
+Emitted when voting power is delegated.
+
+Topics: `["votes_delegated", delegator, delegate]`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `delegator` | `Address` | Address delegating their votes |
+| `delegate` | `Address` | Address receiving the delegation |
+
+### VotesUndelegated
+
+Emitted when a delegation is removed.
+
+Topics: `["votes_undelegated", delegator]`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `delegator` | `Address` | Address removing their delegation |
+
+### VetoPowerDisabled
+
+Emitted when admin veto power is permanently disabled.
+
+Topics: `["veto_power_disabled"]`
+
+| Field | Type | Description |
+| ----- | ---- | ----------- |
+| `disabled_by` | `Address` | The ILN contract that disabled veto power |
 
 ---
 
