@@ -8,6 +8,10 @@
 //!             disable mechanism.
 
 #![no_std]
+
+#[cfg(test)]
+extern crate std;
+
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, token::Client as TokenClient, vec,
     Address, BytesN, Env, IntoVal, Symbol, Vec,
@@ -1172,3 +1176,5 @@ impl GovContract {
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod tests_benchmarks;

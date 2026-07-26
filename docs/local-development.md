@@ -76,6 +76,10 @@ source .contracts-local.env
 | `ILN_GOVERNANCE_ID` | Local deploy output | none | Deployed governance contract ID. |
 | `ILN_DISTRIBUTION_ID` | Local deploy output | none | Deployed distribution contract ID. |
 | `REPUTATION_BONUS_ID` | Local deploy output | none | Deployed reputation bonus contract ID. |
+| `INSURANCE_POOL_ID` | Local deploy output | none | Deployed `insurance_pool` contract ID. Created by `scripts/deploy-insurance-pool.sh` (also runnable via `docker compose --profile insurance up insurance-pool-deploy`). |
+| `INSURANCE_POOL_ADMIN` | `scripts/deploy-insurance-pool.sh` | deploying account's own address | Address passed to `insurance_pool`'s `initialize(admin, coverage)`. |
+| `INSURANCE_POOL_COVERAGE` | `scripts/deploy-insurance-pool.sh` | `1000000000` | Flat per-claim compensation cap (token stroops) passed to `initialize`. |
+| `INSURANCE_POOL_CONTRACT_ID` | Docker Compose indexer/notifications containers | none | Deployed `insurance_pool` contract ID, made available to local services once deployed. Set to `$INSURANCE_POOL_ID` after running the deploy script. |
 | `NETWORK` | Local deploy output | `local` | Stellar CLI network name used during deployment. |
 | `SOURCE` | Local deploy output | `alice` | Stellar CLI key name used to deploy local contracts. |
 | `SOROBAN_RPC_URL` | `scripts/smoke-test.ts`, migration scripts | `https://soroban-testnet.stellar.org` | RPC endpoint for smoke tests or migration helpers. Use `http://localhost:8000` for local quickstart. |
@@ -229,6 +233,20 @@ SOROBAN_RPC_URL=http://localhost:8000 \
 NETWORK_PASSPHRASE="Standalone Network ; February 2021" \
 npx --yes tsx scripts/smoke-test.ts
 ```
+
+`deploy-local.sh` deploys every contract, including `insurance_pool`. To deploy
+just `insurance_pool` on its own (e.g. after changing only that contract), run
+`./scripts/deploy-insurance-pool.sh local alice` directly, or use the opt-in
+Docker Compose profile, which installs the Stellar CLI and runs the same
+script inside a container:
+
+```bash
+docker compose --profile insurance up insurance-pool-deploy
+```
+
+This is not part of the default `docker compose up` — it's opt-in because it
+installs the Stellar CLI via `cargo install` on first run, which can take
+several minutes.
 
 ## Run Services Individually
 
