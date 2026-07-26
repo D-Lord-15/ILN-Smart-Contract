@@ -3,7 +3,9 @@
 #[cfg(test)]
 mod tests {
     use iln_governance::{GovernanceContract, GovernanceContractClient};
-    use invoice_liquidity::{InvoiceLiquidityContract, InvoiceLiquidityContractClient, ReferralCode};
+    use invoice_liquidity::{
+        InvoiceLiquidityContract, InvoiceLiquidityContractClient, ReferralCode,
+    };
     use proptest::prelude::*;
     use soroban_sdk::{
         address_payload::AddressPayload,
@@ -140,7 +142,7 @@ mod tests {
             env.mock_all_auths();
             let contract_id = env.register_contract(None, GovernanceContract);
             let gov = GovernanceContractClient::new(&env, &contract_id);
-            
+
             // Initialize gov contract
             let admin = Address::generate(&env);
             let token = Address::generate(&env);
@@ -165,7 +167,7 @@ mod tests {
             env.mock_all_auths();
             let contract_id = env.register_contract(None, GovernanceContract);
             let gov = GovernanceContractClient::new(&env, &contract_id);
-            
+
             // Initialize gov contract
             let admin = Address::generate(&env);
             let token = Address::generate(&env);
@@ -175,6 +177,8 @@ mod tests {
             let delegate = Address::from_val(&env, &AddressPayload::AccountIdPublicKeyEd25519(BytesN::from_array(&env, &delegate_bytes)));
 
             let _ = gov.try_delegate_votes(&delegator, &delegate);
+        }
+
         // ------------------------------------------------------------
         // Issue #497: dispute_invoice must never panic
         // ------------------------------------------------------------
