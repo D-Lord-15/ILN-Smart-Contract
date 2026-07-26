@@ -15,6 +15,7 @@ design choices so that future contributors understand *why* the system is built 
 | [ADR-005](ADR-005-governance-timelock.md) | Governance Timelock Length (No Timelock in v1) | Accepted |
 | [ADR-006](ADR-006-insurance-pool-design.md) | Insurance Pool Design | Accepted |
 | [ADR-007](adr-007-nft-invoice-representation.md) | NFT Invoice Representation | Accepted |
+| [ADR-008](adr-008-multisig-admin.md) | Multi-Signature Admin | Accepted |
 
 ## Template
 
