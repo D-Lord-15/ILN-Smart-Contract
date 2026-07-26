@@ -8,6 +8,8 @@ import {
   enrollInsurancePool,
   depositInsurancePremium,
   claimInsurance,
+  isInsuranceEnrolled,
+  getInsurancePremiums,
   InsuranceContractError,
 } from "./insurance.js";
 import { SorobanRpc, Keypair, Address, Account } from "@stellar/stellar-sdk";
@@ -257,5 +259,43 @@ describe("claimInsurance", () => {
     await expect(
       claimInsurance(server, CONTRACT_ID, 42n, adminAccount, vi.fn((tx) => tx))
     ).rejects.toThrow(InsuranceContractError.AlreadyClaimed);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Convenience methods
+// ---------------------------------------------------------------------------
+
+describe("isInsuranceEnrolled", () => {
+  it("returns is_enrolled boolean on success (convenience wrapper)", async () => {
+    const server = serverWith({ result: { retval: {} } });
+    mockScValToNative.mockReturnValue(true);
+
+    const enrolled = await isInsuranceEnrolled(server, CONTRACT_ID, VALID_LP);
+    expect(enrolled).toBe(true);
+  });
+
+  it("returns false if no retval in simulation (convenience wrapper)", async () => {
+    const server = serverWith({ result: { retval: null } });
+
+    const enrolled = await isInsuranceEnrolled(server, CONTRACT_ID, VALID_LP);
+    expect(enrolled).toBe(false);
+  });
+});
+
+describe("getInsurancePremiums", () => {
+  it("returns premiums paid on success (convenience wrapper)", async () => {
+    const server = serverWith({ result: { retval: {} } });
+    mockScValToNative.mockReturnValue(300n);
+
+    const premiums = await getInsurancePremiums(server, CONTRACT_ID, VALID_LP);
+    expect(premiums).toBe(300n);
+  });
+
+  it("returns 0n if no retval in simulation (convenience wrapper)", async () => {
+    const server = serverWith({ result: { retval: null } });
+
+    const premiums = await getInsurancePremiums(server, CONTRACT_ID, VALID_LP);
+    expect(premiums).toBe(0n);
   });
 });

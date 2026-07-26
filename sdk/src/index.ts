@@ -91,6 +91,8 @@ export {
   enrollInsurancePool,
   depositInsurancePremium,
   claimInsurance,
+  isInsuranceEnrolled,
+  getInsurancePremiums,
   InsuranceContractError,
 } from "./methods/insurance.js";
 export type { InsurancePoolInfo } from "@invoice-liquidity/types";
@@ -139,3 +141,4 @@ export {
   submitBatchTransaction,
 } from "./methods/batch.js";
 export type { BatchContractCall, BatchTransactionOptions, BatchTransactionResult } from "./methods/batch.js";
+export { setAdmin, upgrade, setDistributionContract } from "./methods/admin.js";

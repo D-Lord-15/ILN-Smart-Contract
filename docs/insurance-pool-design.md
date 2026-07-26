@@ -105,6 +105,147 @@ if let Some(pool) = storage::get_insurance_pool(&env) {
 > `InsurancePoolInterfaceClient` it relies on is already generated and exported
 > by this crate.
 
+## SDK Integration
+
+The `@iln/sdk` TypeScript package provides convenience methods to interact with the insurance pool:
+
+### Querying pool status
+
+```typescript
+import { ILNClient } from "@iln/sdk";
+import { Networks } from "@stellar/stellar-sdk";
+
+const client = ILNClient.testnet(mySigner);
+
+const poolBalance = await client.getPoolBalance(
+  client.rpc,
+  insurancePoolAddress
+);
+
+const coverage = await client.getCoverage(
+  client.rpc,
+  insurancePoolAddress
+);
+
+const isEnrolled = await client.isEnrolled(
+  client.rpc,
+  insurancePoolAddress,
+  lpAddress
+);
+
+const premiumsPaid = await client.getPremiumsPaid(
+  client.rpc,
+  insurancePoolAddress,
+  lpAddress
+);
+```
+
+### Convenience methods
+
+The SDK provides shorter method names for common queries:
+
+```typescript
+// Convenience wrapper for isEnrolled(...)
+const enrolled = await client.isInsuranceEnrolled(
+  client.rpc,
+  insurancePoolAddress,
+  lpAddress
+);
+
+// Convenience wrapper for getPremiumsPaid(...)
+const premiums = await client.getInsurancePremiums(
+  client.rpc,
+  insurancePoolAddress,
+  lpAddress
+);
+```
+
+### Querying LP pool info
+
+Fetch enrollment status, pool balance, coverage cap, and premiums paid in one call:
+
+```typescript
+const poolInfo = await client.getInsurancePoolInfo(
+  client.rpc,
+  insurancePoolAddress,
+  lpAddress
+);
+
+console.log(`
+  Enrolled: ${poolInfo.isEnrolled}
+  Premiums paid: ${poolInfo.premiumsPaid}
+  Pool balance: ${poolInfo.poolBalance}
+  Coverage cap: ${poolInfo.coverage}
+`);
+```
+
+### Enrolling in the pool
+
+```typescript
+import { Keypair } from "@stellar/stellar-sdk";
+
+const lp = Keypair.fromSecret(lpSecretKey);
+const sourceAccount = await client.rpc.getAccount(lp.publicKey());
+
+const { txHash } = await client.enrollInsurancePool(
+  client.rpc,
+  insurancePoolAddress,
+  lp.publicKey(),
+  sourceAccount,
+  (tx) => {
+    tx.sign(lp);
+    return tx;
+  }
+);
+
+console.log(`Enrolled in insurance pool: ${txHash}`);
+```
+
+### Depositing premiums
+
+Auto-enrolls the LP on first payment.
+
+```typescript
+const { txHash } = await client.depositInsurancePremium(
+  client.rpc,
+  insurancePoolAddress,
+  lpAddress,
+  premiumAmount,
+  sourceAccount,
+  (tx) => {
+    tx.sign(lp);
+    return tx;
+  }
+);
+
+console.log(`Premium deposited: ${txHash}`);
+```
+
+### Filing a claim (admin-only)
+
+In production, the `invoice_liquidity` contract is the pool admin and files claims automatically on confirmed defaults. For testing or standalone use:
+
+```typescript
+// Only the pool admin can call claim
+const adminKeypair = Keypair.fromSecret(adminSecretKey);
+const adminAccount = await client.rpc.getAccount(adminKeypair.publicKey());
+
+const { txHash, payout } = await client.claimInsurance(
+  client.rpc,
+  insurancePoolAddress,
+  invoiceId,
+  adminAccount,
+  (tx) => {
+    tx.sign(adminKeypair);
+    return tx;
+  }
+);
+
+console.log(`Claim filed for invoice ${invoiceId}: payout ${payout} stroops`);
+```
+
+---
+
 ## Follow-up work (before mainnet)
 
 - Real SAC token custody for premiums and payouts.

@@ -95,6 +95,94 @@ The insurance pool operates as a separate contract with its own authorization mo
 
 This isolation ensures that the insurance pool cannot be drained except through claims authorized by the main contract, and that no single LP can block others from withdrawing coverage.
 
+### Additional Admin Functions (Dispute Resolution)
+
+| Instruction | Allowed Role(s) | Description |
+| ----------- | --------------- | ----------- |
+| `resolve_appeal` | Admin | Approves or rejects a default appeal (must call `require_admin`) |
+| `resolve_dispute` | Admin | Resolves a dispute on an invoice |
+| `auto_resolve_dispute` | Anyone | Auto-resolves a dispute after timeout elapsed |
+| `set_min_payer_reputation` | Admin | Sets minimum payer reputation threshold |
+| `set_price_oracle` | Admin | Updates the price oracle address |
+| `set_max_oracle_age` | Admin | Updates the maximum oracle age |
+| `upgrade` | Admin | Emits upgrade event for WASM hash change |
+| `update_config` | Admin | Updates reputation and token configuration |
+
+### Governance Contract Admin Functions
+
+| Instruction | Allowed Role(s) | Description |
+| ----------- | --------------- | ----------- |
+| `set_execution_delay` | Admin | Sets timelock delay for proposal execution |
+| `veto_proposal` | Admin | Vetoes an active/passed proposal |
+| `set_min_quorum_bps` | ILN Contract | Updates quorum threshold |
+| `set_min_proposal_balance` | ILN Contract | Updates minimum proposer balance |
+| `disable_veto_power` | ILN Contract | Permanently disables admin veto |
+
+### Insurance Pool Contract Admin Functions
+
+| Instruction | Allowed Role(s) | Description |
+| ----------- | --------------- | ----------- |
+| `claim` | Admin (liquidity contract) | Files a claim for defaulted invoice |
+
+## 5. Audit Findings (Issue #540)
+
+The following findings were identified and resolved during the access control audit:
+
+### Finding AC-01: Missing `require_admin` in `resolve_appeal`
+- **Severity:** High
+- **Location:** `contracts/invoice_liquidity/src/lib.rs:resolve_appeal`
+- **Description:** The function lacked an explicit `require_admin` guard. Although only the payer of the specific invoice could trigger appeals, the resolution function could be called by anyone, allowing unauthorized state transitions from `Appealed` to `Defaulted`.
+- **Resolution:** Added `require_admin(&env)?;` as the first statement in the function body.
+- **Commit:** This commit.
+
+### Finding AC-02: All other admin functions properly guarded
+- All admin-privileged functions in the Invoice Liquidity, Insurance Pool, and Governance contracts include explicit authorization checks at entry. No additional missing guards were found.
+
+## 6. Rate Limiting Design (Issue #541)
+
+### Rationale
+
+Certain admin operations are sensitive to high-frequency invocation — an attacker who compromises an admin key could rapidly toggle economic parameters to extract value or disrupt protocol operations. Rate limiting introduces a time-based cooldown between successive calls to mitigate this risk.
+
+### Functions with Rate Limiting
+
+| Function | Cooldown | Rationale |
+|---|---|---|
+| `set_admin` | 720 ledgers (~1h) | Admin key rotation must be slow to allow detection |
+| `upgrade` | 1440 ledgers (~2h) | Contract upgrade is the most sensitive operation |
+| `update_fee_rate` | 360 ledgers (~30min) | Economic parameter manipulation |
+| `update_max_discount` | 360 ledgers (~30min) | Economic parameter manipulation |
+| `set_min_payer_reputation` | 360 ledgers (~30min) | Economic parameter manipulation |
+| `set_distribution_contract` | 120 ledgers (~10min) | Infrastructure change |
+| `set_price_oracle` | 120 ledgers (~10min) | Infrastructure change |
+| `set_max_oracle_age` | 120 ledgers (~10min) | Infrastructure change |
+| `add_token` | 120 ledgers (~10min) | Token allowlist change |
+| `remove_token` | 120 ledgers (~10min) | Token allowlist change |
+
+### Exempt Functions
+
+Emergency functions are not rate-limited so they can be used immediately when a threat is detected:
+- `pause`
+- `unpause`
+- `resolve_appeal`
+- `resolve_dispute`
+
+### Implementation
+
+Rate limiting is implemented in `contracts/invoice_liquidity/src/access.rs`:
+
+- `check_rate_limit(env, fn_name, cooldown_ledgers)` checks the last ledger when the function was called. If insufficient ledgers have elapsed, it returns `ContractError::RateLimited`. Otherwise, it records the current ledger as the last call time.
+- Storage key: `DataKey::RateLimit(Symbol::new(env, fn_name))` — per-function, instance storage.
+- The cooldown is measured in ledgers (not timestamps) to align with Soroban's deterministic execution model.
+- At ~5 seconds per ledger: 120 ledgers ≈ 10 min, 360 ≈ 30 min, 720 ≈ 1h, 1440 ≈ 2h.
+
+### Audit Finding RL-01
+
+- **Severity:** Medium
+- **Finding:** Several admin functions (`update_fee_rate`, `set_admin`, `upgrade`, etc.) lacked any rate-limiting mechanism, allowing rapid successive calls that could be used to grief the protocol or confuse indexers.
+- **Resolution:** Added `check_rate_limit` guard to all sensitive admin functions with appropriate cooldown periods.
+
+## 7. Security Notes
 ## 5. Security Notes
 
 - **Principle of Least Privilege**: Each instruction relies only on the minimal authority required to execute.

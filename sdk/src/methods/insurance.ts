@@ -413,3 +413,43 @@ export async function claimInsurance(
   );
   return { txHash, payout: (retval as bigint | undefined) ?? 0n };
 }
+
+/**
+ * Convenience method: check if a liquidity provider is enrolled in the insurance pool.
+ *
+ * Alias for `isEnrolled` with shorter naming.
+ *
+ * @param server              - Soroban RPC server for the target network
+ * @param contractId          - Deployed insurance pool contract address
+ * @param lpAddress           - The LP's Stellar G... address
+ * @param networkPassphrase   - Stellar network passphrase (default: TESTNET)
+ * @returns True if enrolled, false otherwise
+ */
+export async function isInsuranceEnrolled(
+  server: SorobanRpc.Server,
+  contractId: string,
+  lpAddress: string,
+  networkPassphrase: string = Networks.TESTNET
+): Promise<boolean> {
+  return isEnrolled(server, contractId, lpAddress, networkPassphrase);
+}
+
+/**
+ * Convenience method: get total premiums paid by an LP to the insurance pool.
+ *
+ * Alias for `getPremiumsPaid` with shorter naming.
+ *
+ * @param server              - Soroban RPC server for the target network
+ * @param contractId          - Deployed insurance pool contract address
+ * @param lpAddress           - The LP's Stellar G... address
+ * @param networkPassphrase   - Stellar network passphrase (default: TESTNET)
+ * @returns The total premiums paid as a bigint
+ */
+export async function getInsurancePremiums(
+  server: SorobanRpc.Server,
+  contractId: string,
+  lpAddress: string,
+  networkPassphrase: string = Networks.TESTNET
+): Promise<bigint> {
+  return getPremiumsPaid(server, contractId, lpAddress, networkPassphrase);
+}

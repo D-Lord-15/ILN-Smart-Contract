@@ -12,6 +12,43 @@ pub enum ReferralCode {
 }
 
 // ----------------------------------------------------------------
+// FORMAL VERIFICATION INVARIANTS
+//
+// == State Machine Invariants ==
+// INVARIANT SM1: InvoiceStatus transitions are strictly validated.
+//   Valid paths:
+//     Pending -> {Funded, PartiallyFunded, Cancelled, Expired, Disputed}
+//     PartiallyFunded -> {Funded, Cancelled, Disputed}
+//     Funded -> {Paid, Defaulted, Disputed}
+//     Defaulted -> {Appealed}
+//     Appealed -> {Defaulted} (via resolve_appeal — admin only)
+//     Disputed -> {Cancelled, Funded, PartiallyFunded, Pending} (admin resolution)
+//   Terminal states: {Paid, Expired, Cancelled}
+// INVARIANT SM2: No invalid transition is ever silently ignored — each
+//   returns a distinct ContractError variant.
+//
+// == Balance Invariants ==
+// INVARIANT B1: amount_funded <= amount  (enforced by OverfundingRejected)
+// INVARIANT B2: amount_paid <= amount    (enforced by OverpaymentRejected)
+// INVARIANT B3: amount_funded == amount  iff status == Funded
+// INVARIANT B4: amount_paid == amount    iff status == Paid
+//
+// == Authorization Invariants ==
+// INVARIANT A1: cancel_invoice requires caller == invoice.freelancer
+// INVARIANT A2: mark_paid requires caller == invoice.payer
+// INVARIANT A3: claim_default requires caller in invoice funders list
+// INVARIANT A4: Admin-only functions call require_admin() at entry
+// INVARIANT A5: dispute_invoice requires caller == invoice.payer
+// INVARIANT A6: appeal_default requires caller == invoice.payer
+//
+// == Storage Invariants ==
+// INVARIANT S1: Each invoice occupies an independent DataKey::Invoice(id).
+//   Operations on invoice i never read or write invoice j (i != j).
+// INVARIANT S2: Submitter invoice index and LP invoice index are eventually
+//   consistent — every invoice appears in at least one index.
+// ----------------------------------------------------------------
+
+// ----------------------------------------------------------------
 // Status enum — tracks lifecycle of invoice
 // ----------------------------------------------------------------
 

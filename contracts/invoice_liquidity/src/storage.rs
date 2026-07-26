@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, BytesN, Env};
+use soroban_sdk::{contracttype, Address, BytesN, Env, Symbol};
 
 use crate::config::Config;
 use crate::invoice::{AppealRecord, Invoice, LpFundRequest, ReputationScore};
@@ -58,6 +58,11 @@ pub enum DataKey {
     FeeTiers,
     /// Issue #539: Storage version tracking for migration safety.
     StorageVersion,
+    /// Reentrancy guard lock (Issue #535)
+    ReentrancyLock,
+    /// Last ledger sequence when each rate-limited function was called (Issue #541).
+    /// Keyed by a Symbol representing the function name.
+    RateLimit(Symbol),
 }
 
 // ----------------------------------------------------------------
