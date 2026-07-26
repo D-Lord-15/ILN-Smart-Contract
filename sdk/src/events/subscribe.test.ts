@@ -8,7 +8,7 @@ import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
  * - subscribe(): happy-path delivery, filtering, unsubscribe, reconnect back-off
  */
 
-import { parseContractEvent, matchesFilter, subscribe } from "./subscribe.js";
+import { parseContractEvent, matchesFilter, subscribe, replay } from "./subscribe.js";
 import type { ILNEvent } from "./types.js";
 
 // ---------------------------------------------------------------------------
@@ -385,7 +385,6 @@ function makeMockHorizon(opts: {
 } = {}) {
   let onmessageCb: ((raw: unknown) => void) | null = null;
   let onerrorCb: ((err: unknown) => void) | null = null;
-  
 
   const closeStream = vi.fn(() => {  });
 
@@ -411,14 +410,29 @@ function makeMockHorizon(opts: {
     return closeStream;
   });
 
-  const forContract = vi.fn(() => ({ limit: () => ({ stream }) }));
-  const contractEvents = vi.fn(() => ({ forContract }));
+  const call = vi.fn(async () => {
+    return {
+      records: opts.events || [],
+    };
+  });
+
+  const builder: any = {
+    forContract: vi.fn(() => builder),
+    limit: vi.fn(() => builder),
+    cursor: vi.fn(() => builder),
+    order: vi.fn(() => builder),
+    stream: stream,
+    call: call,
+  };
+
+  const contractEvents = vi.fn(() => builder);
 
   const horizon = { contractEvents } as unknown;
 
   return {
     horizon,
     stream,
+    call,
     closeStream,
     triggerError: (err: unknown) => onerrorCb?.(err),
     triggerMessage: (raw: unknown) => onmessageCb?.(raw),
@@ -603,5 +617,93 @@ describe("subscribe — reconnection", () => {
     vi.advanceTimersByTime(600);
     // Second attempt also throws but we just verify reconnect was scheduled
     expect((horizon as unknown).contractEvents).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("replay and gap recovery", () => {
+  it("replay() queries history and processes events", async () => {
+    const raw1 = { id: "100-1", ledger: 100, type: "contract", topic: [encodeVal("paused")], value: encodeVal({ timestamp: "100" }) };
+    const raw2 = { id: "100-2", ledger: 100, type: "contract", topic: [encodeVal("unpaused")], value: encodeVal({ timestamp: "101" }) };
+    const { horizon, call } = makeMockHorizon({ events: [raw1, raw2] });
+
+    const events: ILNEvent[] = [];
+    const lastCursor = await replay(horizon, "CBCONTRACT", {}, 100, (ev) => events.push(ev));
+
+    expect(events.length).toBe(2);
+    expect(events[0].type).toBe("paused");
+    expect(events[0].ledger).toBe(100);
+    expect(events[0].pagingToken).toBe("100-1");
+    expect(events[1].type).toBe("unpaused");
+    expect(events[1].ledger).toBe(100);
+    expect(events[1].pagingToken).toBe("100-2");
+    expect(lastCursor).toBe("100-2");
+    expect(call).toHaveBeenCalled();
+  });
+
+  it("subscribe() with fromLedger triggers replay then connects", async () => {
+    vi.useFakeTimers();
+    const rawReplay = { id: "100-1", ledger: 100, type: "contract", topic: [encodeVal("paused")], value: encodeVal({ timestamp: "100" }) };
+    const { horizon, stream } = makeMockHorizon({ events: [rawReplay] });
+
+    const events: ILNEvent[] = [];
+    subscribe(horizon, "CBCONTRACT", { fromLedger: 100 }, (ev) => events.push(ev));
+
+    // Wait for the async replay promise to resolve
+    await vi.runAllTimersAsync();
+
+    expect(events.length).toBe(1);
+    expect(events[0].type).toBe("paused");
+    expect(stream).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it("subscribe() detects ledger gaps and triggers gap recovery replay", async () => {
+    vi.useFakeTimers();
+    const { horizon, triggerMessage } = makeMockHorizon();
+
+    const events: ILNEvent[] = [];
+    subscribe(horizon, "CBCONTRACT", {}, (ev) => events.push(ev));
+
+    // Send first live event (ledger 100)
+    triggerMessage(makeRaw("paused", [], { timestamp: "100" }));
+    events[0] = { ...events[0], ledger: 100, pagingToken: "100-1" } as any;
+
+    // Create a gap! Send live event on ledger 105.
+    const mockGapEvent = {
+      id: "105-1",
+      ledger: 105,
+      type: "contract",
+      topic: [encodeVal("unpaused")],
+      value: encodeVal({ timestamp: "105" }),
+    };
+
+    const gapReplayEvent = {
+      id: "102-1",
+      ledger: 102,
+      type: "contract",
+      topic: [encodeVal("paused")],
+      value: encodeVal({ timestamp: "102" }),
+    };
+
+    const contractEventsSpy = horizon.contractEvents as any;
+    contractEventsSpy.mockImplementation(() => ({
+      forContract: () => ({
+        limit: () => ({
+          order: () => ({
+            cursor: () => ({
+              call: async () => ({ records: [gapReplayEvent] })
+            })
+          })
+        })
+      })
+    }));
+
+    // Trigger the gap event
+    triggerMessage(mockGapEvent);
+    await vi.runAllTimersAsync();
+
+    // Verify replay was triggered and replayed event is processed
+    expect(events.some(e => e.type === "paused" && e.ledger === 102)).toBe(true);
+    vi.useRealTimers();
   });
 });
