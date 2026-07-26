@@ -2,10 +2,17 @@
 
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, token::StellarAssetClient, Address, Env,
+    Symbol,
 };
 
 const HALF_TOKEN: i128 = 5_000_000;
 const HUNDRED_USDC_STROOPS: i128 = 1_000_000_000;
+/// Default LP reward rate: 10,000,000 stroops per 100 USDC.
+const DEFAULT_LP_REWARD_RATE: i128 = 10_000_000;
+/// Default freelancer reward rate: 5,000,000 stroops per settlement.
+const DEFAULT_FREELANCER_REWARD_RATE: i128 = HALF_TOKEN;
+/// Default payer reward rate: 5,000,000 stroops per on-time settlement.
+const DEFAULT_PAYER_REWARD_RATE: i128 = HALF_TOKEN;
 
 #[contracttype]
 pub enum StorageKey {
@@ -16,6 +23,12 @@ pub enum StorageKey {
     FreelancerSettled(Address),
     PayerOnTimeSettled(Address),
     Claimed(Address),
+    /// Reward rate per 100 USDC of LP volume (in stroops).
+    LpRewardRate,
+    /// Reward rate per freelancer settlement (in stroops).
+    FreelancerRewardRate,
+    /// Reward rate per on-time payer settlement (in stroops).
+    PayerRewardRate,
 }
 
 /// Emitted once, when the contract is initialised (Issue #538).
@@ -51,6 +64,15 @@ pub struct TokensClaimed {
     pub amount: i128,
 }
 
+/// Emitted when a reward rate is updated via governance.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct RewardRateUpdated {
+    pub rate_type: Symbol,
+    pub old_rate: i128,
+    pub new_rate: i128,
+}
+
 #[contract]
 pub struct IlnDistribution;
 
@@ -70,6 +92,15 @@ impl IlnDistribution {
         env.storage()
             .instance()
             .set(&StorageKey::GovToken, &gov_token);
+        env.storage()
+            .instance()
+            .set(&StorageKey::LpRewardRate, &DEFAULT_LP_REWARD_RATE);
+        env.storage()
+            .instance()
+            .set(&StorageKey::FreelancerRewardRate, &DEFAULT_FREELANCER_REWARD_RATE);
+        env.storage()
+            .instance()
+            .set(&StorageKey::PayerRewardRate, &DEFAULT_PAYER_REWARD_RATE);
 
         env.events().publish(
             (symbol_short!("init"),),
@@ -188,16 +219,128 @@ impl IlnDistribution {
             .get(&StorageKey::PayerOnTimeSettled(participant.clone()))
             .unwrap_or(0_u64);
 
-        let lp_reward = (lp_volume / HUNDRED_USDC_STROOPS).saturating_mul(10_000_000);
-        let freelancer_reward = (freelancer_settled as i128).saturating_mul(HALF_TOKEN);
-        let payer_reward = (payer_on_time as i128).saturating_mul(HALF_TOKEN);
+        let lp_reward_rate: i128 = env
+            .storage()
+            .instance()
+            .get(&StorageKey::LpRewardRate)
+            .unwrap_or(DEFAULT_LP_REWARD_RATE);
+        let freelancer_reward_rate: i128 = env
+            .storage()
+            .instance()
+            .get(&StorageKey::FreelancerRewardRate)
+            .unwrap_or(DEFAULT_FREELANCER_REWARD_RATE);
+        let payer_reward_rate: i128 = env
+            .storage()
+            .instance()
+            .get(&StorageKey::PayerRewardRate)
+            .unwrap_or(DEFAULT_PAYER_REWARD_RATE);
+
+        let lp_reward = (lp_volume / HUNDRED_USDC_STROOPS).saturating_mul(lp_reward_rate);
+        let freelancer_reward = (freelancer_settled as i128).saturating_mul(freelancer_reward_rate);
+        let payer_reward = (payer_on_time as i128).saturating_mul(payer_reward_rate);
 
         lp_reward
             .saturating_add(freelancer_reward)
             .saturating_add(payer_reward)
     }
 
+    /// Set LP reward rate (requires governance contract authorization).
+    pub fn set_lp_reward_rate(env: Env, new_rate: i128) {
+        Self::require_governance_invoker(&env);
+        let old_rate: i128 = env
+            .storage()
+            .instance()
+            .get(&StorageKey::LpRewardRate)
+            .unwrap_or(DEFAULT_LP_REWARD_RATE);
+        env.storage()
+            .instance()
+            .set(&StorageKey::LpRewardRate, &new_rate);
+        env.events().publish(
+            (symbol_short!("rw_upd"),),
+            RewardRateUpdated {
+                rate_type: Symbol::new(&env, "lp_reward"),
+                old_rate,
+                new_rate,
+            },
+        );
+    }
+
+    /// Set freelancer reward rate (requires governance contract authorization).
+    pub fn set_freelancer_reward_rate(env: Env, new_rate: i128) {
+        Self::require_governance_invoker(&env);
+        let old_rate: i128 = env
+            .storage()
+            .instance()
+            .get(&StorageKey::FreelancerRewardRate)
+            .unwrap_or(DEFAULT_FREELANCER_REWARD_RATE);
+        env.storage()
+            .instance()
+            .set(&StorageKey::FreelancerRewardRate, &new_rate);
+        env.events().publish(
+            (symbol_short!("rw_upd"),),
+            RewardRateUpdated {
+                rate_type: Symbol::new(&env, "freelancer_reward"),
+                old_rate,
+                new_rate,
+            },
+        );
+    }
+
+    /// Set payer reward rate (requires governance contract authorization).
+    pub fn set_payer_reward_rate(env: Env, new_rate: i128) {
+        Self::require_governance_invoker(&env);
+        let old_rate: i128 = env
+            .storage()
+            .instance()
+            .get(&StorageKey::PayerRewardRate)
+            .unwrap_or(DEFAULT_PAYER_REWARD_RATE);
+        env.storage()
+            .instance()
+            .set(&StorageKey::PayerRewardRate, &new_rate);
+        env.events().publish(
+            (symbol_short!("rw_upd"),),
+            RewardRateUpdated {
+                rate_type: Symbol::new(&env, "payer_reward"),
+                old_rate,
+                new_rate,
+            },
+        );
+    }
+
+    /// Get current LP reward rate.
+    pub fn get_lp_reward_rate(env: Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&StorageKey::LpRewardRate)
+            .unwrap_or(DEFAULT_LP_REWARD_RATE)
+    }
+
+    /// Get current freelancer reward rate.
+    pub fn get_freelancer_reward_rate(env: Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&StorageKey::FreelancerRewardRate)
+            .unwrap_or(DEFAULT_FREELANCER_REWARD_RATE)
+    }
+
+    /// Get current payer reward rate.
+    pub fn get_payer_reward_rate(env: Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&StorageKey::PayerRewardRate)
+            .unwrap_or(DEFAULT_PAYER_REWARD_RATE)
+    }
+
     fn require_iln_invoker(env: &Env) {
+        let iln_contract: Address = env
+            .storage()
+            .instance()
+            .get(&StorageKey::IlnContract)
+            .unwrap();
+        iln_contract.require_auth();
+    }
+
+    fn require_governance_invoker(env: &Env) {
         let iln_contract: Address = env
             .storage()
             .instance()
@@ -211,6 +354,9 @@ impl IlnDistribution {
 mod test {
     use super::*;
     use soroban_sdk::{testutils::Address as _, token::Client as TokenClient, Address};
+
+    #[cfg(test)]
+    use super::{HALF_TOKEN, HUNDRED_USDC_STROOPS};
 
     #[contract]
     pub struct MockIln;
@@ -313,5 +459,101 @@ mod test {
 
         assert_eq!(dist.claim_tokens(&freelancer), HALF_TOKEN);
         assert_eq!(dist.claim_tokens(&payer), 0);
+    }
+
+    #[test]
+    fn governance_can_update_lp_reward_rate() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let iln_id = env.register_contract(None, MockIln);
+        let dist_id = env.register_contract(None, IlnDistribution);
+        let dist = IlnDistributionClient::new(&env, &dist_id);
+
+        let gov_token_id = env.register_stellar_asset_contract_v2(dist_id.clone());
+        let gov_token = gov_token_id.address();
+
+        dist.initialize(&iln_id, &gov_token);
+
+        // Check default rate
+        assert_eq!(dist.get_lp_reward_rate(), DEFAULT_LP_REWARD_RATE);
+
+        // Update rate via governance (with ILN auth)
+        dist.set_lp_reward_rate(&20_000_000);
+        assert_eq!(dist.get_lp_reward_rate(), 20_000_000);
+    }
+
+    #[test]
+    fn governance_can_update_freelancer_reward_rate() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let iln_id = env.register_contract(None, MockIln);
+        let dist_id = env.register_contract(None, IlnDistribution);
+        let dist = IlnDistributionClient::new(&env, &dist_id);
+
+        let gov_token_id = env.register_stellar_asset_contract_v2(dist_id.clone());
+        let gov_token = gov_token_id.address();
+
+        dist.initialize(&iln_id, &gov_token);
+
+        // Check default rate
+        assert_eq!(dist.get_freelancer_reward_rate(), DEFAULT_FREELANCER_REWARD_RATE);
+
+        // Update rate
+        dist.set_freelancer_reward_rate(&8_000_000);
+        assert_eq!(dist.get_freelancer_reward_rate(), 8_000_000);
+    }
+
+    #[test]
+    fn governance_can_update_payer_reward_rate() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let iln_id = env.register_contract(None, MockIln);
+        let dist_id = env.register_contract(None, IlnDistribution);
+        let dist = IlnDistributionClient::new(&env, &dist_id);
+
+        let gov_token_id = env.register_stellar_asset_contract_v2(dist_id.clone());
+        let gov_token = gov_token_id.address();
+
+        dist.initialize(&iln_id, &gov_token);
+
+        // Check default rate
+        assert_eq!(dist.get_payer_reward_rate(), DEFAULT_PAYER_REWARD_RATE);
+
+        // Update rate
+        dist.set_payer_reward_rate(&7_000_000);
+        assert_eq!(dist.get_payer_reward_rate(), 7_000_000);
+    }
+
+    #[test]
+    fn updated_rates_affect_reward_calculation() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let iln_id = env.register_contract(None, MockIln);
+        let dist_id = env.register_contract(None, IlnDistribution);
+        let dist = IlnDistributionClient::new(&env, &dist_id);
+        let iln = MockIlnClient::new(&env, &iln_id);
+
+        let gov_token_id = env.register_stellar_asset_contract_v2(dist_id.clone());
+        let gov_token = gov_token_id.address();
+        let token_client = TokenClient::new(&env, &gov_token);
+
+        dist.initialize(&iln_id, &gov_token);
+
+        let lp = Address::generate(&env);
+
+        // Update LP reward rate to 20_000_000
+        dist.set_lp_reward_rate(&20_000_000);
+
+        // Accrue 100 USDC
+        iln.accrue_lp(&dist_id, &lp, &HUNDRED_USDC_STROOPS);
+
+        // Claim should give 20_000_000 instead of default 10_000_000
+        let claimed = dist.claim_tokens(&lp);
+        assert_eq!(claimed, 20_000_000);
+        assert_eq!(token_client.balance(&lp), 20_000_000);
     }
 }

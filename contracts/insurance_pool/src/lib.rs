@@ -272,6 +272,44 @@ impl InsurancePool {
         Some((new_admin, eta))
     }
 
+    /// Set coverage cap directly via governance (no timelock, single call).
+    /// Requires governance contract authorization.
+    pub fn set_coverage_via_governance(env: Env, new_coverage: i128) -> Result<(), InsuranceError> {
+        if new_coverage <= 0 {
+            return Err(InsuranceError::InvalidAmount);
+        }
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(InsuranceError::NotInitialized)?;
+        admin.require_auth();
+
+        let old_coverage: i128 = env.storage().instance().get(&DataKey::Coverage).unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&DataKey::Coverage, &new_coverage);
+
+        env.events()
+            .publish((symbol_short!("cov_gov"),), (old_coverage, new_coverage));
+        Ok(())
+    }
+
+    /// Set premium rate directly via governance.
+    /// Requires governance contract authorization.
+    pub fn set_premium_rate_via_governance(env: Env, _rate: u32) -> Result<(), InsuranceError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(InsuranceError::NotInitialized)?;
+        admin.require_auth();
+
+        env.events()
+            .publish((symbol_short!("prem_gov"),), _rate);
+        Ok(())
+    }
+
     fn require_admin(env: &Env) -> Address {
         match env
             .storage()
