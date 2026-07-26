@@ -208,3 +208,53 @@ fn admin_transfer_can_be_cancelled() {
     let res = s.client.try_execute_admin_transfer();
     assert_eq!(res, Err(Ok(InsuranceError::NoPendingProposal)));
 }
+
+// ── Governance-controlled parameter updates ────────────────────────────────
+
+#[test]
+fn governance_can_update_coverage_cap() {
+    let s = setup();
+    assert_eq!(s.client.get_coverage(), COVERAGE);
+
+    let new_coverage = 2_000_000_000;
+    s.client.set_coverage_via_governance(&new_coverage);
+    assert_eq!(s.client.get_coverage(), new_coverage);
+}
+
+#[test]
+fn governance_rejects_non_positive_coverage() {
+    let s = setup();
+    let res = s.client.try_set_coverage_via_governance(&0);
+    assert_eq!(res, Err(Ok(InsuranceError::InvalidAmount)));
+
+    let res = s.client.try_set_coverage_via_governance(&-1_000_000);
+    assert_eq!(res, Err(Ok(InsuranceError::InvalidAmount)));
+}
+
+#[test]
+fn governance_can_set_premium_rate() {
+    let s = setup();
+    // Premium rate setting is allowed
+    let res = s.client.try_set_premium_rate_via_governance(&500);
+    assert!(res.is_ok());
+}
+
+#[test]
+fn coverage_update_affects_future_claims() {
+    let s = setup();
+    let lp = Address::generate(&s.env);
+
+    // Deposit with default coverage
+    s.client.deposit_premium(&lp, &(COVERAGE * 2));
+    let payout1 = s.client.claim(&1);
+    assert_eq!(payout1, COVERAGE);
+
+    // Update coverage to higher value
+    let new_coverage = 3_000_000_000;
+    s.client.set_coverage_via_governance(&new_coverage);
+
+    // Reset balance for testing
+    s.client.deposit_premium(&lp, &(new_coverage * 2));
+    let payout2 = s.client.claim(&2);
+    assert_eq!(payout2, new_coverage);
+}

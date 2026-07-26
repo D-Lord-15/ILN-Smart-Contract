@@ -448,3 +448,113 @@ fn test_resolve_queue_only_once_stored() {
     let second_winner = t.contract.resolve_fund_queue(&id);
     assert_eq!(first_winner, second_winner);
 }
+
+// ── Sorted Queue Optimization Tests ────────────────────────────────────────
+
+/// Verify that queue is maintained in sorted order (highest score first).
+/// This is the key optimization: resolve_fund_queue can return immediately.
+#[test]
+fn test_queue_maintains_sorted_order_after_joins() {
+    let t = setup_queue();
+    let id = submit_invoice(&t);
+
+    // Set different scores for each LP to ensure sorting.
+    // lp_a: score 50 (initial)
+    // lp_b: score 50 (initial)
+    // lp_c: score 50 (initial)
+
+    // Boost lp_c to 55
+    for _ in 0..5u32 {
+        let extra_id = submit_invoice(&t);
+        t.contract
+            .fund_invoice(&t.lp_c, &extra_id, &INVOICE_AMOUNT, &false);
+    }
+
+    // Join in order: A (50), B (50), C (55)
+    t.contract.join_fund_queue(&t.lp_a, &id);
+    t.contract.join_fund_queue(&t.lp_b, &id);
+    t.contract.join_fund_queue(&t.lp_c, &id);
+
+    // Resolve should return C (highest score) regardless of join order
+    let winner = t.contract.resolve_fund_queue(&id);
+    assert_eq!(winner, t.lp_c, "Highest score should be selected");
+}
+
+/// Test that LPs joining in reverse score order are still sorted correctly.
+#[test]
+fn test_queue_sorted_even_when_joining_in_reverse_order() {
+    let t = setup_queue();
+    let id = submit_invoice(&t);
+
+    // Create different scores:
+    // Boost lp_c to 60
+    for _ in 0..10u32 {
+        let extra_id = submit_invoice(&t);
+        t.contract
+            .fund_invoice(&t.lp_c, &extra_id, &INVOICE_AMOUNT, &false);
+    }
+
+    // Boost lp_b to 55
+    for _ in 0..5u32 {
+        let extra_id = submit_invoice(&t);
+        t.contract
+            .fund_invoice(&t.lp_b, &extra_id, &INVOICE_AMOUNT, &false);
+    }
+    // lp_a stays at 50
+
+    // Join in reverse score order: C (60), B (55), A (50)
+    t.contract.join_fund_queue(&t.lp_c, &id);
+    t.contract.join_fund_queue(&t.lp_b, &id);
+    t.contract.join_fund_queue(&t.lp_a, &id);
+
+    // Even though they joined in descending order, resolve should still work
+    let winner = t.contract.resolve_fund_queue(&id);
+    assert_eq!(winner, t.lp_c, "Highest score (lp_c) should win");
+}
+
+/// Test that inserting an LP with mid-range score places it correctly.
+#[test]
+fn test_queue_sorted_when_inserting_mid_range_scores() {
+    let t = setup_queue();
+    let id = submit_invoice(&t);
+
+    // Set up scores: lp_a=50, lp_b=60, lp_c=55
+    for _ in 0..10u32 {
+        let extra_id = submit_invoice(&t);
+        t.contract
+            .fund_invoice(&t.lp_b, &extra_id, &INVOICE_AMOUNT, &false);
+    }
+    for _ in 0..5u32 {
+        let extra_id = submit_invoice(&t);
+        t.contract
+            .fund_invoice(&t.lp_c, &extra_id, &INVOICE_AMOUNT, &false);
+    }
+
+    // Join in order: A (50), B (60), C (55)
+    // Queue should be sorted as: B (60), C (55), A (50)
+    t.contract.join_fund_queue(&t.lp_a, &id);
+    t.contract.join_fund_queue(&t.lp_b, &id);
+    t.contract.join_fund_queue(&t.lp_c, &id);
+
+    let winner = t.contract.resolve_fund_queue(&id);
+    assert_eq!(winner, t.lp_b, "Highest score (lp_b=60) should win");
+}
+
+/// Test that duplicate prevention still works after sorting optimization.
+#[test]
+fn test_duplicate_prevention_with_sorted_queue() {
+    let t = setup_queue();
+    let id = submit_invoice(&t);
+
+    // First join should succeed
+    t.contract.join_fund_queue(&t.lp_a, &id);
+
+    // Duplicate join should fail
+    let res = t.contract.try_join_fund_queue(&t.lp_a, &id);
+    assert_eq!(res, Err(Ok(ContractError::AlreadyInQueue)));
+
+    // Other LPs can still join
+    t.contract.join_fund_queue(&t.lp_b, &id);
+    let winner = t.contract.resolve_fund_queue(&id);
+    assert!(winner == t.lp_a || winner == t.lp_b);
+}

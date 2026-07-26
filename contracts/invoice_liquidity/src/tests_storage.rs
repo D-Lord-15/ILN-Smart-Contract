@@ -174,3 +174,75 @@ fn test_storage_ttl_near_boundary() {
     let invoice = t.contract.get_invoice(&id);
     assert_eq!(invoice.id, id);
 }
+
+// ── StatsAccumulator Tests ─────────────────────────────────────────────────
+
+#[test]
+fn stats_accumulator_batch_updates() {
+    let t = setup();
+
+    // Create accumulator and add multiple deltas
+    let mut acc = crate::storage::StatsAccumulator::new();
+    acc.add_invoice();
+    acc.add_invoice();
+    acc.add_funded();
+    acc.add_paid();
+
+    // Initial state: all stats are 0
+    assert_eq!(crate::storage::get_total_invoices(&t.env), 0);
+    assert_eq!(crate::storage::get_total_funded(&t.env), 0);
+    assert_eq!(crate::storage::get_total_paid(&t.env), 0);
+
+    // Commit should apply all updates
+    t.env.as_contract(&t.contract.address, || {
+        acc.commit(&t.env);
+    });
+
+    // Verify updates were applied
+    assert_eq!(crate::storage::get_total_invoices(&t.env), 2);
+    assert_eq!(crate::storage::get_total_funded(&t.env), 1);
+    assert_eq!(crate::storage::get_total_paid(&t.env), 1);
+}
+
+#[test]
+fn stats_accumulator_empty_commit_is_noop() {
+    let t = setup();
+
+    // Create empty accumulator and commit
+    let acc = crate::storage::StatsAccumulator::new();
+    t.env.as_contract(&t.contract.address, || {
+        acc.commit(&t.env);
+    });
+
+    // All stats should still be 0 (no-op)
+    assert_eq!(crate::storage::get_total_invoices(&t.env), 0);
+    assert_eq!(crate::storage::get_total_funded(&t.env), 0);
+    assert_eq!(crate::storage::get_total_paid(&t.env), 0);
+}
+
+#[test]
+fn stats_accumulator_preserves_existing_values() {
+    let t = setup();
+
+    // Pre-populate stats
+    t.env.as_contract(&t.contract.address, || {
+        crate::storage::increment_total_invoices(&t.env);
+        crate::storage::increment_total_funded(&t.env);
+    });
+
+    // Create accumulator with new deltas
+    let mut acc = crate::storage::StatsAccumulator::new();
+    acc.add_invoice();
+    acc.add_paid();
+    acc.add_paid();
+
+    // Commit
+    t.env.as_contract(&t.contract.address, || {
+        acc.commit(&t.env);
+    });
+
+    // Verify: existing values + new deltas
+    assert_eq!(crate::storage::get_total_invoices(&t.env), 2); // 1 + 1
+    assert_eq!(crate::storage::get_total_funded(&t.env), 1);   // 1 + 0
+    assert_eq!(crate::storage::get_total_paid(&t.env), 2);     // 0 + 2
+}
