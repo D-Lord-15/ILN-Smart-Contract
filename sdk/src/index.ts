@@ -44,7 +44,7 @@ export type {
   Unsubscribe,
 } from "./events/types.js";
 
-export { getInvoice, listInvoicesBySubmitter, listInvoicesByLP, getSubmitterInvoices } from "./methods/queries.js";
+export { getInvoice, listInvoicesBySubmitter, listInvoicesByLP, getSubmitterInvoices, getPayerScore } from "./methods/queries.js";
 export { getNftMetadata, getNftOwner } from "./methods/nft.js";
 export { submitInvoice } from "./methods/submitInvoice.js";
 export { transferLPPosition } from "./methods/transferLPPosition.js";
