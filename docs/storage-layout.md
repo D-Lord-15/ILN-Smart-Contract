@@ -103,7 +103,10 @@ value — a `u64` invoice id and an `Address` can never serialize identically.
 | `Claimed(u64)` | Persistent | `bool` | Whether a claim has been processed for an invoice id |
 | `PendingCoverage` | Instance | `i128` | Proposed new coverage cap awaiting timelock (Issue #542) |
 | `PendingAdmin` | Instance | `Address` | Proposed new admin awaiting timelock (Issue #542) |
-| `TimelockEta(TimelockAction)` | Instance | `u64` | Ledger timestamp at which a pending admin action becomes executable (Issue #542) |
+| `CoverageEta` | Instance | `u64` | Ledger timestamp at which pending coverage change becomes executable (Issue #542) |
+| `AdminEta` | Instance | `u64` | Ledger timestamp at which pending admin transfer becomes executable (Issue #542) |
+
+> **TTL note:** Persistent keys (`Enrolled`, `Premiums`, `Claimed`) use Soroban's default persistent TTL (min 1,000,000 / max 2,000,000 ledgers). Instance keys live for the contract's lifetime and are removed when the contract instance is deleted.
 
 ---
 
