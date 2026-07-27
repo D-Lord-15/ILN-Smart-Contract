@@ -64,6 +64,9 @@ pub enum GovernanceError {
     VetoPowerDisabled = 18,
     /// Proposer does not hold the minimum required token balance.
     InsufficientProposerBalance = 19,
+    /// Issue #531: the cross-contract execution call failed. The proposal
+    /// remains in `Passed` status so `execute_proposal` can be retried.
+    ExecutionFailed = 20,
 }
 
 // ================================================================
@@ -100,6 +103,25 @@ pub enum ProposalAction {
     UpdateInsuranceCoverageCap(i128),
     /// Update insurance pool premium rates (in bps).
     UpdateInsurancePremiumRate(u32),
+    /// Issue #532: register (or update) the default oracle for a feed type
+    /// on the ILN contract's oracle registry.
+    RegisterOracle(OracleFeedType, Address),
+    /// Issue #532: remove the default oracle for a feed type from the ILN
+    /// contract's oracle registry.
+    RemoveOracle(OracleFeedType),
+}
+
+/// Issue #532: mirrors `invoice_liquidity::oracle_registry::OracleFeedType`.
+/// Soroban contracts share no Rust types across crates — cross-contract
+/// calls decode structurally (same unit-variant names, same order), the
+/// same way `FeeTierConfig` below mirrors the ILN contract's fee tier
+/// struct. Keep variant names/order in sync with the ILN contract's enum.
+#[contracttype]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OracleFeedType {
+    Price,
+    Identity,
+    Credit,
 }
 
 /// Issue #533: Fee tier configuration.
@@ -185,6 +207,16 @@ pub struct ProposalExecuted {
     pub votes_against: i128,
 }
 
+/// Issue #531: emitted when a proposal's cross-contract execution call
+/// fails. The proposal remains `Passed` (not `Executed`) so a subsequent
+/// `execute_proposal` call can retry it.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProposalExecutionFailed {
+    pub proposal_id: u64,
+    pub action_type: ProposalAction,
+}
+
 /// Issue #68: emitted when the admin vetoes a proposal.
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
@@ -246,6 +278,14 @@ pub enum StorageKey {
     ProposalCount,
     VoteWeightSnapshot(u64, Address),
     HasVoted(u64, Address),
+    /// Issue #530: `true` when vote weight is `sqrt(balance + delegated)`
+    /// instead of linear. Defaults to `false` for backwards compatibility.
+    QuadraticVotingEnabled,
+    /// Issue #530: the actual weight applied to the tally for this voter on
+    /// this proposal (post square-root transform when quadratic voting is
+    /// enabled, otherwise equal to the linear balance). Recorded alongside
+    /// `HasVoted` as the vote receipt.
+    AppliedVoteWeight(u64, Address),
     /// Issue #64: forward delegation pointer — Delegation(X) = Y means X delegates to Y.
     Delegation(Address),
     /// Issue #64: running tally of total delegated weight pointing (transitively) at Address.
@@ -432,6 +472,78 @@ impl GovContract {
         );
 
         Ok(id)
+    }
+
+    // ── Issue #530: quadratic voting toggle ───────────────────────
+
+    /// Returns whether quadratic voting (`sqrt(balance + delegated)` weight)
+    /// is enabled. Defaults to `false` (linear weighting) for backwards
+    /// compatibility with proposals created before this feature existed.
+    pub fn is_quadratic_voting_enabled(env: Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&StorageKey::QuadraticVotingEnabled)
+            .unwrap_or(false)
+    }
+
+    /// Enables or disables quadratic voting.
+    ///
+    /// Authorization: the configured ILN contract address must authorize
+    /// (same governance-controlled-toggle pattern as `set_min_quorum_bps`).
+    pub fn set_quadratic_voting_enabled(env: Env, enabled: bool) -> Result<(), GovernanceError> {
+        let iln_contract: Address = env
+            .storage()
+            .instance()
+            .get(&StorageKey::IlnContract)
+            .unwrap();
+        iln_contract.require_auth();
+
+        let old_value: bool = env
+            .storage()
+            .instance()
+            .get(&StorageKey::QuadraticVotingEnabled)
+            .unwrap_or(false);
+        env.storage()
+            .instance()
+            .set(&StorageKey::QuadraticVotingEnabled, &enabled);
+
+        let pn = Symbol::new(&env, "quadratic_voting_enabled");
+        env.events().publish(
+            (Symbol::new(&env, "parameter_updated"), pn.clone()),
+            GovernanceParameterUpdated {
+                param_name: pn,
+                old_value: old_value as i128,
+                new_value: enabled as i128,
+            },
+        );
+        Ok(())
+    }
+
+    /// Returns the actual weight applied to `voter`'s vote on `proposal_id`,
+    /// i.e. the vote receipt recorded by Issue #530. `None` if the address
+    /// has not voted on this proposal (or its temporary-storage TTL expired).
+    pub fn get_applied_vote_weight(env: Env, proposal_id: u64, voter: Address) -> Option<i128> {
+        env.storage()
+            .temporary()
+            .get(&StorageKey::AppliedVoteWeight(proposal_id, voter))
+    }
+
+    /// Integer square root (floor) via binary search. `n` is assumed `>= 0`
+    /// (token balances and delegated weight tallies are non-negative).
+    fn isqrt(n: i128) -> i128 {
+        if n <= 1 {
+            return n.max(0);
+        }
+        let mut lo: i128 = 0;
+        let mut hi: i128 = n;
+        while lo < hi {
+            let mid = lo + (hi - lo + 1) / 2;
+            match mid.checked_mul(mid) {
+                Some(sq) if sq <= n => lo = mid,
+                _ => hi = mid - 1,
+            }
+        }
+        lo
     }
 
     /// Returns the configured minimum proposer balance.
@@ -631,7 +743,17 @@ impl GovContract {
             .get(&StorageKey::DelegatedToMe(voter.clone()))
             .unwrap_or(0_i128);
 
-        let weight = own_balance.saturating_add(delegated);
+        let raw_weight = own_balance.saturating_add(delegated);
+
+        // Issue #530: quadratic voting reduces whale influence by weighting
+        // votes by sqrt(balance + delegated) instead of the raw balance.
+        // Off by default so proposals created before this feature shipped
+        // keep their original linear semantics.
+        let weight = if Self::is_quadratic_voting_enabled(env.clone()) {
+            Self::isqrt(raw_weight)
+        } else {
+            raw_weight
+        };
 
         if weight == 0 {
             return Err(GovernanceError::NoVotingPower);
@@ -646,6 +768,15 @@ impl GovContract {
         env.storage().temporary().set(&voted_key, &true);
         env.storage().temporary().extend_ttl(
             &voted_key,
+            VOTE_RECEIPT_TTL_THRESHOLD_LEDGERS,
+            VOTE_RECEIPT_TTL_LEDGERS,
+        );
+
+        // Issue #530: record the actual weight applied (vote receipt).
+        let applied_weight_key = StorageKey::AppliedVoteWeight(proposal_id, voter.clone());
+        env.storage().temporary().set(&applied_weight_key, &weight);
+        env.storage().temporary().extend_ttl(
+            &applied_weight_key,
             VOTE_RECEIPT_TTL_THRESHOLD_LEDGERS,
             VOTE_RECEIPT_TTL_LEDGERS,
         );
@@ -789,49 +920,31 @@ impl GovContract {
                 .get(&StorageKey::IlnContract)
                 .unwrap();
 
-            match proposal.action_type.clone() {
+            // Issue #531: capture the outcome of the cross-contract call instead
+            // of firing-and-forgetting it. A failed call (callee panics / returns
+            // an error) must NOT mark the proposal `Executed` — it stays `Passed`
+            // so a subsequent `execute_proposal` call can retry it.
+            let succeeded = match proposal.action_type.clone() {
                 ProposalAction::UpdateFeeRate(rate) => {
                     let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
-                    env.invoke_contract::<()>(
-                        &iln_contract,
-                        &Symbol::new(&env, "update_fee_rate"),
-                        args,
-                    );
+                    Self::invoke_and_check(&env, &iln_contract, "update_fee_rate", args)
                 }
                 ProposalAction::AddToken(token, _decimals) => {
                     let args: Vec<soroban_sdk::Val> = vec![&env, token.into_val(&env)];
-                    env.invoke_contract::<()>(&iln_contract, &Symbol::new(&env, "add_token"), args);
+                    Self::invoke_and_check(&env, &iln_contract, "add_token", args)
                 }
                 ProposalAction::RemoveToken(token) => {
                     let args: Vec<soroban_sdk::Val> = vec![&env, token.into_val(&env)];
-                    env.invoke_contract::<()>(
-                        &iln_contract,
-                        &Symbol::new(&env, "remove_token"),
-                        args,
-                    );
+                    Self::invoke_and_check(&env, &iln_contract, "remove_token", args)
                 }
                 ProposalAction::UpdateMaxDiscountRate(rate) => {
                     let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
-                    env.invoke_contract::<()>(
-                        &iln_contract,
-                        &Symbol::new(&env, "update_max_discount"),
-                        args,
-                    );
+                    Self::invoke_and_check(&env, &iln_contract, "update_max_discount", args)
                 }
-                ProposalAction::UpdateDecayParams(
-                    rate_bps,
-                    period_ledgers,
-                ) => {
-                    let args: Vec<soroban_sdk::Val> = vec![
-                        &env,
-                        rate_bps.into_val(&env),
-                        period_ledgers.into_val(&env),
-                    ];
-                    env.invoke_contract::<()>(
-                        &iln_contract,
-                        &Symbol::new(&env, "update_decay_params"),
-                        args,
-                    );
+                ProposalAction::UpdateDecayParams(rate_bps, period_ledgers) => {
+                    let args: Vec<soroban_sdk::Val> =
+                        vec![&env, rate_bps.into_val(&env), period_ledgers.into_val(&env)];
+                    Self::invoke_and_check(&env, &iln_contract, "update_decay_params", args)
                 }
                 ProposalAction::UpdateDistributionRewardParams(
                     half_token,
@@ -849,27 +962,15 @@ impl GovContract {
                         hundred_usdc_stroops.into_val(&env),
                         lp_multiplier.into_val(&env),
                     ];
-                    env.invoke_contract::<()>(
-                        &dist_contract,
-                        &Symbol::new(&env, "update_reward_params"),
-                        args,
-                    );
+                    Self::invoke_and_check(&env, &dist_contract, "update_reward_params", args)
                 }
                 ProposalAction::UpdateFeeTiers(tiers) => {
                     let args: Vec<soroban_sdk::Val> = vec![&env, tiers.into_val(&env)];
-                    env.invoke_contract::<()>(
-                        &iln_contract,
-                        &Symbol::new(&env, "update_fee_tiers"),
-                        args,
-                    );
+                    Self::invoke_and_check(&env, &iln_contract, "update_fee_tiers", args)
                 }
                 ProposalAction::Upgrade(new_wasm_hash) => {
                     let args: Vec<soroban_sdk::Val> = vec![&env, new_wasm_hash.into_val(&env)];
-                    env.invoke_contract::<()>(
-                        &iln_contract,
-                        &Symbol::new(&env, "upgrade"),
-                        args,
-                    );
+                    Self::invoke_and_check(&env, &iln_contract, "upgrade", args)
                 }
                 ProposalAction::UpdateLpRewardRate(rate) => {
                     let dist_contract: Address = env
@@ -878,11 +979,7 @@ impl GovContract {
                         .get(&StorageKey::DistributionContract)
                         .unwrap();
                     let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
-                    env.invoke_contract::<()>(
-                        &dist_contract,
-                        &Symbol::new(&env, "set_lp_reward_rate"),
-                        args,
-                    );
+                    Self::invoke_and_check(&env, &dist_contract, "set_lp_reward_rate", args)
                 }
                 ProposalAction::UpdateFreelancerRewardRate(rate) => {
                     let dist_contract: Address = env
@@ -891,11 +988,7 @@ impl GovContract {
                         .get(&StorageKey::DistributionContract)
                         .unwrap();
                     let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
-                    env.invoke_contract::<()>(
-                        &dist_contract,
-                        &Symbol::new(&env, "set_freelancer_reward_rate"),
-                        args,
-                    );
+                    Self::invoke_and_check(&env, &dist_contract, "set_freelancer_reward_rate", args)
                 }
                 ProposalAction::UpdatePayerRewardRate(rate) => {
                     let dist_contract: Address = env
@@ -904,11 +997,7 @@ impl GovContract {
                         .get(&StorageKey::DistributionContract)
                         .unwrap();
                     let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
-                    env.invoke_contract::<()>(
-                        &dist_contract,
-                        &Symbol::new(&env, "set_payer_reward_rate"),
-                        args,
-                    );
+                    Self::invoke_and_check(&env, &dist_contract, "set_payer_reward_rate", args)
                 }
                 ProposalAction::UpdateInsuranceCoverageCap(cap) => {
                     let insurance_contract: Address = env
@@ -917,11 +1006,12 @@ impl GovContract {
                         .get(&StorageKey::IlnContract)
                         .unwrap();
                     let args: Vec<soroban_sdk::Val> = vec![&env, cap.into_val(&env)];
-                    env.invoke_contract::<()>(
+                    Self::invoke_and_check(
+                        &env,
                         &insurance_contract,
-                        &Symbol::new(&env, "set_coverage_via_governance"),
+                        "set_coverage_via_governance",
                         args,
-                    );
+                    )
                 }
                 ProposalAction::UpdateInsurancePremiumRate(rate) => {
                     let insurance_contract: Address = env
@@ -930,12 +1020,36 @@ impl GovContract {
                         .get(&StorageKey::IlnContract)
                         .unwrap();
                     let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
-                    env.invoke_contract::<()>(
+                    Self::invoke_and_check(
+                        &env,
                         &insurance_contract,
-                        &Symbol::new(&env, "set_premium_rate_via_governance"),
+                        "set_premium_rate_via_governance",
                         args,
-                    );
+                    )
                 }
+                ProposalAction::RegisterOracle(feed_type, oracle) => {
+                    let args: Vec<soroban_sdk::Val> =
+                        vec![&env, feed_type.into_val(&env), oracle.into_val(&env)];
+                    Self::invoke_and_check(&env, &iln_contract, "register_oracle", args)
+                }
+                ProposalAction::RemoveOracle(feed_type) => {
+                    let args: Vec<soroban_sdk::Val> = vec![&env, feed_type.into_val(&env)];
+                    Self::invoke_and_check(&env, &iln_contract, "remove_oracle", args)
+                }
+            };
+
+            if !succeeded {
+                env.events().publish(
+                    (Symbol::new(&env, "proposal_execution_failed"), proposal_id),
+                    ProposalExecutionFailed {
+                        proposal_id,
+                        action_type: proposal.action_type,
+                    },
+                );
+                // Proposal storage is untouched here — it remains `Passed` with
+                // its original `eta_ledger`, so calling `execute_proposal` again
+                // retries the same cross-contract call (Issue #531 retry mechanism).
+                return Err(GovernanceError::ExecutionFailed);
             }
 
             proposal.status = ProposalStatus::Executed;
@@ -1128,6 +1242,25 @@ impl GovContract {
     }
 
     // ── Private helpers ──────────────────────────────────────────
+
+    /// Issue #531: invoke a cross-contract call and report whether it
+    /// succeeded, instead of letting a trapped/failed call silently mark the
+    /// proposal `Executed`. Uses `try_invoke_contract` so a callee panic or
+    /// returned error surfaces here rather than aborting the whole
+    /// `execute_proposal` transaction.
+    fn invoke_and_check(
+        env: &Env,
+        contract: &Address,
+        func_name: &str,
+        args: Vec<soroban_sdk::Val>,
+    ) -> bool {
+        let result = env.try_invoke_contract::<(), soroban_sdk::Error>(
+            contract,
+            &Symbol::new(env, func_name),
+            args,
+        );
+        matches!(result, Ok(Ok(())))
+    }
 
     fn get_delegate_raw(env: &Env, addr: &Address) -> Option<Address> {
         env.storage()

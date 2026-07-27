@@ -1,7 +1,9 @@
 use soroban_sdk::{contracttype, Address, BytesN, Env, Symbol};
 
 use crate::config::Config;
-use crate::invoice::{AppealRecord, Invoice, InvoiceCore, InvoiceMetadata, LpFundRequest, ReputationScore};
+use crate::invoice::{
+    AppealRecord, Invoice, InvoiceCore, InvoiceMetadata, LpFundRequest, ReputationScore,
+};
 
 #[contracttype]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -18,9 +20,9 @@ pub enum DataKey {
     NextInvoiceId,
 
     // Persistent Storage
-    Invoice(u64),           // DEPRECATED: kept for backwards compatibility
-    InvoiceCore(u64),       // NEW: hot-path core data (accessed >95% of time)
-    InvoiceMetadata(u64),   // NEW: cold-path metadata (accessed <5% of time)
+    Invoice(u64),         // DEPRECATED: kept for backwards compatibility
+    InvoiceCore(u64),     // NEW: hot-path core data (accessed >95% of time)
+    InvoiceMetadata(u64), // NEW: cold-path metadata (accessed <5% of time)
     InvoiceCount,
     Token,
     PayerScore(Address),
@@ -65,6 +67,15 @@ pub enum DataKey {
     /// Last ledger sequence when each rate-limited function was called (Issue #541).
     /// Keyed by a Symbol representing the function name.
     RateLimit(Symbol),
+    /// Issue #532: governance-controlled oracle registry default, keyed by feed type.
+    OracleRegistry(crate::oracle_registry::OracleFeedType),
+    /// Issue #532: per-token oracle override, takes priority over OracleRegistry.
+    TokenOracle(crate::oracle_registry::OracleFeedType, Address),
+    /// Issue #532: last recorded oracle health snapshot for a feed type + token.
+    OracleHealth(crate::oracle_registry::OracleFeedType, Address),
+    /// Issue #529: deployed insurance pool contract address, consulted by
+    /// claim_default() to compensate enrolled LPs on a confirmed default.
+    InsurancePool,
 }
 
 // ----------------------------------------------------------------
@@ -85,6 +96,15 @@ pub fn get_config(env: &Env) -> Option<Config> {
 
 pub fn set_config(env: &Env, config: &Config) {
     env.storage().instance().set(&DataKey::Config, config);
+}
+
+/// Issue #529: the configured insurance pool contract address, if any.
+pub fn get_insurance_pool(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::InsurancePool)
+}
+
+pub fn set_insurance_pool(env: &Env, pool: &Address) {
+    env.storage().instance().set(&DataKey::InsurancePool, pool);
 }
 
 pub fn is_paused(env: &Env) -> bool {
@@ -448,9 +468,10 @@ impl StatsAccumulator {
                 .persistent()
                 .get(&DataKey::TotalPaid)
                 .unwrap_or(0);
-            env.storage()
-                .persistent()
-                .set(&DataKey::TotalPaid, &current.saturating_add(self.paid_delta as u64));
+            env.storage().persistent().set(
+                &DataKey::TotalPaid,
+                &current.saturating_add(self.paid_delta as u64),
+            );
         }
     }
 }

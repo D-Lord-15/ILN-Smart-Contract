@@ -36,7 +36,35 @@ impl MockIln {
     pub fn set_payer_reward_rate(_env: Env, _rate: i128) {}
     pub fn set_coverage_via_governance(_env: Env, _cap: i128) {}
     pub fn set_premium_rate_via_governance(_env: Env, _rate: u32) {}
+    pub fn register_oracle(_env: Env, _feed_type: OracleFeedType, _oracle: Address) {}
+    pub fn remove_oracle(_env: Env, _feed_type: OracleFeedType) {}
 }
+
+/// Issue #531: a mock ILN contract whose `update_fee_rate` always fails, used
+/// to verify that a failed cross-contract call during execution does not get
+/// silently marked `Executed`. Nested in its own module so the
+/// `#[contractimpl]`-generated symbols (e.g. `update_fee_rate`) don't collide
+/// with `MockIln`'s identically-named function in this module.
+mod mock_iln_failing {
+    use soroban_sdk::{contract, contracterror, contractimpl, Env};
+
+    #[contracterror]
+    #[derive(Copy, Clone, Debug, PartialEq)]
+    pub enum MockFailError {
+        AlwaysFails = 1,
+    }
+
+    #[contract]
+    pub struct MockIlnFailing;
+
+    #[contractimpl]
+    impl MockIlnFailing {
+        pub fn update_fee_rate(_env: Env, _rate: u32) -> Result<(), MockFailError> {
+            Err(MockFailError::AlwaysFails)
+        }
+    }
+}
+use mock_iln_failing::MockIlnFailing;
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 
@@ -1282,10 +1310,7 @@ fn test_create_and_execute_decay_params_proposal() {
     );
 
     let p = t.contract.get_proposal(&id);
-    assert_eq!(
-        p.action_type,
-        ProposalAction::UpdateDecayParams(100, 5000)
-    );
+    assert_eq!(p.action_type, ProposalAction::UpdateDecayParams(100, 5000));
     assert_eq!(p.status, ProposalStatus::Active);
 
     // Vote to pass
@@ -1297,7 +1322,9 @@ fn test_create_and_execute_decay_params_proposal() {
         .ledger()
         .set_timestamp(t.env.ledger().timestamp() + VOTING_PERIOD_SECS + 1);
 
-    let total_supply = t.gov_token.balance(&t.voter_a) + t.gov_token.balance(&t.voter_b) + t.gov_token.balance(&t.proposer);
+    let total_supply = t.gov_token.balance(&t.voter_a)
+        + t.gov_token.balance(&t.voter_b)
+        + t.gov_token.balance(&t.proposer);
     let _ = t.env.as_contract(&t.contract.address, || {
         GovContract::execute_proposal(t.env.clone(), id, total_supply)
     });
@@ -1310,7 +1337,10 @@ fn test_create_and_execute_decay_params_proposal() {
         GovContract::execute_proposal(t.env.clone(), id, total_supply)
     });
 
-    assert_eq!(t.contract.get_proposal(&id).status, ProposalStatus::Executed);
+    assert_eq!(
+        t.contract.get_proposal(&id).status,
+        ProposalStatus::Executed
+    );
 }
 
 // ── Issue #544: UpdateDistributionRewardParams proposal ─────────────────────
@@ -1322,11 +1352,7 @@ fn test_create_and_execute_distribution_reward_params_proposal() {
 
     let id = t.contract.create_proposal(
         &t.proposer,
-        &ProposalAction::UpdateDistributionRewardParams(
-            7_500_000,
-            2_000_000_000,
-            15_000_000,
-        ),
+        &ProposalAction::UpdateDistributionRewardParams(7_500_000, 2_000_000_000, 15_000_000),
         &hash,
         &7_500_000_i128,
     );
@@ -1334,11 +1360,7 @@ fn test_create_and_execute_distribution_reward_params_proposal() {
     let p = t.contract.get_proposal(&id);
     assert_eq!(
         p.action_type,
-        ProposalAction::UpdateDistributionRewardParams(
-            7_500_000,
-            2_000_000_000,
-            15_000_000,
-        )
+        ProposalAction::UpdateDistributionRewardParams(7_500_000, 2_000_000_000, 15_000_000,)
     );
 
     // Vote to pass
@@ -1350,7 +1372,9 @@ fn test_create_and_execute_distribution_reward_params_proposal() {
         .ledger()
         .set_timestamp(t.env.ledger().timestamp() + VOTING_PERIOD_SECS + 1);
 
-    let total_supply = t.gov_token.balance(&t.voter_a) + t.gov_token.balance(&t.voter_b) + t.gov_token.balance(&t.proposer);
+    let total_supply = t.gov_token.balance(&t.voter_a)
+        + t.gov_token.balance(&t.voter_b)
+        + t.gov_token.balance(&t.proposer);
     let _ = t.env.as_contract(&t.contract.address, || {
         GovContract::execute_proposal(t.env.clone(), id, total_supply)
     });
@@ -1361,7 +1385,10 @@ fn test_create_and_execute_distribution_reward_params_proposal() {
         GovContract::execute_proposal(t.env.clone(), id, total_supply)
     });
 
-    assert_eq!(t.contract.get_proposal(&id).status, ProposalStatus::Executed);
+    assert_eq!(
+        t.contract.get_proposal(&id).status,
+        ProposalStatus::Executed
+    );
 }
 
 // ── Issue #533: UpdateFeeTiers proposal ─────────────────────────────────────
@@ -1406,7 +1433,9 @@ fn test_create_and_execute_fee_tiers_proposal() {
         .ledger()
         .set_timestamp(t.env.ledger().timestamp() + VOTING_PERIOD_SECS + 1);
 
-    let total_supply = t.gov_token.balance(&t.voter_a) + t.gov_token.balance(&t.voter_b) + t.gov_token.balance(&t.proposer);
+    let total_supply = t.gov_token.balance(&t.voter_a)
+        + t.gov_token.balance(&t.voter_b)
+        + t.gov_token.balance(&t.proposer);
     let _ = t.env.as_contract(&t.contract.address, || {
         GovContract::execute_proposal(t.env.clone(), id, total_supply)
     });
@@ -1417,7 +1446,10 @@ fn test_create_and_execute_fee_tiers_proposal() {
         GovContract::execute_proposal(t.env.clone(), id, total_supply)
     });
 
-    assert_eq!(t.contract.get_proposal(&id).status, ProposalStatus::Executed);
+    assert_eq!(
+        t.contract.get_proposal(&id).status,
+        ProposalStatus::Executed
+    );
 }
 
 // ── Issue #539: Upgrade proposal action ────────────────────────────────────
@@ -1447,7 +1479,9 @@ fn test_upgrade_proposal_creates_and_executes() {
         .ledger()
         .set_timestamp(t.env.ledger().timestamp() + VOTING_PERIOD_SECS + 1);
 
-    let total_supply = t.gov_token.balance(&t.voter_a) + t.gov_token.balance(&t.voter_b) + t.gov_token.balance(&t.proposer);
+    let total_supply = t.gov_token.balance(&t.voter_a)
+        + t.gov_token.balance(&t.voter_b)
+        + t.gov_token.balance(&t.proposer);
 
     let _ = t.env.as_contract(&t.contract.address, || {
         GovContract::execute_proposal(t.env.clone(), id, total_supply)
@@ -1457,7 +1491,10 @@ fn test_upgrade_proposal_creates_and_executes() {
     let _ = t.env.as_contract(&t.contract.address, || {
         GovContract::execute_proposal(t.env.clone(), id, total_supply)
     });
-    assert_eq!(t.contract.get_proposal(&id).status, ProposalStatus::Executed);
+    assert_eq!(
+        t.contract.get_proposal(&id).status,
+        ProposalStatus::Executed
+    );
 }
 
 // ── Distribution Reward Rate Governance ────────────────────────────────
@@ -1549,4 +1586,416 @@ fn test_create_insurance_premium_rate_proposal() {
         ProposalAction::UpdateInsurancePremiumRate(rate) => assert_eq!(rate, 300),
         _ => panic!("Expected UpdateInsurancePremiumRate"),
     }
+}
+
+// ── Issue #532: oracle registry governance actions ──────────────────────────
+
+/// Proposal to register an oracle for a feed type can be created and
+/// executes successfully against the ILN contract.
+#[test]
+fn test_create_and_execute_register_oracle_proposal() {
+    let t = setup();
+    let oracle = Address::generate(&t.env);
+    let hash = dummy_hash(&t.env);
+
+    let id = t.contract.create_proposal(
+        &t.proposer,
+        &ProposalAction::RegisterOracle(OracleFeedType::Identity, oracle.clone()),
+        &hash,
+        &0_i128,
+    );
+
+    let p = t.contract.get_proposal(&id);
+    assert_eq!(
+        p.action_type,
+        ProposalAction::RegisterOracle(OracleFeedType::Identity, oracle)
+    );
+
+    t.gov_token_admin.mint(&t.voter_a, &10_000);
+    t.contract.cast_vote(&t.voter_a, &id, &true);
+    t.env
+        .ledger()
+        .set_timestamp(t.env.ledger().timestamp() + VOTING_PERIOD_SECS + 1);
+
+    let total_supply = t.gov_token.balance(&t.voter_a)
+        + t.gov_token.balance(&t.voter_b)
+        + t.gov_token.balance(&t.proposer);
+    let _ = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, total_supply)
+    });
+    assert_eq!(t.contract.get_proposal(&id).status, ProposalStatus::Passed);
+
+    let _ = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, total_supply)
+    });
+    assert_eq!(
+        t.contract.get_proposal(&id).status,
+        ProposalStatus::Executed
+    );
+}
+
+/// Proposal to remove an oracle for a feed type can be created and executes.
+#[test]
+fn test_create_and_execute_remove_oracle_proposal() {
+    let t = setup();
+    let hash = dummy_hash(&t.env);
+
+    let id = t.contract.create_proposal(
+        &t.proposer,
+        &ProposalAction::RemoveOracle(OracleFeedType::Credit),
+        &hash,
+        &0_i128,
+    );
+
+    let p = t.contract.get_proposal(&id);
+    assert_eq!(
+        p.action_type,
+        ProposalAction::RemoveOracle(OracleFeedType::Credit)
+    );
+
+    t.gov_token_admin.mint(&t.voter_a, &10_000);
+    t.contract.cast_vote(&t.voter_a, &id, &true);
+    t.env
+        .ledger()
+        .set_timestamp(t.env.ledger().timestamp() + VOTING_PERIOD_SECS + 1);
+
+    let total_supply = t.gov_token.balance(&t.voter_a)
+        + t.gov_token.balance(&t.voter_b)
+        + t.gov_token.balance(&t.proposer);
+    let _ = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, total_supply)
+    });
+    let _ = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, total_supply)
+    });
+    assert_eq!(
+        t.contract.get_proposal(&id).status,
+        ProposalStatus::Executed
+    );
+}
+
+// ── Issue #530: quadratic voting ─────────────────────────────────────────────
+
+/// Quadratic voting is disabled by default (backwards compatibility).
+#[test]
+fn test_quadratic_voting_disabled_by_default() {
+    let t = setup();
+    assert!(!t.contract.is_quadratic_voting_enabled());
+}
+
+/// Governance (via ILN contract auth) can enable quadratic voting.
+#[test]
+fn test_set_quadratic_voting_enabled_toggles_flag() {
+    let t = setup();
+    t.contract.set_quadratic_voting_enabled(&true);
+    assert!(t.contract.is_quadratic_voting_enabled());
+
+    t.contract.set_quadratic_voting_enabled(&false);
+    assert!(!t.contract.is_quadratic_voting_enabled());
+}
+
+/// With quadratic voting disabled (default), cast_vote weight is unchanged:
+/// a 10_000-token holder still casts exactly 10_000 votes.
+#[test]
+fn test_linear_voting_weight_unchanged_when_disabled() {
+    let t = setup();
+    let whale = Address::generate(&t.env);
+    t.gov_token_admin.mint(&whale, &10_000);
+
+    let id = create_fee_proposal(&t);
+    t.contract.cast_vote(&whale, &id, &true);
+
+    let p = t.contract.get_proposal(&id);
+    assert_eq!(p.votes_for, 10_000);
+}
+
+/// With quadratic voting enabled, a whale's vote weight is sqrt(balance),
+/// not the raw balance — this is the whole point of Issue #530: reduce
+/// whale dominance relative to linear weighting.
+#[test]
+fn test_quadratic_voting_weight_is_sqrt_of_balance() {
+    let t = setup();
+    t.contract.set_quadratic_voting_enabled(&true);
+
+    let whale = Address::generate(&t.env);
+    t.gov_token_admin.mint(&whale, &10_000); // sqrt(10_000) = 100
+
+    let id = create_fee_proposal(&t);
+    t.contract.cast_vote(&whale, &id, &true);
+
+    let p = t.contract.get_proposal(&id);
+    assert_eq!(p.votes_for, 100);
+}
+
+/// Quadratic voting compresses the ratio between a whale and a small
+/// holder: a holder with 100x the tokens of another should end up with
+/// only 10x the vote weight (sqrt(100) = 10), not 100x.
+#[test]
+fn test_quadratic_voting_reduces_whale_dominance_ratio() {
+    let t = setup();
+    t.contract.set_quadratic_voting_enabled(&true);
+
+    let whale = Address::generate(&t.env);
+    let minnow = Address::generate(&t.env);
+    t.gov_token_admin.mint(&whale, &1_000_000); // sqrt = 1_000
+    t.gov_token_admin.mint(&minnow, &10_000); // sqrt = 100
+
+    let id_whale = create_fee_proposal(&t);
+    t.contract.cast_vote(&whale, &id_whale, &true);
+    let id_minnow = create_fee_proposal(&t);
+    t.contract.cast_vote(&minnow, &id_minnow, &true);
+
+    let p_whale = t.contract.get_proposal(&id_whale);
+    let p_minnow = t.contract.get_proposal(&id_minnow);
+
+    // Raw balance ratio is 100x; quadratic weight ratio must be only 10x.
+    assert_eq!(p_whale.votes_for, 1_000);
+    assert_eq!(p_minnow.votes_for, 100);
+    assert_eq!(p_whale.votes_for / p_minnow.votes_for, 10);
+}
+
+/// Quadratic voting also applies to delegated weight: own + delegated is
+/// summed first, then the square root is taken of the combined total.
+#[test]
+fn test_quadratic_voting_applies_to_own_plus_delegated_weight() {
+    let t = setup();
+    t.contract.set_quadratic_voting_enabled(&true);
+
+    // voter_b has 2_000, voter_a delegates 1_000 -> combined 3_000 (not a
+    // perfect square, isqrt floors it): isqrt(3_000) = 54 (54^2=2916, 55^2=3025).
+    t.contract.delegate_votes(&t.voter_a, &t.voter_b);
+    let id = create_fee_proposal(&t);
+    t.contract.cast_vote(&t.voter_b, &id, &true);
+
+    let p = t.contract.get_proposal(&id);
+    assert_eq!(p.votes_for, 54);
+}
+
+/// A zero-balance voter with a zero-balance delegation still has no voting
+/// power under quadratic voting (sqrt(0) = 0), same as linear.
+#[test]
+#[should_panic]
+fn test_quadratic_voting_zero_balance_rejected() {
+    let t = setup();
+    t.contract.set_quadratic_voting_enabled(&true);
+    let id = create_fee_proposal(&t);
+    let zero_voter = Address::generate(&t.env);
+    t.contract.cast_vote(&zero_voter, &id, &true);
+}
+
+/// cast_vote records the applied (quadratic) weight as a vote receipt,
+/// retrievable via get_applied_vote_weight — this is distinct from the
+/// linear snapshot balance used to compute it.
+#[test]
+fn test_get_applied_vote_weight_returns_quadratic_receipt() {
+    let t = setup();
+    t.contract.set_quadratic_voting_enabled(&true);
+
+    let whale = Address::generate(&t.env);
+    t.gov_token_admin.mint(&whale, &10_000); // sqrt = 100
+
+    let id = create_fee_proposal(&t);
+    assert_eq!(t.contract.get_applied_vote_weight(&id, &whale), None);
+
+    t.contract.cast_vote(&whale, &id, &true);
+    assert_eq!(t.contract.get_applied_vote_weight(&id, &whale), Some(100));
+}
+
+/// get_applied_vote_weight also records the linear weight when quadratic
+/// voting is disabled, so the receipt is always available regardless of mode.
+#[test]
+fn test_get_applied_vote_weight_records_linear_weight_when_disabled() {
+    let t = setup();
+    let id = create_fee_proposal(&t);
+    t.contract.cast_vote(&t.voter_a, &id, &true);
+    assert_eq!(
+        t.contract.get_applied_vote_weight(&id, &t.voter_a),
+        Some(1_000)
+    );
+}
+
+/// Non-ILN-contract callers cannot toggle quadratic voting.
+#[test]
+#[should_panic]
+fn test_set_quadratic_voting_enabled_requires_iln_auth() {
+    let env = Env::default();
+    let token_id = env.register_stellar_asset_contract_v2(Address::generate(&env));
+    let token_addr = token_id.address();
+    let iln_id = env.register_contract(None, MockIln);
+    let dist_id = env.register_contract(None, MockIln);
+    let admin = Address::generate(&env);
+
+    let contract_id = env.register_contract(None, GovContract);
+    let contract = GovContractClient::new(&env, &contract_id);
+
+    env.mock_all_auths();
+    contract.initialize(&iln_id, &dist_id, &token_addr, &admin);
+
+    // No auths mocked on this second client — require_auth on the ILN
+    // contract address must reject an arbitrary caller.
+    let env2 = Env::default();
+    let contract2 = GovContractClient::new(&env2, &contract_id);
+    contract2.set_quadratic_voting_enabled(&true);
+}
+
+// ── Issue #531: proposal execution verification ─────────────────────────────
+
+/// Test env wired to a failing mock ILN contract, so `execute_proposal`'s
+/// cross-contract call always traps.
+struct FailingGovTestEnv {
+    env: Env,
+    contract: GovContractClient<'static>,
+    voter: Address,
+    proposer: Address,
+}
+
+fn setup_with_failing_iln() -> FailingGovTestEnv {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let token_admin = Address::generate(&env);
+    let token_id = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_addr = token_id.address();
+    let gov_token_admin = StellarAssetClient::new(&env, &token_addr);
+
+    let voter = Address::generate(&env);
+    let proposer = Address::generate(&env);
+    let admin = Address::generate(&env);
+    gov_token_admin.mint(&voter, &10_000);
+    gov_token_admin.mint(&proposer, &1_000);
+
+    let iln_contract = env.register_contract(None, MockIlnFailing);
+    let dist_contract = env.register_contract(None, MockIln);
+
+    let contract_id = env.register_contract(None, GovContract);
+    let contract = GovContractClient::new(&env, &contract_id);
+    contract.initialize(&iln_contract, &dist_contract, &token_addr, &admin);
+
+    FailingGovTestEnv {
+        env,
+        contract,
+        voter,
+        proposer,
+    }
+}
+
+/// A failed cross-contract call during execution must NOT mark the proposal
+/// `Executed` — it stays `Passed` so it can be retried, and returns
+/// `ExecutionFailed` instead of silently succeeding.
+#[test]
+fn test_execute_proposal_call_failure_reverts_to_passed() {
+    let t = setup_with_failing_iln();
+    let id = t.contract.create_proposal(
+        &t.proposer,
+        &ProposalAction::UpdateFeeRate(200),
+        &dummy_hash(&t.env),
+        &200_i128,
+    );
+    t.contract.cast_vote(&t.voter, &id, &true);
+
+    let mut ledger = t.env.ledger().get();
+    ledger.timestamp += VOTING_PERIOD_SECS + 1;
+    t.env.ledger().set(ledger);
+
+    // Active -> Passed (quorum met, votes_for > votes_against).
+    let res_pass = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, 11_000)
+    });
+    assert!(res_pass.is_ok());
+    assert_eq!(t.contract.get_proposal(&id).status, ProposalStatus::Passed);
+
+    // Passed -> the callee always fails, so execution must report
+    // ExecutionFailed and the proposal must remain Passed (retryable).
+    let res_exec = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, 11_000)
+    });
+    assert_eq!(res_exec, Err(GovernanceError::ExecutionFailed));
+    assert_eq!(t.contract.get_proposal(&id).status, ProposalStatus::Passed);
+}
+
+/// A failed execution can be retried indefinitely: the proposal never gets
+/// stuck in a bad state, and each retry attempt is independently observable.
+#[test]
+fn test_execute_proposal_failure_allows_repeated_retry() {
+    let t = setup_with_failing_iln();
+    let id = t.contract.create_proposal(
+        &t.proposer,
+        &ProposalAction::UpdateFeeRate(200),
+        &dummy_hash(&t.env),
+        &200_i128,
+    );
+    t.contract.cast_vote(&t.voter, &id, &true);
+
+    let mut ledger = t.env.ledger().get();
+    ledger.timestamp += VOTING_PERIOD_SECS + 1;
+    t.env.ledger().set(ledger);
+
+    let _ = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, 11_000)
+    });
+    assert_eq!(t.contract.get_proposal(&id).status, ProposalStatus::Passed);
+
+    for _ in 0..3 {
+        let res = t.env.as_contract(&t.contract.address, || {
+            GovContract::execute_proposal(t.env.clone(), id, 11_000)
+        });
+        assert_eq!(res, Err(GovernanceError::ExecutionFailed));
+        assert_eq!(t.contract.get_proposal(&id).status, ProposalStatus::Passed);
+    }
+}
+
+/// A failed execution emits `ProposalExecutionFailed`.
+#[test]
+fn test_execute_proposal_failure_emits_event() {
+    let t = setup_with_failing_iln();
+    let id = t.contract.create_proposal(
+        &t.proposer,
+        &ProposalAction::UpdateFeeRate(200),
+        &dummy_hash(&t.env),
+        &200_i128,
+    );
+    t.contract.cast_vote(&t.voter, &id, &true);
+
+    let mut ledger = t.env.ledger().get();
+    ledger.timestamp += VOTING_PERIOD_SECS + 1;
+    t.env.ledger().set(ledger);
+
+    let _ = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, 11_000)
+    });
+
+    let events_before = t.env.events().all().len();
+    let _ = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, 11_000)
+    });
+    let events_after = t.env.events().all().len();
+    assert!(
+        events_after > events_before,
+        "ProposalExecutionFailed event should be emitted"
+    );
+}
+
+/// A successful execution (the existing MockIln, which never fails) still
+/// marks the proposal Executed and emits ProposalExecuted — the happy path
+/// is unchanged by the Issue #531 verification logic.
+#[test]
+fn test_execute_proposal_success_still_marks_executed() {
+    let t = setup();
+    let id = create_fee_proposal(&t);
+    t.contract.cast_vote(&t.voter_a, &id, &true);
+    t.contract.cast_vote(&t.voter_b, &id, &true);
+
+    let mut ledger = t.env.ledger().get();
+    ledger.timestamp += VOTING_PERIOD_SECS + 1;
+    t.env.ledger().set(ledger);
+
+    let res = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, 10_000)?;
+        GovContract::execute_proposal(t.env.clone(), id, 10_000)
+    });
+    assert!(res.is_ok());
+    assert_eq!(
+        t.contract.get_proposal(&id).status,
+        ProposalStatus::Executed
+    );
 }

@@ -71,39 +71,56 @@ Ten interface tests cover initialization, enrollment, premium accumulation,
 coverage-capped vs balance-capped payouts, idempotency, and the empty-pool and
 invalid-amount rejection paths (`cargo test -p insurance_pool`).
 
-## Integration with `invoice_liquidity`
+## Integration with `invoice_liquidity` (Issue #529)
 
 The compensation hook lives on the liquidity contract's default-handling path
-(`claim_default`). The design:
+(`claim_default`), implemented directly in
+`contracts/invoice_liquidity/src/lib.rs`. The design:
 
-1. Governance stores the deployed pool address (e.g. a new
-   `DataKey::InsurancePool` instance key + an admin setter).
-2. When a default is confirmed for `invoice_id` funded by `lp`, and `lp` is
-   enrolled, the liquidity contract invokes the pool:
+1. `invoice_liquidity` depends on the `insurance_pool` crate directly (a
+   regular Cargo dependency, not just dev-only) so it can use the generated
+   `InsurancePoolInterfaceClient` for typed cross-contract calls. The deployed
+   pool address is stored as a new `DataKey::InsurancePool` instance key, set
+   via the admin-gated `set_insurance_pool(pool)` / read via
+   `get_insurance_pool()`.
+2. After a default is confirmed for `invoice_id` (invoice marked `Defaulted`,
+   funders refunded their principal), `claim_default` checks whether the
+   *claiming* LP (the caller) is enrolled and, if so, attempts to claim on
+   their behalf:
 
 ```rust
-// inside claim_default(), after the invoice is marked Defaulted:
-if let Some(pool) = storage::get_insurance_pool(&env) {
-    let client = insurance_pool::InsurancePoolInterfaceClient::new(&env, &pool);
-    if client.is_enrolled(&lp) {
-        let payout = client.claim(&invoice_id); // pool credits/transfers to lp
+// inside claim_default(), after the principal refund loop:
+if let Some(pool_addr) = crate::storage::get_insurance_pool(&env) {
+    let pool_client = InsurancePoolInterfaceClient::new(&env, &pool_addr);
+    let enrolled = matches!(pool_client.try_is_enrolled(&funder), Ok(Ok(true)));
+    if enrolled {
+        let (compensated, payout) = match pool_client.try_claim(&invoice_id, &funder) {
+            Ok(Ok(payout)) => (true, payout),
+            _ => (false, 0),
+        };
         env.events().publish(
-            (symbol_short!("ins_comp"), invoice_id),
-            (lp.clone(), payout),
+            (Symbol::new(&env, "insurance_claim_attempted"), invoice.id, funder.clone()),
+            InsuranceClaimAttempted { invoice_id: invoice.id, lp: funder.clone(), compensated, payout },
         );
     }
 }
 ```
 
-3. The pool is configured with the liquidity contract as its `admin`, so only a
-   genuine confirmed default can trigger `claim`.
+3. The pool is configured with the liquidity contract's own address as its
+   `admin`, so only a genuine confirmed default (the liquidity contract
+   authorizing itself) can trigger `claim`. `claim()` transfers the payout
+   directly from the pool's balance to the LP — `invoice_liquidity` never
+   holds or forwards insurance funds itself.
+4. **Graceful degradation**: the pool calls use `try_is_enrolled` /
+   `try_claim` rather than the panicking variants. If the pool is paused,
+   empty, unreachable, or the invoice was already claimed, `claim_default`
+   still completes successfully (the principal refund and status update
+   already happened, in the same atomic invocation) — it just reports
+   `compensated: false` instead of reverting the whole default over an
+   optional insurance top-up.
 
-> **Note:** This wiring is documented rather than committed in this PR because
-> the `invoice_liquidity` crate does not currently compile on `main` (a botched
-> merge predating this work — see the PR description). The hook above is a
-> drop-in for `claim_default` once the contract builds, and the
-> `InsurancePoolInterfaceClient` it relies on is already generated and exported
-> by this crate.
+Tests covering this integration (using the real `insurance_pool` contract,
+not a mock) are in `contracts/invoice_liquidity/src/tests_insurance_integration.rs`.
 
 ## SDK Integration
 
