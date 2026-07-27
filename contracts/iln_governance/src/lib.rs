@@ -64,6 +64,9 @@ pub enum GovernanceError {
     VetoPowerDisabled = 18,
     /// Proposer does not hold the minimum required token balance.
     InsufficientProposerBalance = 19,
+    /// Issue #531: the cross-contract execution call failed. The proposal
+    /// remains in `Passed` status so `execute_proposal` can be retried.
+    ExecutionFailed = 20,
 }
 
 // ================================================================
@@ -183,6 +186,16 @@ pub struct ProposalExecuted {
     pub proposed_value: i128,
     pub votes_for: i128,
     pub votes_against: i128,
+}
+
+/// Issue #531: emitted when a proposal's cross-contract execution call
+/// fails. The proposal remains `Passed` (not `Executed`) so a subsequent
+/// `execute_proposal` call can retry it.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProposalExecutionFailed {
+    pub proposal_id: u64,
+    pub action_type: ProposalAction,
 }
 
 /// Issue #68: emitted when the admin vetoes a proposal.
@@ -789,49 +802,31 @@ impl GovContract {
                 .get(&StorageKey::IlnContract)
                 .unwrap();
 
-            match proposal.action_type.clone() {
+            // Issue #531: capture the outcome of the cross-contract call instead
+            // of firing-and-forgetting it. A failed call (callee panics / returns
+            // an error) must NOT mark the proposal `Executed` — it stays `Passed`
+            // so a subsequent `execute_proposal` call can retry it.
+            let succeeded = match proposal.action_type.clone() {
                 ProposalAction::UpdateFeeRate(rate) => {
                     let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
-                    env.invoke_contract::<()>(
-                        &iln_contract,
-                        &Symbol::new(&env, "update_fee_rate"),
-                        args,
-                    );
+                    Self::invoke_and_check(&env, &iln_contract, "update_fee_rate", args)
                 }
                 ProposalAction::AddToken(token, _decimals) => {
                     let args: Vec<soroban_sdk::Val> = vec![&env, token.into_val(&env)];
-                    env.invoke_contract::<()>(&iln_contract, &Symbol::new(&env, "add_token"), args);
+                    Self::invoke_and_check(&env, &iln_contract, "add_token", args)
                 }
                 ProposalAction::RemoveToken(token) => {
                     let args: Vec<soroban_sdk::Val> = vec![&env, token.into_val(&env)];
-                    env.invoke_contract::<()>(
-                        &iln_contract,
-                        &Symbol::new(&env, "remove_token"),
-                        args,
-                    );
+                    Self::invoke_and_check(&env, &iln_contract, "remove_token", args)
                 }
                 ProposalAction::UpdateMaxDiscountRate(rate) => {
                     let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
-                    env.invoke_contract::<()>(
-                        &iln_contract,
-                        &Symbol::new(&env, "update_max_discount"),
-                        args,
-                    );
+                    Self::invoke_and_check(&env, &iln_contract, "update_max_discount", args)
                 }
-                ProposalAction::UpdateDecayParams(
-                    rate_bps,
-                    period_ledgers,
-                ) => {
-                    let args: Vec<soroban_sdk::Val> = vec![
-                        &env,
-                        rate_bps.into_val(&env),
-                        period_ledgers.into_val(&env),
-                    ];
-                    env.invoke_contract::<()>(
-                        &iln_contract,
-                        &Symbol::new(&env, "update_decay_params"),
-                        args,
-                    );
+                ProposalAction::UpdateDecayParams(rate_bps, period_ledgers) => {
+                    let args: Vec<soroban_sdk::Val> =
+                        vec![&env, rate_bps.into_val(&env), period_ledgers.into_val(&env)];
+                    Self::invoke_and_check(&env, &iln_contract, "update_decay_params", args)
                 }
                 ProposalAction::UpdateDistributionRewardParams(
                     half_token,
@@ -849,27 +844,15 @@ impl GovContract {
                         hundred_usdc_stroops.into_val(&env),
                         lp_multiplier.into_val(&env),
                     ];
-                    env.invoke_contract::<()>(
-                        &dist_contract,
-                        &Symbol::new(&env, "update_reward_params"),
-                        args,
-                    );
+                    Self::invoke_and_check(&env, &dist_contract, "update_reward_params", args)
                 }
                 ProposalAction::UpdateFeeTiers(tiers) => {
                     let args: Vec<soroban_sdk::Val> = vec![&env, tiers.into_val(&env)];
-                    env.invoke_contract::<()>(
-                        &iln_contract,
-                        &Symbol::new(&env, "update_fee_tiers"),
-                        args,
-                    );
+                    Self::invoke_and_check(&env, &iln_contract, "update_fee_tiers", args)
                 }
                 ProposalAction::Upgrade(new_wasm_hash) => {
                     let args: Vec<soroban_sdk::Val> = vec![&env, new_wasm_hash.into_val(&env)];
-                    env.invoke_contract::<()>(
-                        &iln_contract,
-                        &Symbol::new(&env, "upgrade"),
-                        args,
-                    );
+                    Self::invoke_and_check(&env, &iln_contract, "upgrade", args)
                 }
                 ProposalAction::UpdateLpRewardRate(rate) => {
                     let dist_contract: Address = env
@@ -878,11 +861,7 @@ impl GovContract {
                         .get(&StorageKey::DistributionContract)
                         .unwrap();
                     let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
-                    env.invoke_contract::<()>(
-                        &dist_contract,
-                        &Symbol::new(&env, "set_lp_reward_rate"),
-                        args,
-                    );
+                    Self::invoke_and_check(&env, &dist_contract, "set_lp_reward_rate", args)
                 }
                 ProposalAction::UpdateFreelancerRewardRate(rate) => {
                     let dist_contract: Address = env
@@ -891,11 +870,7 @@ impl GovContract {
                         .get(&StorageKey::DistributionContract)
                         .unwrap();
                     let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
-                    env.invoke_contract::<()>(
-                        &dist_contract,
-                        &Symbol::new(&env, "set_freelancer_reward_rate"),
-                        args,
-                    );
+                    Self::invoke_and_check(&env, &dist_contract, "set_freelancer_reward_rate", args)
                 }
                 ProposalAction::UpdatePayerRewardRate(rate) => {
                     let dist_contract: Address = env
@@ -904,11 +879,7 @@ impl GovContract {
                         .get(&StorageKey::DistributionContract)
                         .unwrap();
                     let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
-                    env.invoke_contract::<()>(
-                        &dist_contract,
-                        &Symbol::new(&env, "set_payer_reward_rate"),
-                        args,
-                    );
+                    Self::invoke_and_check(&env, &dist_contract, "set_payer_reward_rate", args)
                 }
                 ProposalAction::UpdateInsuranceCoverageCap(cap) => {
                     let insurance_contract: Address = env
@@ -917,11 +888,12 @@ impl GovContract {
                         .get(&StorageKey::IlnContract)
                         .unwrap();
                     let args: Vec<soroban_sdk::Val> = vec![&env, cap.into_val(&env)];
-                    env.invoke_contract::<()>(
+                    Self::invoke_and_check(
+                        &env,
                         &insurance_contract,
-                        &Symbol::new(&env, "set_coverage_via_governance"),
+                        "set_coverage_via_governance",
                         args,
-                    );
+                    )
                 }
                 ProposalAction::UpdateInsurancePremiumRate(rate) => {
                     let insurance_contract: Address = env
@@ -930,12 +902,27 @@ impl GovContract {
                         .get(&StorageKey::IlnContract)
                         .unwrap();
                     let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
-                    env.invoke_contract::<()>(
+                    Self::invoke_and_check(
+                        &env,
                         &insurance_contract,
-                        &Symbol::new(&env, "set_premium_rate_via_governance"),
+                        "set_premium_rate_via_governance",
                         args,
-                    );
+                    )
                 }
+            };
+
+            if !succeeded {
+                env.events().publish(
+                    (Symbol::new(&env, "proposal_execution_failed"), proposal_id),
+                    ProposalExecutionFailed {
+                        proposal_id,
+                        action_type: proposal.action_type,
+                    },
+                );
+                // Proposal storage is untouched here — it remains `Passed` with
+                // its original `eta_ledger`, so calling `execute_proposal` again
+                // retries the same cross-contract call (Issue #531 retry mechanism).
+                return Err(GovernanceError::ExecutionFailed);
             }
 
             proposal.status = ProposalStatus::Executed;
@@ -1128,6 +1115,25 @@ impl GovContract {
     }
 
     // ── Private helpers ──────────────────────────────────────────
+
+    /// Issue #531: invoke a cross-contract call and report whether it
+    /// succeeded, instead of letting a trapped/failed call silently mark the
+    /// proposal `Executed`. Uses `try_invoke_contract` so a callee panic or
+    /// returned error surfaces here rather than aborting the whole
+    /// `execute_proposal` transaction.
+    fn invoke_and_check(
+        env: &Env,
+        contract: &Address,
+        func_name: &str,
+        args: Vec<soroban_sdk::Val>,
+    ) -> bool {
+        let result = env.try_invoke_contract::<(), soroban_sdk::Error>(
+            contract,
+            &Symbol::new(env, func_name),
+            args,
+        );
+        matches!(result, Ok(Ok(())))
+    }
 
     fn get_delegate_raw(env: &Env, addr: &Address) -> Option<Address> {
         env.storage()
