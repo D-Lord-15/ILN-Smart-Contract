@@ -36,6 +36,8 @@ impl MockIln {
     pub fn set_payer_reward_rate(_env: Env, _rate: i128) {}
     pub fn set_coverage_via_governance(_env: Env, _cap: i128) {}
     pub fn set_premium_rate_via_governance(_env: Env, _rate: u32) {}
+    pub fn register_oracle(_env: Env, _feed_type: OracleFeedType, _oracle: Address) {}
+    pub fn remove_oracle(_env: Env, _feed_type: OracleFeedType) {}
 }
 
 /// Issue #531: a mock ILN contract whose `update_fee_rate` always fails, used
@@ -1584,6 +1586,92 @@ fn test_create_insurance_premium_rate_proposal() {
         ProposalAction::UpdateInsurancePremiumRate(rate) => assert_eq!(rate, 300),
         _ => panic!("Expected UpdateInsurancePremiumRate"),
     }
+}
+
+// ── Issue #532: oracle registry governance actions ──────────────────────────
+
+/// Proposal to register an oracle for a feed type can be created and
+/// executes successfully against the ILN contract.
+#[test]
+fn test_create_and_execute_register_oracle_proposal() {
+    let t = setup();
+    let oracle = Address::generate(&t.env);
+    let hash = dummy_hash(&t.env);
+
+    let id = t.contract.create_proposal(
+        &t.proposer,
+        &ProposalAction::RegisterOracle(OracleFeedType::Identity, oracle.clone()),
+        &hash,
+        &0_i128,
+    );
+
+    let p = t.contract.get_proposal(&id);
+    assert_eq!(
+        p.action_type,
+        ProposalAction::RegisterOracle(OracleFeedType::Identity, oracle)
+    );
+
+    t.gov_token_admin.mint(&t.voter_a, &10_000);
+    t.contract.cast_vote(&t.voter_a, &id, &true);
+    t.env
+        .ledger()
+        .set_timestamp(t.env.ledger().timestamp() + VOTING_PERIOD_SECS + 1);
+
+    let total_supply = t.gov_token.balance(&t.voter_a)
+        + t.gov_token.balance(&t.voter_b)
+        + t.gov_token.balance(&t.proposer);
+    let _ = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, total_supply)
+    });
+    assert_eq!(t.contract.get_proposal(&id).status, ProposalStatus::Passed);
+
+    let _ = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, total_supply)
+    });
+    assert_eq!(
+        t.contract.get_proposal(&id).status,
+        ProposalStatus::Executed
+    );
+}
+
+/// Proposal to remove an oracle for a feed type can be created and executes.
+#[test]
+fn test_create_and_execute_remove_oracle_proposal() {
+    let t = setup();
+    let hash = dummy_hash(&t.env);
+
+    let id = t.contract.create_proposal(
+        &t.proposer,
+        &ProposalAction::RemoveOracle(OracleFeedType::Credit),
+        &hash,
+        &0_i128,
+    );
+
+    let p = t.contract.get_proposal(&id);
+    assert_eq!(
+        p.action_type,
+        ProposalAction::RemoveOracle(OracleFeedType::Credit)
+    );
+
+    t.gov_token_admin.mint(&t.voter_a, &10_000);
+    t.contract.cast_vote(&t.voter_a, &id, &true);
+    t.env
+        .ledger()
+        .set_timestamp(t.env.ledger().timestamp() + VOTING_PERIOD_SECS + 1);
+
+    let total_supply = t.gov_token.balance(&t.voter_a)
+        + t.gov_token.balance(&t.voter_b)
+        + t.gov_token.balance(&t.proposer);
+    let _ = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, total_supply)
+    });
+    let _ = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id, total_supply)
+    });
+    assert_eq!(
+        t.contract.get_proposal(&id).status,
+        ProposalStatus::Executed
+    );
 }
 
 // ── Issue #530: quadratic voting ─────────────────────────────────────────────

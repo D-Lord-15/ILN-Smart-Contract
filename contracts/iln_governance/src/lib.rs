@@ -103,6 +103,25 @@ pub enum ProposalAction {
     UpdateInsuranceCoverageCap(i128),
     /// Update insurance pool premium rates (in bps).
     UpdateInsurancePremiumRate(u32),
+    /// Issue #532: register (or update) the default oracle for a feed type
+    /// on the ILN contract's oracle registry.
+    RegisterOracle(OracleFeedType, Address),
+    /// Issue #532: remove the default oracle for a feed type from the ILN
+    /// contract's oracle registry.
+    RemoveOracle(OracleFeedType),
+}
+
+/// Issue #532: mirrors `invoice_liquidity::oracle_registry::OracleFeedType`.
+/// Soroban contracts share no Rust types across crates — cross-contract
+/// calls decode structurally (same unit-variant names, same order), the
+/// same way `FeeTierConfig` below mirrors the ILN contract's fee tier
+/// struct. Keep variant names/order in sync with the ILN contract's enum.
+#[contracttype]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OracleFeedType {
+    Price,
+    Identity,
+    Credit,
 }
 
 /// Issue #533: Fee tier configuration.
@@ -1007,6 +1026,15 @@ impl GovContract {
                         "set_premium_rate_via_governance",
                         args,
                     )
+                }
+                ProposalAction::RegisterOracle(feed_type, oracle) => {
+                    let args: Vec<soroban_sdk::Val> =
+                        vec![&env, feed_type.into_val(&env), oracle.into_val(&env)];
+                    Self::invoke_and_check(&env, &iln_contract, "register_oracle", args)
+                }
+                ProposalAction::RemoveOracle(feed_type) => {
+                    let args: Vec<soroban_sdk::Val> = vec![&env, feed_type.into_val(&env)];
+                    Self::invoke_and_check(&env, &iln_contract, "remove_oracle", args)
                 }
             };
 

@@ -24,6 +24,8 @@ use constants::{
     UPGRADE_COOLDOWN_LEDGERS,
 };
 pub mod oracle_interface;
+pub mod oracle_registry;
+use oracle_registry::OracleFeedType;
 
 pub use crate::invoice::{
     AppealRecord, Invoice, InvoiceParams, InvoiceStatus, LpFundRequest, ReferralCode,
@@ -437,6 +439,85 @@ impl InvoiceLiquidityContract {
         crate::storage::get_config(&env)
             .map(|c| c.max_oracle_age_ledgers)
             .unwrap_or(DEFAULT_MAX_ORACLE_AGE_LEDGERS)
+    }
+
+    // ── Issue #532: governance-controlled oracle registry ─────────
+
+    /// Register (or update) the default oracle for `feed_type`, applying to
+    /// every token without a more specific per-token override.
+    /// Access: Admin only (governance-controlled via cross-contract proposal
+    /// execution, same pattern as `update_fee_rate` / `add_token`).
+    pub fn register_oracle(
+        env: Env,
+        feed_type: OracleFeedType,
+        oracle: Address,
+    ) -> Result<(), ContractError> {
+        oracle_registry::register_oracle(&env, feed_type, oracle)
+    }
+
+    /// Remove the default oracle for `feed_type`.
+    /// Access: Admin only.
+    pub fn remove_oracle(env: Env, feed_type: OracleFeedType) -> Result<(), ContractError> {
+        oracle_registry::remove_oracle(&env, feed_type)
+    }
+
+    /// Register (or update) a per-token override oracle for `feed_type`.
+    /// Access: Admin only.
+    pub fn register_token_oracle(
+        env: Env,
+        feed_type: OracleFeedType,
+        token: Address,
+        oracle: Address,
+    ) -> Result<(), ContractError> {
+        oracle_registry::register_token_oracle(&env, feed_type, token, oracle)
+    }
+
+    /// Remove a per-token override oracle for `feed_type`.
+    /// Access: Admin only.
+    pub fn remove_token_oracle(
+        env: Env,
+        feed_type: OracleFeedType,
+        token: Address,
+    ) -> Result<(), ContractError> {
+        oracle_registry::remove_token_oracle(&env, feed_type, token)
+    }
+
+    /// Resolve the oracle address that would be queried for `feed_type` +
+    /// `token` (per-token override, then feed-type default, then — for
+    /// `Identity` only — the legacy `price_oracle` config field).
+    /// Access: Anyone
+    pub fn get_oracle_for_token(
+        env: Env,
+        feed_type: OracleFeedType,
+        token: Address,
+    ) -> Option<Address> {
+        oracle_registry::get_oracle_for_token(env, feed_type, token)
+    }
+
+    /// Return the last recorded health snapshot for `feed_type` + `token`,
+    /// or `None` if that oracle has never been queried.
+    /// Access: Anyone
+    pub fn get_oracle_health(
+        env: Env,
+        feed_type: OracleFeedType,
+        token: Address,
+    ) -> Option<oracle_registry::OracleHealthStatus> {
+        oracle_registry::get_oracle_health(env, feed_type, token)
+    }
+
+    /// Actively query the oracle resolved for `feed_type` + `token` (using
+    /// `payer`'s record) and record + return its current health status.
+    /// Unlike `fund_invoice`'s inline check, this never errors on stale or
+    /// unverified data — it only reports the observation — making it safe
+    /// for off-chain monitors/keepers to poll independent of funding activity.
+    /// Access: Anyone
+    pub fn check_oracle_health(
+        env: Env,
+        feed_type: OracleFeedType,
+        token: Address,
+        payer: Address,
+    ) -> Option<oracle_registry::OracleHealthStatus> {
+        oracle_registry::check_oracle_health(env, feed_type, token, payer)
     }
 
     /// Access: Admin only
@@ -1328,11 +1409,15 @@ impl InvoiceLiquidityContract {
             return Err(ContractError::PayerReputationTooLow);
         }
 
-        // Issues #92 + #93: optional oracle verification with data-freshness guard.
-        // When require_oracle_verification is true, the oracle stored in config is
-        // called. If no oracle is configured the flag is a no-op.
+        // Issues #92 + #93 + #532: optional oracle verification with a
+        // data-freshness guard. When require_oracle_verification is true,
+        // the oracle registry is queried for the Identity feed, resolved per
+        // the invoice's token (per-token override, then feed-type default,
+        // then the legacy price_oracle config field). If no oracle resolves,
+        // the flag is a no-op.
         if require_oracle_verification {
-            if let Some(oracle_addr) = crate::storage::get_config(&env).and_then(|c| c.price_oracle)
+            if let Some(oracle_addr) =
+                oracle_registry::resolve_oracle(&env, OracleFeedType::Identity, &invoice.token)
             {
                 let response: OracleVerificationResponse = env.invoke_contract(
                     &oracle_addr,
@@ -1346,6 +1431,18 @@ impl InvoiceLiquidityContract {
                 let max_age = crate::storage::get_config(&env)
                     .map(|c| c.max_oracle_age_ledgers)
                     .unwrap_or(DEFAULT_MAX_ORACLE_AGE_LEDGERS);
+
+                // Issue #532: record health (staleness) for this oracle
+                // regardless of outcome, so monitoring sees every query.
+                oracle_registry::record_oracle_health(
+                    &env,
+                    OracleFeedType::Identity,
+                    &invoice.token,
+                    &oracle_addr,
+                    response.timestamp,
+                    max_age,
+                );
+
                 if max_age > 0 {
                     let current_ledger = env.ledger().sequence() as u64;
                     let age = current_ledger.saturating_sub(response.timestamp as u64);
@@ -2822,8 +2919,9 @@ fn notify_distribution_settlement(
 // ----------------------------------------------------------------
 
 pub(crate) mod test;
-mod tests_storage;
-mod tests_storage_layout;
+mod tests_lifecycle_integration;
 mod tests_min_invoice_amount;
 mod tests_new_features;
-mod tests_lifecycle_integration;
+mod tests_oracle_registry;
+mod tests_storage;
+mod tests_storage_layout;
