@@ -1586,6 +1586,170 @@ fn test_create_insurance_premium_rate_proposal() {
     }
 }
 
+// ── Issue #530: quadratic voting ─────────────────────────────────────────────
+
+/// Quadratic voting is disabled by default (backwards compatibility).
+#[test]
+fn test_quadratic_voting_disabled_by_default() {
+    let t = setup();
+    assert!(!t.contract.is_quadratic_voting_enabled());
+}
+
+/// Governance (via ILN contract auth) can enable quadratic voting.
+#[test]
+fn test_set_quadratic_voting_enabled_toggles_flag() {
+    let t = setup();
+    t.contract.set_quadratic_voting_enabled(&true);
+    assert!(t.contract.is_quadratic_voting_enabled());
+
+    t.contract.set_quadratic_voting_enabled(&false);
+    assert!(!t.contract.is_quadratic_voting_enabled());
+}
+
+/// With quadratic voting disabled (default), cast_vote weight is unchanged:
+/// a 10_000-token holder still casts exactly 10_000 votes.
+#[test]
+fn test_linear_voting_weight_unchanged_when_disabled() {
+    let t = setup();
+    let whale = Address::generate(&t.env);
+    t.gov_token_admin.mint(&whale, &10_000);
+
+    let id = create_fee_proposal(&t);
+    t.contract.cast_vote(&whale, &id, &true);
+
+    let p = t.contract.get_proposal(&id);
+    assert_eq!(p.votes_for, 10_000);
+}
+
+/// With quadratic voting enabled, a whale's vote weight is sqrt(balance),
+/// not the raw balance — this is the whole point of Issue #530: reduce
+/// whale dominance relative to linear weighting.
+#[test]
+fn test_quadratic_voting_weight_is_sqrt_of_balance() {
+    let t = setup();
+    t.contract.set_quadratic_voting_enabled(&true);
+
+    let whale = Address::generate(&t.env);
+    t.gov_token_admin.mint(&whale, &10_000); // sqrt(10_000) = 100
+
+    let id = create_fee_proposal(&t);
+    t.contract.cast_vote(&whale, &id, &true);
+
+    let p = t.contract.get_proposal(&id);
+    assert_eq!(p.votes_for, 100);
+}
+
+/// Quadratic voting compresses the ratio between a whale and a small
+/// holder: a holder with 100x the tokens of another should end up with
+/// only 10x the vote weight (sqrt(100) = 10), not 100x.
+#[test]
+fn test_quadratic_voting_reduces_whale_dominance_ratio() {
+    let t = setup();
+    t.contract.set_quadratic_voting_enabled(&true);
+
+    let whale = Address::generate(&t.env);
+    let minnow = Address::generate(&t.env);
+    t.gov_token_admin.mint(&whale, &1_000_000); // sqrt = 1_000
+    t.gov_token_admin.mint(&minnow, &10_000); // sqrt = 100
+
+    let id_whale = create_fee_proposal(&t);
+    t.contract.cast_vote(&whale, &id_whale, &true);
+    let id_minnow = create_fee_proposal(&t);
+    t.contract.cast_vote(&minnow, &id_minnow, &true);
+
+    let p_whale = t.contract.get_proposal(&id_whale);
+    let p_minnow = t.contract.get_proposal(&id_minnow);
+
+    // Raw balance ratio is 100x; quadratic weight ratio must be only 10x.
+    assert_eq!(p_whale.votes_for, 1_000);
+    assert_eq!(p_minnow.votes_for, 100);
+    assert_eq!(p_whale.votes_for / p_minnow.votes_for, 10);
+}
+
+/// Quadratic voting also applies to delegated weight: own + delegated is
+/// summed first, then the square root is taken of the combined total.
+#[test]
+fn test_quadratic_voting_applies_to_own_plus_delegated_weight() {
+    let t = setup();
+    t.contract.set_quadratic_voting_enabled(&true);
+
+    // voter_b has 2_000, voter_a delegates 1_000 -> combined 3_000 (not a
+    // perfect square, isqrt floors it): isqrt(3_000) = 54 (54^2=2916, 55^2=3025).
+    t.contract.delegate_votes(&t.voter_a, &t.voter_b);
+    let id = create_fee_proposal(&t);
+    t.contract.cast_vote(&t.voter_b, &id, &true);
+
+    let p = t.contract.get_proposal(&id);
+    assert_eq!(p.votes_for, 54);
+}
+
+/// A zero-balance voter with a zero-balance delegation still has no voting
+/// power under quadratic voting (sqrt(0) = 0), same as linear.
+#[test]
+#[should_panic]
+fn test_quadratic_voting_zero_balance_rejected() {
+    let t = setup();
+    t.contract.set_quadratic_voting_enabled(&true);
+    let id = create_fee_proposal(&t);
+    let zero_voter = Address::generate(&t.env);
+    t.contract.cast_vote(&zero_voter, &id, &true);
+}
+
+/// cast_vote records the applied (quadratic) weight as a vote receipt,
+/// retrievable via get_applied_vote_weight — this is distinct from the
+/// linear snapshot balance used to compute it.
+#[test]
+fn test_get_applied_vote_weight_returns_quadratic_receipt() {
+    let t = setup();
+    t.contract.set_quadratic_voting_enabled(&true);
+
+    let whale = Address::generate(&t.env);
+    t.gov_token_admin.mint(&whale, &10_000); // sqrt = 100
+
+    let id = create_fee_proposal(&t);
+    assert_eq!(t.contract.get_applied_vote_weight(&id, &whale), None);
+
+    t.contract.cast_vote(&whale, &id, &true);
+    assert_eq!(t.contract.get_applied_vote_weight(&id, &whale), Some(100));
+}
+
+/// get_applied_vote_weight also records the linear weight when quadratic
+/// voting is disabled, so the receipt is always available regardless of mode.
+#[test]
+fn test_get_applied_vote_weight_records_linear_weight_when_disabled() {
+    let t = setup();
+    let id = create_fee_proposal(&t);
+    t.contract.cast_vote(&t.voter_a, &id, &true);
+    assert_eq!(
+        t.contract.get_applied_vote_weight(&id, &t.voter_a),
+        Some(1_000)
+    );
+}
+
+/// Non-ILN-contract callers cannot toggle quadratic voting.
+#[test]
+#[should_panic]
+fn test_set_quadratic_voting_enabled_requires_iln_auth() {
+    let env = Env::default();
+    let token_id = env.register_stellar_asset_contract_v2(Address::generate(&env));
+    let token_addr = token_id.address();
+    let iln_id = env.register_contract(None, MockIln);
+    let dist_id = env.register_contract(None, MockIln);
+    let admin = Address::generate(&env);
+
+    let contract_id = env.register_contract(None, GovContract);
+    let contract = GovContractClient::new(&env, &contract_id);
+
+    env.mock_all_auths();
+    contract.initialize(&iln_id, &dist_id, &token_addr, &admin);
+
+    // No auths mocked on this second client — require_auth on the ILN
+    // contract address must reject an arbitrary caller.
+    let env2 = Env::default();
+    let contract2 = GovContractClient::new(&env2, &contract_id);
+    contract2.set_quadratic_voting_enabled(&true);
+}
+
 // ── Issue #531: proposal execution verification ─────────────────────────────
 
 /// Test env wired to a failing mock ILN contract, so `execute_proposal`'s

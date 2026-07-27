@@ -259,6 +259,14 @@ pub enum StorageKey {
     ProposalCount,
     VoteWeightSnapshot(u64, Address),
     HasVoted(u64, Address),
+    /// Issue #530: `true` when vote weight is `sqrt(balance + delegated)`
+    /// instead of linear. Defaults to `false` for backwards compatibility.
+    QuadraticVotingEnabled,
+    /// Issue #530: the actual weight applied to the tally for this voter on
+    /// this proposal (post square-root transform when quadratic voting is
+    /// enabled, otherwise equal to the linear balance). Recorded alongside
+    /// `HasVoted` as the vote receipt.
+    AppliedVoteWeight(u64, Address),
     /// Issue #64: forward delegation pointer — Delegation(X) = Y means X delegates to Y.
     Delegation(Address),
     /// Issue #64: running tally of total delegated weight pointing (transitively) at Address.
@@ -445,6 +453,78 @@ impl GovContract {
         );
 
         Ok(id)
+    }
+
+    // ── Issue #530: quadratic voting toggle ───────────────────────
+
+    /// Returns whether quadratic voting (`sqrt(balance + delegated)` weight)
+    /// is enabled. Defaults to `false` (linear weighting) for backwards
+    /// compatibility with proposals created before this feature existed.
+    pub fn is_quadratic_voting_enabled(env: Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&StorageKey::QuadraticVotingEnabled)
+            .unwrap_or(false)
+    }
+
+    /// Enables or disables quadratic voting.
+    ///
+    /// Authorization: the configured ILN contract address must authorize
+    /// (same governance-controlled-toggle pattern as `set_min_quorum_bps`).
+    pub fn set_quadratic_voting_enabled(env: Env, enabled: bool) -> Result<(), GovernanceError> {
+        let iln_contract: Address = env
+            .storage()
+            .instance()
+            .get(&StorageKey::IlnContract)
+            .unwrap();
+        iln_contract.require_auth();
+
+        let old_value: bool = env
+            .storage()
+            .instance()
+            .get(&StorageKey::QuadraticVotingEnabled)
+            .unwrap_or(false);
+        env.storage()
+            .instance()
+            .set(&StorageKey::QuadraticVotingEnabled, &enabled);
+
+        let pn = Symbol::new(&env, "quadratic_voting_enabled");
+        env.events().publish(
+            (Symbol::new(&env, "parameter_updated"), pn.clone()),
+            GovernanceParameterUpdated {
+                param_name: pn,
+                old_value: old_value as i128,
+                new_value: enabled as i128,
+            },
+        );
+        Ok(())
+    }
+
+    /// Returns the actual weight applied to `voter`'s vote on `proposal_id`,
+    /// i.e. the vote receipt recorded by Issue #530. `None` if the address
+    /// has not voted on this proposal (or its temporary-storage TTL expired).
+    pub fn get_applied_vote_weight(env: Env, proposal_id: u64, voter: Address) -> Option<i128> {
+        env.storage()
+            .temporary()
+            .get(&StorageKey::AppliedVoteWeight(proposal_id, voter))
+    }
+
+    /// Integer square root (floor) via binary search. `n` is assumed `>= 0`
+    /// (token balances and delegated weight tallies are non-negative).
+    fn isqrt(n: i128) -> i128 {
+        if n <= 1 {
+            return n.max(0);
+        }
+        let mut lo: i128 = 0;
+        let mut hi: i128 = n;
+        while lo < hi {
+            let mid = lo + (hi - lo + 1) / 2;
+            match mid.checked_mul(mid) {
+                Some(sq) if sq <= n => lo = mid,
+                _ => hi = mid - 1,
+            }
+        }
+        lo
     }
 
     /// Returns the configured minimum proposer balance.
@@ -644,7 +724,17 @@ impl GovContract {
             .get(&StorageKey::DelegatedToMe(voter.clone()))
             .unwrap_or(0_i128);
 
-        let weight = own_balance.saturating_add(delegated);
+        let raw_weight = own_balance.saturating_add(delegated);
+
+        // Issue #530: quadratic voting reduces whale influence by weighting
+        // votes by sqrt(balance + delegated) instead of the raw balance.
+        // Off by default so proposals created before this feature shipped
+        // keep their original linear semantics.
+        let weight = if Self::is_quadratic_voting_enabled(env.clone()) {
+            Self::isqrt(raw_weight)
+        } else {
+            raw_weight
+        };
 
         if weight == 0 {
             return Err(GovernanceError::NoVotingPower);
@@ -659,6 +749,15 @@ impl GovContract {
         env.storage().temporary().set(&voted_key, &true);
         env.storage().temporary().extend_ttl(
             &voted_key,
+            VOTE_RECEIPT_TTL_THRESHOLD_LEDGERS,
+            VOTE_RECEIPT_TTL_LEDGERS,
+        );
+
+        // Issue #530: record the actual weight applied (vote receipt).
+        let applied_weight_key = StorageKey::AppliedVoteWeight(proposal_id, voter.clone());
+        env.storage().temporary().set(&applied_weight_key, &weight);
+        env.storage().temporary().extend_ttl(
+            &applied_weight_key,
             VOTE_RECEIPT_TTL_THRESHOLD_LEDGERS,
             VOTE_RECEIPT_TTL_LEDGERS,
         );

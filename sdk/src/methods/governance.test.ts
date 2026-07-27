@@ -13,6 +13,9 @@ import {
   getExecutionDelay,
   setMinQuorumBps,
   setMinProposalBalance,
+  setQuadraticVotingEnabled,
+  isQuadraticVotingEnabled,
+  getAppliedVoteWeight,
   GovernanceContractError,
 } from "./governance.js";
 import { ProposalAction, ProposalStatus } from "../types/governance.js";
@@ -199,5 +202,44 @@ describe("governance", () => {
   it("setMinProposalBalance submits and returns txHash", async () => {
     const res = await setMinProposalBalance(mockServer, CONTRACT, 500n, account, sign, PASS);
     expect(res.txHash).toBe("txGOV");
+  });
+
+  it("setQuadraticVotingEnabled submits and returns txHash", async () => {
+    const res = await setQuadraticVotingEnabled(mockServer, CONTRACT, true, account, sign, PASS);
+    expect(res.txHash).toBe("txGOV");
+  });
+
+  it("setQuadraticVotingEnabled throws GovernanceContractError.Unauthorized on Error(Contract, 14)", async () => {
+    // @ts-expect-error mock
+    mockServer.simulateTransaction.mockResolvedValueOnce({ error: "Error(Contract, 14)" });
+    await expect(
+      setQuadraticVotingEnabled(mockServer, CONTRACT, true, account, sign, PASS)
+    ).rejects.toBeInstanceOf(GovernanceContractError.Unauthorized);
+  });
+
+  it("isQuadraticVotingEnabled returns the decoded flag", async () => {
+    mockScValToNative.mockReturnValue(true);
+    const enabled = await isQuadraticVotingEnabled(mockServer, CONTRACT, account, PASS);
+    expect(enabled).toBe(true);
+  });
+
+  it("isQuadraticVotingEnabled returns false when unset", async () => {
+    // @ts-expect-error mock
+    mockServer.simulateTransaction.mockResolvedValueOnce({ result: { retval: null } });
+    const enabled = await isQuadraticVotingEnabled(mockServer, CONTRACT, account, PASS);
+    expect(enabled).toBe(false);
+  });
+
+  it("getAppliedVoteWeight returns the decoded weight", async () => {
+    mockScValToNative.mockReturnValue(100);
+    const weight = await getAppliedVoteWeight(mockServer, CONTRACT, 5n, PROPOSER, account, PASS);
+    expect(weight).toBe(100n);
+  });
+
+  it("getAppliedVoteWeight returns undefined when the voter has no receipt", async () => {
+    // @ts-expect-error mock
+    mockServer.simulateTransaction.mockResolvedValueOnce({ result: { retval: null } });
+    const weight = await getAppliedVoteWeight(mockServer, CONTRACT, 5n, PROPOSER, account, PASS);
+    expect(weight).toBeUndefined();
   });
 });
