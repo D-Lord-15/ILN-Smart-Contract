@@ -73,6 +73,9 @@ pub enum DataKey {
     TokenOracle(crate::oracle_registry::OracleFeedType, Address),
     /// Issue #532: last recorded oracle health snapshot for a feed type + token.
     OracleHealth(crate::oracle_registry::OracleFeedType, Address),
+    /// Issue #529: deployed insurance pool contract address, consulted by
+    /// claim_default() to compensate enrolled LPs on a confirmed default.
+    InsurancePool,
 }
 
 // ----------------------------------------------------------------
@@ -93,6 +96,15 @@ pub fn get_config(env: &Env) -> Option<Config> {
 
 pub fn set_config(env: &Env, config: &Config) {
     env.storage().instance().set(&DataKey::Config, config);
+}
+
+/// Issue #529: the configured insurance pool contract address, if any.
+pub fn get_insurance_pool(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::InsurancePool)
+}
+
+pub fn set_insurance_pool(env: &Env, pool: &Address) {
+    env.storage().instance().set(&DataKey::InsurancePool, pool);
 }
 
 pub fn is_paused(env: &Env) -> bool {

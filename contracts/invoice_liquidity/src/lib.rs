@@ -25,6 +25,7 @@ use constants::{
 };
 pub mod oracle_interface;
 pub mod oracle_registry;
+use insurance_pool::InsurancePoolInterfaceClient;
 use oracle_registry::OracleFeedType;
 
 pub use crate::invoice::{
@@ -44,10 +45,10 @@ use crate::storage::get_admin;
 use events::{
     AdminChanged, AppealResolved, ContractInitialized, ContractPaused, ContractUnpaused,
     ContractUpgraded, DefaultAppealed, DisputeResolved, DistributionContractUpdated,
-    FundQueueResolved, FundRequested, InvoiceCancelled, InvoiceDefaulted, InvoiceDisputed,
-    InvoiceExpired, InvoiceFunded, InvoicePaid, InvoicePartiallyPaid, InvoiceSubmitted,
-    InvoiceTokenChanged, InvoiceTransferred, InvoiceUpdated, LPPositionTransferred,
-    ParameterUpdated, PriceOracleUpdated, TokenAdded, TokenRemoved,
+    FundQueueResolved, FundRequested, InsuranceClaimAttempted, InvoiceCancelled, InvoiceDefaulted,
+    InvoiceDisputed, InvoiceExpired, InvoiceFunded, InvoicePaid, InvoicePartiallyPaid,
+    InvoiceSubmitted, InvoiceTokenChanged, InvoiceTransferred, InvoiceUpdated,
+    LPPositionTransferred, ParameterUpdated, PriceOracleUpdated, TokenAdded, TokenRemoved,
 };
 use invoice::{
     add_invoice_to_lp, add_invoice_to_submitter, add_volume, get_appeal, get_contract_stats,
@@ -518,6 +519,24 @@ impl InvoiceLiquidityContract {
         payer: Address,
     ) -> Option<oracle_registry::OracleHealthStatus> {
         oracle_registry::check_oracle_health(env, feed_type, token, payer)
+    }
+
+    // ── Issue #529: insurance pool integration ────────────────────
+
+    /// Configure the deployed insurance pool contract address consulted by
+    /// `claim_default` to compensate enrolled LPs on a confirmed default.
+    /// Access: Admin only
+    pub fn set_insurance_pool(env: Env, pool: Address) -> Result<(), ContractError> {
+        require_admin(&env)?;
+        check_rate_limit(&env, "set_insurance_pool", DEFAULT_RATE_LIMIT_LEDGERS)?;
+        crate::storage::set_insurance_pool(&env, &pool);
+        Ok(())
+    }
+
+    /// Return the configured insurance pool contract address, if any.
+    /// Access: Anyone
+    pub fn get_insurance_pool(env: Env) -> Option<Address> {
+        crate::storage::get_insurance_pool(&env)
     }
 
     /// Access: Admin only
@@ -2109,7 +2128,6 @@ impl InvoiceLiquidityContract {
         invoice.status = InvoiceStatus::Defaulted;
         save_invoice(&env, &invoice);
 
-        let mut total_refunded = 0;
         let mut total_refunded: i128 = 0;
 
         for i in 0..funders.len() {
@@ -2121,6 +2139,40 @@ impl InvoiceLiquidityContract {
             let refund = fund_amt.saturating_sub(fund_discount);
             token.transfer(&contract_address, &funder_addr, &refund);
             total_refunded = total_refunded.saturating_add(refund);
+        }
+
+        // Issue #529: on top of the principal refund above, an LP enrolled in
+        // the insurance pool gets an additional payout for this default. The
+        // pool itself credits the LP directly (it transfers tokens from its
+        // own balance), so this contract only needs to trigger the claim and
+        // report the outcome - it never holds or forwards the payout.
+        //
+        // Handled via try_* so a paused/empty/unreachable pool degrades
+        // gracefully: claim_default still completes (refund + status update
+        // already happened above, in the same atomic invocation) rather than
+        // reverting the whole default over an optional insurance top-up.
+        if let Some(pool_addr) = crate::storage::get_insurance_pool(&env) {
+            let pool_client = InsurancePoolInterfaceClient::new(&env, &pool_addr);
+            let enrolled = matches!(pool_client.try_is_enrolled(&funder), Ok(Ok(true)));
+            if enrolled {
+                let (compensated, payout) = match pool_client.try_claim(&invoice_id, &funder) {
+                    Ok(Ok(payout)) => (true, payout),
+                    _ => (false, 0),
+                };
+                env.events().publish(
+                    (
+                        Symbol::new(&env, "insurance_claim_attempted"),
+                        invoice.id,
+                        funder.clone(),
+                    ),
+                    InsuranceClaimAttempted {
+                        invoice_id: invoice.id,
+                        lp: funder.clone(),
+                        compensated,
+                        payout,
+                    },
+                );
+            }
         }
 
         // --- Update payer reputation ---
@@ -2919,6 +2971,7 @@ fn notify_distribution_settlement(
 // ----------------------------------------------------------------
 
 pub(crate) mod test;
+mod tests_insurance_integration;
 mod tests_lifecycle_integration;
 mod tests_min_invoice_amount;
 mod tests_new_features;

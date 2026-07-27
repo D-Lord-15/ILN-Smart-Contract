@@ -4,6 +4,7 @@ import {
   TransactionBuilder,
   BASE_FEE,
   nativeToScVal,
+  scValToNative,
   Account,
   Transaction,
 } from "@stellar/stellar-sdk";
@@ -443,6 +444,94 @@ export async function setMaxOracleAge(
   }
 
   return { txHash: sendResult.hash };
+}
+
+/**
+ * Configure the deployed insurance pool contract address consulted by
+ * claim_default() to compensate enrolled LPs on a confirmed default
+ * (Issue #529). Admin only — subject to the default rate limit.
+ */
+export async function setInsurancePool(
+  server: SorobanRpc.Server,
+  contractAddress: string,
+  poolAddress: string,
+  sourceAccount: Account,
+  signTransaction: (tx: Transaction) => Promise<Transaction> | Transaction,
+  networkPassphrase: string
+): Promise<{ txHash: string }> {
+  validateContractId(poolAddress);
+
+  const contract = new Contract(contractAddress);
+  const op = contract.call(
+    "set_insurance_pool",
+    nativeToScVal(poolAddress, { type: "address" })
+  );
+
+  const tx = new TransactionBuilder(sourceAccount, {
+    fee: BASE_FEE,
+    networkPassphrase,
+  })
+    .addOperation(op)
+    .setTimeout(30)
+    .build();
+
+  const sim = await retry(() => server.simulateTransaction(tx));
+  if (SorobanRpc.Api.isSimulationError(sim)) {
+    throw ILNError.fromError(sim.error);
+  }
+
+  const assembledTx = SorobanRpc.assembleTransaction(tx, sim).build();
+  const signedTx = await signTransaction(assembledTx);
+  const sendResult = await retry(() => server.sendTransaction(signedTx));
+  if (sendResult.errorResult) {
+    throw new Error(`Transaction failed: ${sendResult.errorResult}`);
+  }
+
+  let status = await retry(() => server.getTransaction(sendResult.hash));
+  let retries = 0;
+  while (status.status === SorobanRpc.Api.GetTransactionStatus.NOT_FOUND && retries < 15) {
+    await new Promise(r => setTimeout(r, 2000));
+    status = await retry(() => server.getTransaction(sendResult.hash));
+    retries++;
+  }
+
+  if (status.status === SorobanRpc.Api.GetTransactionStatus.FAILED) {
+    throw new Error("Transaction failed during execution");
+  }
+
+  return { txHash: sendResult.hash };
+}
+
+/**
+ * Fetch the invoice_liquidity contract's configured insurance pool address,
+ * if any (Issue #529). Read-only; no signer required.
+ */
+export async function getInsurancePool(
+  server: SorobanRpc.Server,
+  contractAddress: string,
+  sourceAccount: Account,
+  networkPassphrase: string
+): Promise<string | undefined> {
+  const contract = new Contract(contractAddress);
+  const op = contract.call("get_insurance_pool");
+
+  const tx = new TransactionBuilder(sourceAccount, {
+    fee: BASE_FEE,
+    networkPassphrase,
+  })
+    .addOperation(op)
+    .setTimeout(30)
+    .build();
+
+  const sim = await retry(() => server.simulateTransaction(tx));
+  if (SorobanRpc.Api.isSimulationError(sim)) {
+    throw ILNError.fromError(sim.error);
+  }
+  if (!sim.result?.retval) {
+    return undefined;
+  }
+  const decoded = scValToNative(sim.result.retval);
+  return decoded === null || decoded === undefined ? undefined : String(decoded);
 }
 
 /**

@@ -34,6 +34,19 @@ pub struct OracleHealthRecorded {
     pub consecutive_stale_count: u32,
 }
 
+/// Emitted after `claim_default` attempts to compensate the claiming LP from
+/// the configured insurance pool. `compensated` is `false` when the LP
+/// wasn't enrolled, no pool is configured, or the pool call failed/was
+/// unavailable (Issue #529).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct InsuranceClaimAttempted {
+    pub invoice_id: u64,
+    pub lp: Address,
+    pub compensated: bool,
+    pub payout: i128,
+}
+
 /// Emitted when governance adds a token to the funding allowlist (Issue #19).
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
