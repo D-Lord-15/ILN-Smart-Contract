@@ -257,6 +257,10 @@ export interface EventFilter {
    * (freelancer, payer, LP, admin, token …).
    */
   address?: string;
+  /**
+   * The starting ledger sequence for historical event replay.
+   */
+  fromLedger?: number;
 }
 
 /** Call to stop the subscription and close the underlying stream. */

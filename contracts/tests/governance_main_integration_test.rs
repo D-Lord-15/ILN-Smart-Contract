@@ -90,7 +90,8 @@ fn setup() -> GovIntegrationEnv {
 
     let iln_id = env.register_contract(None, InvoiceLiquidityContract);
     let iln = InvoiceLiquidityContractClient::new(&env, &iln_id);
-    iln.initialize(&admin, &payment_token_addr, &xlm_addr);
+    let eurc_addr = Address::generate(&env);
+    iln.initialize(&admin, &payment_token_addr, &eurc_addr, &xlm_addr);
 
     // ── Governance contract ───────────────────────────────────────────────
     let governance_id = env.register_contract(None, GovContract);
@@ -235,9 +236,9 @@ fn test_update_fee_rate_via_governance_takes_effect() {
 
     // Run the invoice lifecycle: submit → fund → mark_paid.
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.iln.submit_invoice(&ReferralCode::None);
+    let invoice_id = t.iln.submit_invoice(&t.freelancer, &t.payer, &INVOICE_AMOUNT, &(t.env.ledger().timestamp() + DUE_DATE_OFFSET), &DISCOUNT_RATE, &t.payment_token_addr, &ReferralCode::None);
 
-    t.iln.fund_invoice(&t.lp, &invoice_id, &INVOICE_AMOUNT);
+    t.iln.fund_invoice(&t.lp, &invoice_id, &INVOICE_AMOUNT, &false);
     t.iln.mark_paid(&invoice_id, &INVOICE_AMOUNT);
 
     // Admin should have received the protocol fee.
@@ -295,8 +296,8 @@ fn test_veto_proposal_prevents_execution() {
     // The ILN fee rate was NOT changed — submitting and funding an invoice
     // with the default fee (0) means admin receives no fee.
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.iln.submit_invoice(&ReferralCode::None);
-    t.iln.fund_invoice(&t.lp, &invoice_id, &INVOICE_AMOUNT);
+    let invoice_id = t.iln.submit_invoice(&t.freelancer, &t.payer, &INVOICE_AMOUNT, &(t.env.ledger().timestamp() + DUE_DATE_OFFSET), &DISCOUNT_RATE, &t.payment_token_addr, &ReferralCode::None);
+    t.iln.fund_invoice(&t.lp, &invoice_id, &INVOICE_AMOUNT, &false);
     t.iln.mark_paid(&invoice_id, &INVOICE_AMOUNT);
 
     // With fee_rate still at 0, admin receives no protocol fee.

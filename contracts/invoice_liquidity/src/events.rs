@@ -1,6 +1,51 @@
 use soroban_sdk::{contracttype, Address, BytesN, Symbol};
 
 use crate::invoice::{InvoiceStatus, ReferralCode};
+use crate::oracle_registry::OracleFeedType;
+
+/// Emitted when an oracle is registered for a feed type, either as the
+/// feed-type-wide default (`token: None`) or a per-token override
+/// (`token: Some(..)`) (Issue #532).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct OracleRegistered {
+    pub feed_type: OracleFeedType,
+    pub token: Option<Address>,
+    pub oracle: Address,
+}
+
+/// Emitted when an oracle registration is removed (Issue #532).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct OracleUnregistered {
+    pub feed_type: OracleFeedType,
+    pub token: Option<Address>,
+}
+
+/// Emitted every time `fund_invoice` (or another caller) queries an oracle,
+/// recording its staleness at that moment (Issue #532).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct OracleHealthRecorded {
+    pub feed_type: OracleFeedType,
+    pub token: Address,
+    pub is_stale: bool,
+    pub last_data_age_ledgers: u64,
+    pub consecutive_stale_count: u32,
+}
+
+/// Emitted after `claim_default` attempts to compensate the claiming LP from
+/// the configured insurance pool. `compensated` is `false` when the LP
+/// wasn't enrolled, no pool is configured, or the pool call failed/was
+/// unavailable (Issue #529).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct InsuranceClaimAttempted {
+    pub invoice_id: u64,
+    pub lp: Address,
+    pub compensated: bool,
+    pub payout: i128,
+}
 
 /// Emitted when governance adds a token to the funding allowlist (Issue #19).
 #[contracttype]

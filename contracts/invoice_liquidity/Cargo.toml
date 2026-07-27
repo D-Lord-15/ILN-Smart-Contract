@@ -8,6 +8,7 @@ license = "MIT OR Apache-2.0"
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
+insurance_pool = { path = "../insurance_pool" }
 soroban-sdk = { workspace = true }
 
 [dev-dependencies]

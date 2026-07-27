@@ -251,3 +251,47 @@ cd sdk && npm run fmt:check && npm run lint
 - CI confirms Rust tests, Node tests, formatting, linting where available, and coverage thresholds.
 - All items in the [Comprehensive Security Audit Checklist](#comprehensive-security-audit-checklist) above are reviewed before mainnet release.
 - Mainnet releases require the [Mainnet Launch Checklist](mainnet-launch-checklist.md) to be signed off.
+
+## Reentrancy Analysis (Issue #535)
+
+### Cross-Contract Call Matrix
+
+| Function | External Call(s) | CEI Pattern | Guard | Risk |
+|---|---|---|---|---|
+| `fund_invoice` | `token.transfer(funder→contract)` | ✅ State check before | `lock_reentrancy` | Low — SAC has no callback |
+| `fund_invoice` | `oracle.get_payer_data` | ✅ Read-only, before state | — | None — view only |
+| `fund_invoice` | `token.transfer(contract→freelancer)` | ⚠️ Fixed: now after state update | `lock_reentrancy` | Low |
+| `fund_invoice` | `distribution.accrue_lp` | ✅ After state save | — | Low — trusted contract |
+| `mark_paid` | `token.transfer(payer→contract)` | ⚠️ Fixed: now after state update | `lock_reentrancy` | Low |
+| `mark_paid` | `token.transfer(contract→admin)` | ⚠️ Fixed: now after state update | `lock_reentrancy` | Low |
+| `mark_paid` | `token.transfer(contract→funder)` | ⚠️ Fixed: now after status update | `lock_reentrancy` | Low |
+| `mark_paid` | `distribution.accrue_settlement` | ✅ After state save | — | Low — trusted contract |
+| `cancel_invoice` | `token.transfer(contract→funder)` | ⚠️ Fixed: now after status update | `lock_reentrancy` | Low |
+| `claim_default` | `token.transfer(contract→funder)` | ⚠️ Fixed: now after status update | `lock_reentrancy` | Low |
+| `resolve_dispute` | `token.transfer(contract→funder)` | ⚠️ Fixed: now after status update | `lock_reentrancy` | Low |
+| `execute_proposal` (governance) | `invoke_contract(iln_contract, ...)` | ⚠️ Note: status update after call | — | Low — governance trust boundary |
+
+### Mitigations Applied
+
+1. **Reentrancy guards** (`lock_reentrancy` / `unlock_reentrancy`): Added to `fund_invoice`, `mark_paid`, `cancel_invoice`, `claim_default`, and `resolve_dispute`. Uses a boolean instance storage lock; on error/panic the lock is automatically cleared by Soroban's revert semantics.
+
+2. **CEI pattern enforcement**: All state updates in `mark_paid`, `claim_default`, `cancel_invoice`, and `resolve_dispute` now occur **before** external token transfers. Previously the status/amount updates were after token transfers, which could have allowed reentrant exploitation with exotic tokens.
+
+3. **Oracle calls**: The `oracle.get_payer_data` call in `fund_invoice` is a read-only view and occurs only after auth checks and state validation. State mutation happens after the oracle returns.
+
+4. **Distribution contract calls**: `notify_distribution_funding` and `notify_distribution_settlement` are informational updates to a trusted distribution contract. They are invoked after state is fully persisted.
+
+### Residual Risk
+
+- Governance `execute_proposal` in `iln_governance` invokes the ILN contract after changing `ProposalStatus::Passed` but before `ProposalStatus::Executed`. This is an accepted design choice because the ILN contract's admin functions are idempotent and guarded by `require_admin`.
+- Soroban's host function isolation provides inherent reentrancy protection for SAC token transfers, so the guards are defense-in-depth.
+
+## Rate Limiting (Issue #541)
+
+Rate limiting is applied to sensitive admin functions to prevent griefing via rapid parameter changes. See `docs/access-control.md#6-rate-limiting-design-issue-541` for the full design, cooldown table, and implementation details.
+
+Key design decisions:
+- Cooldown is measured in **ledgers** (not timestamps), aligning with Soroban's deterministic execution model.
+- Emergency functions (`pause`, `unpause`, `resolve_appeal`, `resolve_dispute`) are exempt.
+- Rate limits are per-function, so calling `update_fee_rate` does not affect `update_max_discount`.
+- Each rate-limited function is keyed by a `Symbol` in instance storage (`DataKey::RateLimit(Symbol)`).

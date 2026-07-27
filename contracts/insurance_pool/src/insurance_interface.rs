@@ -36,13 +36,13 @@ pub trait InsurancePoolInterface {
     /// balance. Requires `lp` auth. Enrolls `lp` if not already enrolled.
     fn deposit_premium(env: Env, lp: Address, amount: i128);
 
-    /// File a claim for the given defaulted `invoice_id`. Returns the
-    /// compensation amount credited toward the funding LP. Idempotent per
+    /// File a claim for the given defaulted `invoice_id` and compensate `lp`.
+    /// Returns the compensation amount credited to the LP. Idempotent per
     /// invoice: a second claim for the same invoice is rejected.
     ///
     /// Requires admin auth, since in the integrated flow only the liquidity
     /// contract (acting as configured admin) reports a confirmed default.
-    fn claim(env: Env, invoice_id: u64) -> i128;
+    fn claim(env: Env, invoice_id: u64, lp: Address) -> i128;
 
     /// Current total balance held by the pool (sum of premiums minus payouts).
     fn get_pool_balance(env: Env) -> i128;

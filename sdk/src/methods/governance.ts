@@ -95,6 +95,9 @@ export class GovernanceContractError extends Error {
   static InsufficientProposerBalance = class InsufficientProposerBalance extends GovernanceContractError {
     constructor(msg = "Proposer does not hold the minimum required balance") { super(msg, 19); }
   };
+  static ExecutionFailed = class ExecutionFailed extends GovernanceContractError {
+    constructor(msg = "Proposal's cross-contract execution call failed; it remains Passed and can be retried") { super(msg, 20); }
+  };
 
   static fromError(error: unknown): Error {
     const match = String(error).match(/Error\(Contract, (\d+)\)/);
@@ -119,6 +122,7 @@ export class GovernanceContractError extends Error {
       case 17: return new GovernanceContractError.NotVetoable();
       case 18: return new GovernanceContractError.VetoPowerDisabled();
       case 19: return new GovernanceContractError.InsufficientProposerBalance();
+      case 20: return new GovernanceContractError.ExecutionFailed();
       default: return new GovernanceContractError(`iln_governance error: ${String(error)}`);
     }
   }
@@ -719,4 +723,113 @@ export async function setMinProposalBalance(
     GovernanceContractError.fromError
   );
   return { txHash };
+}
+
+// ---------------------------------------------------------------------------
+// Quadratic voting (#530)
+// ---------------------------------------------------------------------------
+
+/**
+ * Enables or disables quadratic voting (`sqrt(balance + delegated)` weight
+ * instead of linear). Defaults to disabled for backwards compatibility.
+ *
+ * Wraps `set_quadratic_voting_enabled(enabled)`. Requires a signature from
+ * the configured ILN contract address — `sourceAccount` must be authorized
+ * as that address, not an arbitrary caller.
+ */
+export async function setQuadraticVotingEnabled(
+  server: SorobanRpc.Server,
+  contractAddress: string,
+  enabled: boolean,
+  sourceAccount: Account,
+  signTransaction: (tx: Transaction) => Promise<Transaction> | Transaction,
+  networkPassphrase: string
+): Promise<{ txHash: string }> {
+  const contract = new Contract(contractAddress);
+  const op = contract.call(
+    "set_quadratic_voting_enabled",
+    nativeToScVal(enabled, { type: "bool" })
+  );
+
+  const { txHash } = await sendGovernanceCall(
+    server,
+    sourceAccount,
+    networkPassphrase,
+    op,
+    signTransaction,
+    GovernanceContractError.fromError
+  );
+  return { txHash };
+}
+
+/**
+ * Returns whether quadratic voting is currently enabled (read-only; no
+ * signer required).
+ */
+export async function isQuadraticVotingEnabled(
+  server: SorobanRpc.Server,
+  contractAddress: string,
+  sourceAccount: Account,
+  networkPassphrase: string
+): Promise<boolean> {
+  const contract = new Contract(contractAddress);
+  const op = contract.call("is_quadratic_voting_enabled");
+
+  const tx = new TransactionBuilder(sourceAccount, {
+    fee: BASE_FEE,
+    networkPassphrase,
+  })
+    .addOperation(op)
+    .setTimeout(30)
+    .build();
+
+  const sim = await retry(() => server.simulateTransaction(tx));
+  if (SorobanRpc.Api.isSimulationError(sim)) {
+    throw GovernanceContractError.fromError(sim.error);
+  }
+  if (!sim.result?.retval) {
+    return false;
+  }
+  return scValToNative(sim.result.retval) as boolean;
+}
+
+/**
+ * Fetch the weight actually applied to `voter`'s vote on `proposalId` (the
+ * vote receipt) — the post-square-root value when quadratic voting was
+ * enabled at the time of voting, otherwise the linear balance. Read-only;
+ * no signer required. Returns `undefined` if the address hasn't voted (or
+ * the receipt's temporary-storage TTL expired).
+ */
+export async function getAppliedVoteWeight(
+  server: SorobanRpc.Server,
+  contractAddress: string,
+  proposalId: bigint,
+  voter: string,
+  sourceAccount: Account,
+  networkPassphrase: string
+): Promise<bigint | undefined> {
+  const contract = new Contract(contractAddress);
+  const op = contract.call(
+    "get_applied_vote_weight",
+    nativeToScVal(proposalId, { type: "u64" }),
+    nativeToScVal(voter, { type: "address" })
+  );
+
+  const tx = new TransactionBuilder(sourceAccount, {
+    fee: BASE_FEE,
+    networkPassphrase,
+  })
+    .addOperation(op)
+    .setTimeout(30)
+    .build();
+
+  const sim = await retry(() => server.simulateTransaction(tx));
+  if (SorobanRpc.Api.isSimulationError(sim)) {
+    throw GovernanceContractError.fromError(sim.error);
+  }
+  if (!sim.result?.retval) {
+    return undefined;
+  }
+  const decoded = scValToNative(sim.result.retval);
+  return decoded === null || decoded === undefined ? undefined : BigInt(String(decoded));
 }
