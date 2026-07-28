@@ -1207,6 +1207,84 @@ fn test_reputation_score_never_goes_below_zero() {
     assert_eq!(score, 0, "Score should floor at 0, not go negative");
 }
 
+// ----------------------------------------------------------------
+// Regression tests — issue #601: bound reputation decay loop
+// ----------------------------------------------------------------
+
+#[test]
+fn test_reputation_decay_bounded_for_extremely_long_inactivity() {
+    let t = setup();
+
+    t.env.as_contract(&t.contract.address, || {
+        invoice::set_payer_score(&t.env, &t.payer, 80);
+    });
+
+    let config = Config {
+        high_rep_threshold: 80,
+        bonus_bps: 200,
+        min_discount_rate_bps: 100,
+        decay_rate_bps: 100,
+        decay_period_ledgers: 2,
+        dispute_timeout_ledgers: 100,
+        xlm_sac_address: Address::generate(&t.env),
+        usdc_sac_address: Address::generate(&t.env),
+        eurc_sac_address: Address::generate(&t.env),
+        price_oracle: None,
+        max_oracle_age_ledgers: 17280,
+    };
+    t.env.as_contract(&t.contract.address, || {
+        crate::storage::set_config(&t.env, &config);
+        t.env.storage().instance().extend_ttl(1_000_000, 2_000_000);
+    });
+
+    // periods_passed = 2,500 / 2 = 1,250 (1.25x the cap) — sustained
+    // long-term inactivity under a normal (non-griefing) decay period.
+    let mut ledger = t.env.ledger().get();
+    ledger.sequence_number += 2_500;
+    t.env.ledger().set(ledger);
+
+    let score = t.contract.payer_score(&t.payer);
+
+    assert_eq!(score, 0, "Score for a long-inactive payer should floor at 0, not hang or panic");
+}
+
+#[test]
+fn test_reputation_decay_bounded_when_decay_period_is_one_ledger() {
+    let t = setup();
+
+    t.env.as_contract(&t.contract.address, || {
+        invoice::set_payer_score(&t.env, &t.payer, 80);
+    });
+
+    // The exact griefing scenario from issue #601: decay_period_ledgers=1.
+    let config = Config {
+        high_rep_threshold: 80,
+        bonus_bps: 200,
+        min_discount_rate_bps: 100,
+        decay_rate_bps: 100,
+        decay_period_ledgers: 1,
+        dispute_timeout_ledgers: 100,
+        xlm_sac_address: Address::generate(&t.env),
+        usdc_sac_address: Address::generate(&t.env),
+        eurc_sac_address: Address::generate(&t.env),
+        price_oracle: None,
+        max_oracle_age_ledgers: 17280,
+    };
+    t.env.as_contract(&t.contract.address, || {
+        crate::storage::set_config(&t.env, &config);
+        t.env.storage().instance().extend_ttl(1_000_000, 2_000_000);
+    });
+
+    // periods_passed = 1,500 (1.5x the cap) with decay_period_ledgers=1.
+    let mut ledger = t.env.ledger().get();
+    ledger.sequence_number += 1_500;
+    t.env.ledger().set(ledger);
+
+    let score = t.contract.payer_score(&t.payer);
+
+    assert_eq!(score, 0, "decay_period_ledgers=1 with a large gap should floor at 0, not hang or panic");
+}
+
 #[test]
 fn test_reputation_score_never_exceeds_100() {
     let t = setup();

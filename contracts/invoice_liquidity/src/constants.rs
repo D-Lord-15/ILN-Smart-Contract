@@ -25,6 +25,14 @@ pub const UPGRADE_COOLDOWN_LEDGERS: u64 = 1440;
 /// Rate limit cooldown for economic parameters — 30 minutes (360 ledgers).
 pub const ECONOMIC_PARAM_COOLDOWN_LEDGERS: u64 = 360;
 
+// ----------------------------------------------------------------
+// Reputation Decay Bounds (Issue #601)
+// ----------------------------------------------------------------
+
+/// Maximum number of decay periods `get_payer_score` will iterate before
+/// short-circuiting the score to zero. See invoice.rs for full rationale.
+pub const MAX_REPUTATION_DECAY_PERIODS: u64 = 1000;
+
 /// Minimum number of ledgers that must elapse between the first LP joining the
 /// fund queue and `resolve_fund_queue` being callable.  At ~5 s per ledger,
 /// 120 ledgers ≈ 10 minutes, giving other LPs a fair window to join.
