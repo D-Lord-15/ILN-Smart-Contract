@@ -871,6 +871,9 @@ impl GovContract {
                 .instance()
                 .get(&StorageKey::MinQuorumBps)
                 .unwrap_or(DEFAULT_MIN_QUORUM_BPS);
+
+            // TODO(#602): Query total supply from the governance token contract
+            // once a compatible total_supply interface is available.
             let quorum = if total_supply <= 0 {
                 0_i128
             } else {
