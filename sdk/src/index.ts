@@ -111,9 +111,15 @@ export {
   submitReputationInvoice,
   markReputationInvoicePaid,
   handleDefault,
+  getReputationBonusConfig,
+  getReputationBonusReputation,
   ReputationContractError,
 } from "./methods/reputation.js";
-export type { ReputationBonusInvoice } from "./methods/reputation.js";
+export type {
+  ReputationBonusInvoice,
+  ReputationBonusConfig,
+  ReputationBonusScore,
+} from "./methods/reputation.js";
 export { getReferralStats } from "./methods/referralStats.js";
 export { appealInvoice, resolveAppeal } from "./methods/appeal.js";
 export type { AppealInvoiceResult, ResolveAppealResult } from "./methods/appeal.js";
