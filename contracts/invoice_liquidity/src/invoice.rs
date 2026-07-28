@@ -481,16 +481,23 @@ pub fn get_payer_score(env: &Env, payer: &Address) -> u32 {
                         u64::from(ledgers_since_activity) / decay_config.decay_period_ledgers;
 
                     // Apply decay: score = score * (1 - decay_rate/10000)^periods
-                    let mut decayed_score = rep.score as u64;
-                    for _ in 0..periods_passed {
-                        // Decay: subtract decay_rate_bps basis points (min 1 point)
-                        let mut decay_amount =
-                            (decayed_score * decay_config.decay_rate_bps as u64) / 10_000;
-                        if decay_amount == 0 && decayed_score > 0 {
-                            decay_amount = 1;
+                    // Issue #601: periods_passed is unbounded (governance-
+                    // configurable decay_period_ledgers can be set to 1),
+                    // so cap iteration and short-circuit to 0 beyond that.
+                    let decayed_score: u64 = if periods_passed > crate::constants::MAX_REPUTATION_DECAY_PERIODS {
+                        0
+                    } else {
+                        let mut decayed_score = rep.score as u64;
+                        for _ in 0..periods_passed {
+                            let mut decay_amount =
+                                (decayed_score * decay_config.decay_rate_bps as u64) / 10_000;
+                            if decay_amount == 0 && decayed_score > 0 {
+                                decay_amount = 1;
+                            }
+                            decayed_score = decayed_score.saturating_sub(decay_amount);
                         }
-                        decayed_score = decayed_score.saturating_sub(decay_amount);
-                    }
+                        decayed_score
+                    };
 
                     let new_score = (decayed_score.min(100)) as u32;
                     if new_score != rep.score {

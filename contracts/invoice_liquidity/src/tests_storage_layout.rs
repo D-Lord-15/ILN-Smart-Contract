@@ -2,21 +2,22 @@
 mod tests {
     use crate::invoice::{InvoiceCore, InvoiceMetadata, Invoice, InvoiceStatus, ReferralCode};
     use soroban_sdk::testutils::Address as TestAddress;
-    use soroban_sdk::Address;
+    use soroban_sdk::{Address, Env};
 
     #[test]
     fn test_invoice_to_core_split() {
+        let env = Env::default();
         // Create a full invoice
         let invoice = Invoice {
             id: 123,
-            freelancer: TestAddress::random(),
-            payer: TestAddress::random(),
-            token: TestAddress::random(),
+            freelancer: Address::generate(&env),
+            payer: Address::generate(&env),
+            token: Address::generate(&env),
             amount: 1_000_000,
             due_date: 1234567890,
             discount_rate: 300,
             status: InvoiceStatus::Pending,
-            funder: Some(TestAddress::random()),
+            funder: Some(Address::generate(&env)),
             funded_at: Some(1234567800),
             amount_funded: 0,
             amount_paid: 0,
@@ -43,11 +44,12 @@ mod tests {
 
     #[test]
     fn test_invoice_core_with_metadata_roundtrip() {
+        let env = Env::default();
         // Create core and metadata
-        let freelancer = TestAddress::random();
-        let payer = TestAddress::random();
-        let token = TestAddress::random();
-        let funder = TestAddress::random();
+        let freelancer = Address::generate(&env);
+        let payer = Address::generate(&env);
+        let token = Address::generate(&env);
+        let funder = Address::generate(&env);
 
         let core = InvoiceCore {
             id: 456,
@@ -94,14 +96,15 @@ mod tests {
 
     #[test]
     fn test_invoice_hot_cold_separation_consistency() {
+        let env = Env::default();
         // Test that extracting hot/cold and recombining gives same result
         let invoice = Invoice {
             id: 789,
-            freelancer: TestAddress::random(),
-            payer: TestAddress::random(),
-            token: TestAddress::random(),
+            freelancer: Address::generate(&env),
+            payer: Address::generate(&env),
+            token: Address::generate(&env),
             amount: 5_000_000,
-            due_date: 9876543210,
+            due_date: 987654321,
             discount_rate: 100,
             status: InvoiceStatus::PartiallyFunded,
             funder: None,
