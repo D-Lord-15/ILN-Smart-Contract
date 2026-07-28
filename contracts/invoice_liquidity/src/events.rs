@@ -330,6 +330,24 @@ pub struct FundQueueResolved {
     pub score: u32,
 }
 
+/// Emitted whenever `resolve_fund_queue` is called, regardless of outcome.
+/// `success=true` means a winner was selected; `success=false` means the
+/// call was rejected (e.g. maturity delay not yet elapsed).
+///
+/// Useful for off-chain monitoring to detect MEV attempts and track queue
+/// activity (Issue #MEV-1).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct FundQueueResolutionAttempted {
+    pub invoice_id: u64,
+    /// Caller that triggered the resolution attempt.
+    pub caller_ledger: u32,
+    /// Ledger sequence when the attempt was made.
+    pub attempted_at_ledger: u32,
+    /// Whether the resolution succeeded.
+    pub success: bool,
+}
+
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct InvoiceExpired {

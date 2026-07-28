@@ -38,6 +38,10 @@ pub enum DataKey {
     LpScore(Address),
     FundQueue(u64),
     QueueResolution(u64),
+    /// Ledger sequence when the first LP joined the fund queue for an invoice.
+    /// Used to enforce a minimum maturity delay before `resolve_fund_queue` may
+    /// be called, preventing MEV / front-running (Issue #MEV-1).
+    FundQueueOpenedAt(u64),
 
     // Stats (Persistent)
     TotalInvoices,
@@ -374,6 +378,26 @@ pub fn save_queue_resolution(env: &Env, invoice_id: u64, approved_lp: &Address) 
     env.storage()
         .persistent()
         .set(&DataKey::QueueResolution(invoice_id), approved_lp);
+}
+
+/// Record the ledger sequence when the first LP joined the fund queue.
+/// Must only be called once per invoice (when the queue transitions from empty
+/// to non-empty).  Subsequent joins do not overwrite this timestamp.
+pub fn try_set_fund_queue_opened_at(env: &Env, invoice_id: u64) {
+    let key = DataKey::FundQueueOpenedAt(invoice_id);
+    if !env.storage().persistent().has(&key) {
+        env.storage()
+            .persistent()
+            .set(&key, &env.ledger().sequence());
+    }
+}
+
+/// Return the ledger sequence when the fund queue for `invoice_id` was first
+/// opened (i.e. the first LP join), or `None` if the queue is still empty.
+pub fn get_fund_queue_opened_at(env: &Env, invoice_id: u64) -> Option<u32> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::FundQueueOpenedAt(invoice_id))
 }
 
 // ----------------------------------------------------------------
