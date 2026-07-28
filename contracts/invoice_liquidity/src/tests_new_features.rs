@@ -580,7 +580,7 @@ fn test_batch_submit_all_valid_invoices() {
     let result = t.contract.try_submit_invoices_batch(&batch);
     assert!(result.is_ok());
 
-    let ids = result.unwrap();
+    let ids = result.unwrap().unwrap();
     assert_eq!(ids.len(), 5);
 
     // Verify all invoices were created with sequential IDs
@@ -673,7 +673,7 @@ fn test_batch_submit_referral_tracking() {
     let result = t.contract.try_submit_invoices_batch(&batch);
     assert!(result.is_ok());
 
-    let ids = result.unwrap();
+    let ids = result.unwrap().unwrap();
     assert_eq!(ids.len(), 3);
 
     // Verify referral count was incremented
@@ -708,7 +708,7 @@ fn test_batch_submit_exact_10_invoices_succeeds() {
     let result = t.contract.try_submit_invoices_batch(&batch);
     assert!(result.is_ok());
 
-    let ids = result.unwrap();
+    let ids = result.unwrap().unwrap();
     assert_eq!(ids.len(), 10);
 }
 

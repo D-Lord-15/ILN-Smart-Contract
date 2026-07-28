@@ -1,6 +1,51 @@
 use soroban_sdk::{contracttype, Address, BytesN, Symbol};
 
 use crate::invoice::{InvoiceStatus, ReferralCode};
+use crate::oracle_registry::OracleFeedType;
+
+/// Emitted when an oracle is registered for a feed type, either as the
+/// feed-type-wide default (`token: None`) or a per-token override
+/// (`token: Some(..)`) (Issue #532).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct OracleRegistered {
+    pub feed_type: OracleFeedType,
+    pub token: Option<Address>,
+    pub oracle: Address,
+}
+
+/// Emitted when an oracle registration is removed (Issue #532).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct OracleUnregistered {
+    pub feed_type: OracleFeedType,
+    pub token: Option<Address>,
+}
+
+/// Emitted every time `fund_invoice` (or another caller) queries an oracle,
+/// recording its staleness at that moment (Issue #532).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct OracleHealthRecorded {
+    pub feed_type: OracleFeedType,
+    pub token: Address,
+    pub is_stale: bool,
+    pub last_data_age_ledgers: u64,
+    pub consecutive_stale_count: u32,
+}
+
+/// Emitted after `claim_default` attempts to compensate the claiming LP from
+/// the configured insurance pool. `compensated` is `false` when the LP
+/// wasn't enrolled, no pool is configured, or the pool call failed/was
+/// unavailable (Issue #529).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct InsuranceClaimAttempted {
+    pub invoice_id: u64,
+    pub lp: Address,
+    pub compensated: bool,
+    pub payout: i128,
+}
 
 /// Emitted when governance adds a token to the funding allowlist (Issue #19).
 #[contracttype]
@@ -184,6 +229,38 @@ pub struct ContractUpgraded {
     pub timestamp: u64,
 }
 
+/// Emitted when the admin sets/changes the distribution contract address
+/// (Issue #538: event emission completeness audit).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct DistributionContractUpdated {
+    pub old_distribution_contract: Option<Address>,
+    pub new_distribution_contract: Address,
+    pub updated_by: Address,
+}
+
+/// Emitted when the admin sets/changes the price oracle address
+/// (Issue #538: event emission completeness audit).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct PriceOracleUpdated {
+    pub old_oracle: Option<Address>,
+    pub new_oracle: Address,
+    pub updated_by: Address,
+}
+
+/// Emitted once, when the contract is initialised
+/// (Issue #538: event emission completeness audit).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ContractInitialized {
+    pub admin: Address,
+    pub usdc_token: Address,
+    pub eurc_token: Address,
+    pub xlm_token: Address,
+    pub timestamp: u64,
+}
+
 // ── Issue #36: appeal_default events ──────────────────────────────────────────
 
 /// Emitted when a payer files an appeal against an unfair default marking.
@@ -251,6 +328,24 @@ pub struct FundQueueResolved {
     pub approved_lp: Address,
     /// Winning score that secured priority.
     pub score: u32,
+}
+
+/// Emitted whenever `resolve_fund_queue` is called, regardless of outcome.
+/// `success=true` means a winner was selected; `success=false` means the
+/// call was rejected (e.g. maturity delay not yet elapsed).
+///
+/// Useful for off-chain monitoring to detect MEV attempts and track queue
+/// activity (Issue #MEV-1).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct FundQueueResolutionAttempted {
+    pub invoice_id: u64,
+    /// Caller that triggered the resolution attempt.
+    pub caller_ledger: u32,
+    /// Ledger sequence when the attempt was made.
+    pub attempted_at_ledger: u32,
+    /// Whether the resolution succeeded.
+    pub success: bool,
 }
 
 #[contracttype]

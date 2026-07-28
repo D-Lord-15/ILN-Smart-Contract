@@ -145,27 +145,30 @@ export interface TokenConfig {
 // Event Types (Unions)
 // ---------------------------------------------------------------------------
 
-export type ILNEventType = 
-  | "submitted" 
-  | "funded" 
-  | "paid" 
-  | "partially_paid" 
-  | "defaulted" 
-  | "appealed" 
-  | "appeal_resolved" 
-  | "disputed" 
-  | "dispute_resolved" 
-  | "token_added" 
-  | "token_removed" 
-  | "parameter_updated" 
-  | "transferred" 
-  | "cancelled" 
-  | "paused" 
-  | "unpaused" 
-  | "upgraded" 
-  | "admin_changed" 
-  | "fund_requested" 
-  | "fund_queue_resolved";
+export type ILNEventType =
+  | "submitted"
+  | "funded"
+  | "paid"
+  | "partially_paid"
+  | "defaulted"
+  | "appealed"
+  | "appeal_resolved"
+  | "disputed"
+  | "dispute_resolved"
+  | "token_added"
+  | "token_removed"
+  | "parameter_updated"
+  | "transferred"
+  | "cancelled"
+  | "paused"
+  | "unpaused"
+  | "upgraded"
+  | "admin_changed"
+  | "fund_requested"
+  | "fund_queue_resolved"
+  | "insurance_pool_enrolled"
+  | "insurance_premium_deposited"
+  | "insurance_claim_processed";
 
 export interface BaseEvent {
   type: ILNEventType;

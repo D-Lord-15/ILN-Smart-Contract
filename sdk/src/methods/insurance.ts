@@ -332,8 +332,50 @@ export async function enrollInsurancePool(
 }
 
 /**
+ * Initialize the insurance pool with a token address for real transfers (Issue #527).
+ *
+ * @param server              - Soroban RPC server for the target network
+ * @param contractId          - Deployed insurance pool contract address
+ * @param adminAddress        - The admin address
+ * @param coverage            - Flat per-claim coverage cap
+ * @param tokenAddress        - Token contract address for real transfers
+ * @param sourceAccount       - The admin's account (signs and pays the tx fee)
+ * @param signTransaction     - Function to sign the assembled transaction
+ * @param networkPassphrase   - Stellar network passphrase (default: TESTNET)
+ * @returns The submitted transaction hash
+ */
+export async function initializeInsurancePool(
+  server: SorobanRpc.Server,
+  contractId: string,
+  adminAddress: string,
+  coverage: bigint,
+  tokenAddress: string,
+  sourceAccount: Account,
+  signTransaction: (tx: Transaction) => Promise<Transaction> | Transaction,
+  networkPassphrase: string = Networks.TESTNET
+): Promise<{ txHash: string }> {
+  validateContractId(contractId);
+  validateGAddress(adminAddress);
+  validateGAddress(tokenAddress);
+  const { txHash } = await submitCall(
+    server,
+    contractId,
+    "initialize",
+    [
+      new Address(adminAddress).toScVal(),
+      nativeToScVal(coverage, { type: "i128" }),
+      new Address(tokenAddress).toScVal(),
+    ],
+    sourceAccount,
+    signTransaction,
+    networkPassphrase
+  );
+  return { txHash };
+}
+
+/**
  * Deposit a premium payment into the insurance pool, auto-enrolling the LP
- * on first payment.
+ * on first payment. Transfers real tokens from LP to pool contract (Issue #527).
  *
  * Wraps the `deposit_premium(lp, amount)` write function. Requires `lp`'s
  * signature — `sourceAccount` must be `lp`'s account.
@@ -375,9 +417,10 @@ export async function depositInsurancePremium(
 
 /**
  * File an insurance claim for a defaulted invoice, compensating the LP from
- * the pool balance (up to the configured coverage cap).
+ * the pool balance (up to the configured coverage cap). Transfers real tokens
+ * from pool to LP (Issue #527).
  *
- * Wraps the `claim(invoice_id)` write function. **Admin-only**: the
+ * Wraps the `claim(invoice_id, lp)` write function. **Admin-only**: the
  * contract's `require_admin` check means `sourceAccount` must be the
  * address the pool was `initialize`d with — not the affected LP or any
  * arbitrary caller. In production this is expected to be the
@@ -386,6 +429,7 @@ export async function depositInsurancePremium(
  * @param server              - Soroban RPC server for the target network
  * @param contractId          - Deployed insurance pool contract address
  * @param invoiceId           - The defaulted invoice's ID
+ * @param lpAddress           - The LP to compensate
  * @param sourceAccount       - The pool admin's account (signs and pays the tx fee)
  * @param signTransaction     - Function to sign the assembled transaction
  * @param networkPassphrase   - Stellar network passphrase (default: TESTNET)
@@ -397,19 +441,143 @@ export async function claimInsurance(
   server: SorobanRpc.Server,
   contractId: string,
   invoiceId: bigint,
+  lpAddress: string,
   sourceAccount: Account,
   signTransaction: (tx: Transaction) => Promise<Transaction> | Transaction,
   networkPassphrase: string = Networks.TESTNET
 ): Promise<{ txHash: string; payout: bigint }> {
   validateContractId(contractId);
+  validateGAddress(lpAddress);
   const { txHash, retval } = await submitCall(
     server,
     contractId,
     "claim",
-    [nativeToScVal(invoiceId, { type: "u64" })],
+    [nativeToScVal(invoiceId, { type: "u64" }), new Address(lpAddress).toScVal()],
     sourceAccount,
     signTransaction,
     networkPassphrase
   );
   return { txHash, payout: (retval as bigint | undefined) ?? 0n };
+}
+
+/**
+ * Get the configured token address for real transfers (Issue #527).
+ *
+ * @param server              - Soroban RPC server for the target network
+ * @param contractId          - Deployed insurance pool contract address
+ * @param networkPassphrase   - Stellar network passphrase (default: TESTNET)
+ * @returns The token address
+ */
+export async function getTokenAddress(
+  server: SorobanRpc.Server,
+  contractId: string,
+  networkPassphrase: string = Networks.TESTNET
+): Promise<string> {
+  validateContractId(contractId);
+  const retval = await simulateCall(server, contractId, "get_token_address", [], networkPassphrase);
+  if (!retval) {
+    throw new Error("Token address not configured");
+  }
+  const addr = scValToNative(retval) as Address;
+  return addr.toString();
+}
+
+/**
+ * Calculate the risk-priced premium rate for an LP (Issue #528).
+ *
+ * @param server              - Soroban RPC server for the target network
+ * @param contractId          - Deployed insurance pool contract address
+ * @param lpAddress           - The LP's Stellar G... address
+ * @param networkPassphrase   - Stellar network passphrase (default: TESTNET)
+ * @returns The premium rate in basis points
+ */
+export async function calculatePremiumRate(
+  server: SorobanRpc.Server,
+  contractId: string,
+  lpAddress: string,
+  networkPassphrase: string = Networks.TESTNET
+): Promise<number> {
+  validateContractId(contractId);
+  validateGAddress(lpAddress);
+  const retval = await simulateCall(
+    server,
+    contractId,
+    "calculate_premium_rate_bps",
+    [new Address(lpAddress).toScVal()],
+    networkPassphrase
+  );
+  if (!retval) {
+    return 500; // Default 5%
+  }
+  return scValToNative(retval) as number;
+}
+
+/**
+ * Get the tiered coverage for an LP based on their premiums paid (Issue #528).
+ *
+ * @param server              - Soroban RPC server for the target network
+ * @param contractId          - Deployed insurance pool contract address
+ * @param lpAddress           - The LP's Stellar G... address
+ * @param networkPassphrase   - Stellar network passphrase (default: TESTNET)
+ * @returns The tiered coverage cap
+ */
+export async function getTieredCoverage(
+  server: SorobanRpc.Server,
+  contractId: string,
+  lpAddress: string,
+  networkPassphrase: string = Networks.TESTNET
+): Promise<bigint> {
+  validateContractId(contractId);
+  validateGAddress(lpAddress);
+  const retval = await simulateCall(
+    server,
+    contractId,
+    "get_tiered_coverage",
+    [new Address(lpAddress).toScVal()],
+    networkPassphrase
+  );
+  if (!retval) {
+    return 0n;
+  }
+  return scValToNative(retval) as bigint;
+}
+
+/**
+ * Convenience method: check if a liquidity provider is enrolled in the insurance pool.
+ *
+ * Alias for `isEnrolled` with shorter naming.
+ *
+ * @param server              - Soroban RPC server for the target network
+ * @param contractId          - Deployed insurance pool contract address
+ * @param lpAddress           - The LP's Stellar G... address
+ * @param networkPassphrase   - Stellar network passphrase (default: TESTNET)
+ * @returns True if enrolled, false otherwise
+ */
+export async function isInsuranceEnrolled(
+  server: SorobanRpc.Server,
+  contractId: string,
+  lpAddress: string,
+  networkPassphrase: string = Networks.TESTNET
+): Promise<boolean> {
+  return isEnrolled(server, contractId, lpAddress, networkPassphrase);
+}
+
+/**
+ * Convenience method: get total premiums paid by an LP to the insurance pool.
+ *
+ * Alias for `getPremiumsPaid` with shorter naming.
+ *
+ * @param server              - Soroban RPC server for the target network
+ * @param contractId          - Deployed insurance pool contract address
+ * @param lpAddress           - The LP's Stellar G... address
+ * @param networkPassphrase   - Stellar network passphrase (default: TESTNET)
+ * @returns The total premiums paid as a bigint
+ */
+export async function getInsurancePremiums(
+  server: SorobanRpc.Server,
+  contractId: string,
+  lpAddress: string,
+  networkPassphrase: string = Networks.TESTNET
+): Promise<bigint> {
+  return getPremiumsPaid(server, contractId, lpAddress, networkPassphrase);
 }

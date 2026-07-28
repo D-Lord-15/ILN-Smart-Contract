@@ -2,13 +2,9 @@
  * `iln insurance` — enroll, deposit, claim, and check status against the
  * default-protection insurance pool contract.
  *
- * Issue: #459
+ * Issue: #459, #527
  *
- * `enroll`/`deposit`/`claim` are stubbed (like `fund.ts`'s default executor)
- * since the SDK does not yet expose signed write methods for the insurance
- * pool contract (`enroll`/`deposit_premium`/`claim` — only read queries
- * exist in sdk/src/methods/insurance.ts). `status` is wired to the real
- * `ILNClient.getInsurancePoolInfo` read method.
+ * Supports real token transfers (Issue #527) and risk-priced premiums (Issue #528).
  */
 import { Command } from "commander";
 import { ILNClient } from "@iln/sdk";
@@ -20,12 +16,13 @@ export interface InsuranceStatus {
   coverage: bigint;
   isEnrolled: boolean;
   premiumsPaid: bigint;
+  tokenAddress?: string;
 }
 
 export type StatusFetcher = (contractId: string, address: string) => Promise<InsuranceStatus>;
 export type EnrollExecutor = (contractId: string) => Promise<{ txHash: string }>;
 export type DepositExecutor = (contractId: string, amount: number) => Promise<{ txHash: string }>;
-export type ClaimExecutor = (contractId: string, invoiceId: string) => Promise<{ txHash: string }>;
+export type ClaimExecutor = (contractId: string, invoiceId: string, lpAddress: string) => Promise<{ txHash: string }>;
 
 async function defaultStatusFetcher(contractId: string, address: string): Promise<InsuranceStatus> {
   const client = ILNClient.testnet();
@@ -40,7 +37,7 @@ async function defaultDepositExecutor(_contractId: string, _amount: number): Pro
   return { txHash: `TX${Math.random().toString(36).slice(2).toUpperCase()}` };
 }
 
-async function defaultClaimExecutor(_contractId: string, _invoiceId: string): Promise<{ txHash: string }> {
+async function defaultClaimExecutor(_contractId: string, _invoiceId: string, _lpAddress: string): Promise<{ txHash: string }> {
   return { txHash: `TX${Math.random().toString(36).slice(2).toUpperCase()}` };
 }
 
@@ -78,6 +75,9 @@ export function makeInsuranceCommand(
           console.log(`Pool balance:   ${status.poolBalance}`);
           console.log(`Coverage cap:   ${status.coverage}`);
           console.log(`Premiums paid:  ${status.premiumsPaid}`);
+          if (status.tokenAddress) {
+            console.log(`Token:          ${status.tokenAddress}`);
+          }
         });
       } catch (err) {
         formatError((err as Error).message, "INSURANCE_STATUS_ERROR", json);
@@ -123,10 +123,11 @@ export function makeInsuranceCommand(
     .description("File a claim against a defaulted invoice")
     .requiredOption("--contract <id>", "Insurance pool contract address")
     .requiredOption("--invoice <id>", "Defaulted invoice ID")
-    .action(async (opts: { contract: string; invoice: string }) => {
+    .requiredOption("--lp <address>", "LP address to compensate")
+    .action(async (opts: { contract: string; invoice: string; lp: string }) => {
       const json = isJsonMode(cmd.parent?.opts() as Record<string, unknown> | undefined);
       try {
-        const result = await executeClaim(opts.contract, opts.invoice);
+        const result = await executeClaim(opts.contract, opts.invoice, opts.lp);
         formatOutput(result, json, () => {
           console.log(`Claim filed for invoice #${opts.invoice}. TX: ${result.txHash}`);
         });

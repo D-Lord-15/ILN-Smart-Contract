@@ -55,6 +55,7 @@ flowchart TD
 | **`iln_governance`** | `contracts/iln_governance/` | On-chain governance: proposals, voting, delegation, quorum, and admin veto |
 | **`iln_distribution`** | `contracts/iln_distribution/` | Yield and incentive distribution for LPs, freelancers, and payers (linked to governance token) |
 | **`reputation_bonus`** | `contracts/reputation_bonus/` | Reputation-based discount bonuses and related invoice hooks |
+| **`insurance_pool`** | `contracts/insurance_pool/` | Default-protection insurance pool for LPs |
 | **`iln_fuzz`** | `contracts/fuzz/` | Property-based fuzz tests against core invoice flows |
 | **Integration tests** | `contracts/tests/` | Cross-contract tests with mock tokens and oracles |
 

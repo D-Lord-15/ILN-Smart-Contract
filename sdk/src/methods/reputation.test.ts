@@ -13,6 +13,8 @@ import {
   submitReputationInvoice,
   markReputationInvoicePaid,
   handleDefault,
+  getReputationBonusConfig,
+  getReputationBonusReputation,
   ReputationContractError,
 } from "./reputation.js";
 import type { ReputationProfile } from "./reputation.js";
@@ -238,5 +240,131 @@ describe("handleDefault", () => {
 
     const result = await handleDefault(server, CONTRACT_ID, 7n, account, sign);
     expect(result.txHash).toBe("txABC");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// reputation_bonus config & reputation view operations (#426)
+// ---------------------------------------------------------------------------
+
+describe("getReputationBonusConfig", () => {
+  it("returns the decoded config on success", async () => {
+    const server = serverWith({ result: { retval: {} } });
+    mockScValToNative.mockReturnValue({
+      high_rep_threshold: 80,
+      bonus_bps: 200,
+      min_discount_rate_bps: 100,
+    });
+
+    const result = await getReputationBonusConfig(server, CONTRACT_ID);
+
+    expect(result).toEqual({
+      highRepThreshold: 80,
+      bonusBps: 200,
+      minDiscountRateBps: 100,
+    });
+    expect(server.simulateTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("maps a contract error code to ReputationContractError.ConfigErrorUnauthorized", async () => {
+    const server = serverWith({ error: "HostError: Error(Contract, 4)" });
+
+    await expect(
+      getReputationBonusConfig(server, CONTRACT_ID)
+    ).rejects.toThrow(ReputationContractError.ConfigErrorUnauthorized);
+  });
+
+  it("throws when simulation returns no result", async () => {
+    const server = serverWith({ result: { retval: null } });
+
+    await expect(
+      getReputationBonusConfig(server, CONTRACT_ID)
+    ).rejects.toThrow("get_config simulation returned no result");
+  });
+
+  it("propagates RPC connection errors", async () => {
+    const server = {
+      simulateTransaction: vi
+        .fn()
+        .mockRejectedValue(new Error("connect ECONNREFUSED")),
+    } as unknown as SorobanRpc.Server;
+
+    await expect(
+      getReputationBonusConfig(server, CONTRACT_ID)
+    ).rejects.toThrow("connect ECONNREFUSED");
+  });
+});
+
+describe("getReputationBonusReputation — known address", () => {
+  it("returns a populated score on success", async () => {
+    const server = serverWith({ result: { retval: {} } });
+    mockScValToNative.mockReturnValue({
+      invoices_submitted: 12,
+      invoices_paid: 8,
+      invoices_defaulted: 1,
+      score: 75,
+    });
+
+    const result = await getReputationBonusReputation(server, CONTRACT_ID, VALID_GA);
+
+    expect(result).toEqual({
+      invoicesSubmitted: 12,
+      invoicesPaid: 8,
+      invoicesDefaulted: 1,
+      score: 75,
+    });
+  });
+});
+
+describe("getReputationBonusReputation — unknown address", () => {
+  it("returns a zeroed score when simulation returns no retval", async () => {
+    const server = serverWith({ result: { retval: null } });
+
+    const result = await getReputationBonusReputation(server, CONTRACT_ID, VALID_GA);
+
+    expect(result).toEqual({
+      invoicesSubmitted: 0,
+      invoicesPaid: 0,
+      invoicesDefaulted: 0,
+      score: 0,
+    });
+  });
+});
+
+describe("getReputationBonusReputation — invalid address", () => {
+  const server = serverWith({});
+
+  it("throws for empty string", async () => {
+    await expect(
+      getReputationBonusReputation(server, CONTRACT_ID, "")
+    ).rejects.toThrow("Invalid Stellar address");
+  });
+
+  it("throws for short addresses", async () => {
+    await expect(
+      getReputationBonusReputation(server, CONTRACT_ID, "GABC")
+    ).rejects.toThrow("Invalid Stellar address");
+  });
+});
+
+describe("getReputationBonusReputation — RPC errors", () => {
+  it("throws when simulation returns an error object", async () => {
+    const server = serverWith({ error: "contract trap", _parsed: true });
+
+    await expect(
+      getReputationBonusReputation(server, CONTRACT_ID, VALID_GA)
+    ).rejects.toThrow("contract trap");
+  });
+
+  it("propagates RPC connection errors", async () => {
+    const server = {
+      simulateTransaction: vi
+        .fn()
+        .mockRejectedValue(new Error("connect ECONNREFUSED")),
+    } as unknown as SorobanRpc.Server;
+
+    await expect(
+      getReputationBonusReputation(server, CONTRACT_ID, VALID_GA)
+    ).rejects.toThrow("connect ECONNREFUSED");
   });
 });

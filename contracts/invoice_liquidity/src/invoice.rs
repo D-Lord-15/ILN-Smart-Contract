@@ -12,6 +12,43 @@ pub enum ReferralCode {
 }
 
 // ----------------------------------------------------------------
+// FORMAL VERIFICATION INVARIANTS
+//
+// == State Machine Invariants ==
+// INVARIANT SM1: InvoiceStatus transitions are strictly validated.
+//   Valid paths:
+//     Pending -> {Funded, PartiallyFunded, Cancelled, Expired, Disputed}
+//     PartiallyFunded -> {Funded, Cancelled, Disputed}
+//     Funded -> {Paid, Defaulted, Disputed}
+//     Defaulted -> {Appealed}
+//     Appealed -> {Defaulted} (via resolve_appeal — admin only)
+//     Disputed -> {Cancelled, Funded, PartiallyFunded, Pending} (admin resolution)
+//   Terminal states: {Paid, Expired, Cancelled}
+// INVARIANT SM2: No invalid transition is ever silently ignored — each
+//   returns a distinct ContractError variant.
+//
+// == Balance Invariants ==
+// INVARIANT B1: amount_funded <= amount  (enforced by OverfundingRejected)
+// INVARIANT B2: amount_paid <= amount    (enforced by OverpaymentRejected)
+// INVARIANT B3: amount_funded == amount  iff status == Funded
+// INVARIANT B4: amount_paid == amount    iff status == Paid
+//
+// == Authorization Invariants ==
+// INVARIANT A1: cancel_invoice requires caller == invoice.freelancer
+// INVARIANT A2: mark_paid requires caller == invoice.payer
+// INVARIANT A3: claim_default requires caller in invoice funders list
+// INVARIANT A4: Admin-only functions call require_admin() at entry
+// INVARIANT A5: dispute_invoice requires caller == invoice.payer
+// INVARIANT A6: appeal_default requires caller == invoice.payer
+//
+// == Storage Invariants ==
+// INVARIANT S1: Each invoice occupies an independent DataKey::Invoice(id).
+//   Operations on invoice i never read or write invoice j (i != j).
+// INVARIANT S2: Submitter invoice index and LP invoice index are eventually
+//   consistent — every invoice appears in at least one index.
+// ----------------------------------------------------------------
+
+// ----------------------------------------------------------------
 // Status enum — tracks lifecycle of invoice
 // ----------------------------------------------------------------
 
@@ -30,26 +67,70 @@ pub enum InvoiceStatus {
 }
 
 // ----------------------------------------------------------------
-// Invoice struct (UPDATED - token stays per invoice)
+// Invoice Core struct — hot path data (accessed in >95% of operations)
+// ================================================================
+// Fields are ordered by access frequency and size for optimal layout:
+// - id, status: identifiers, checked in every operation
+// - amount/amount_funded/amount_paid: financial core
+// - addresses: payer, freelancer, token
+// - due_date, discount_rate: parameters
+// ================================================================
+
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct InvoiceCore {
+    pub id: u64,
+    pub freelancer: Address,      // who submitted the invoice (receives liquidity)
+    pub payer: Address,           // the client who owes the money
+    pub token: Address,           // token used for this invoice lifecycle
+    pub amount: i128,             // full invoice value in stroops (1 USDC = 10_000_000)
+    pub due_date: u32,            // Unix timestamp — when the payer must settle by
+    pub discount_rate: u32,       // basis points, e.g. 300 = 3.00%
+    pub status: InvoiceStatus,
+    pub amount_funded: i128,      // cumulative amount funded so far
+    pub amount_paid: i128,        // cumulative amount paid by the payer
+}
+
 // ----------------------------------------------------------------
+// Invoice Metadata struct — cold path data (accessed <5% of operations)
+// ================================================================
+// Kept separate to avoid deserializing unnecessary data on hot paths.
+// Only loaded when needed for appeals, disputes, or metadata queries.
+// ================================================================
+
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct InvoiceMetadata {
+    pub funder: Option<Address>,  // set when an LP funds the invoice (legacy for full funding)
+    pub funded_at: Option<u32>,   // ledger timestamp when funding occurred
+    pub referral_code: ReferralCode,
+    pub submitter_reputation: u32, // snapshot of freelancer's reputation at submission time
+}
+
+// ================================================================
+// Invoice — Unified type for backwards compatibility
+// ================================================================
+// The Invoice type combines both core and metadata.
+// Internal operations use InvoiceCore for hot paths.
+// External API continues to use Invoice for compatibility.
 
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Invoice {
     pub id: u64,
-    pub freelancer: Address, // who submitted the invoice (receives liquidity)
-    pub payer: Address,      // the client who owes the money
-    pub token: Address,      // token used for this invoice lifecycle
-    pub amount: i128,        // full invoice value in stroops (1 USDC = 10_000_000)
-    pub due_date: u32,       // Unix timestamp — when the payer must settle by
-    pub discount_rate: u32,  // basis points, e.g. 300 = 3.00%
+    pub freelancer: Address,
+    pub payer: Address,
+    pub token: Address,
+    pub amount: i128,
+    pub due_date: u32,
+    pub discount_rate: u32,
     pub status: InvoiceStatus,
-    pub funder: Option<Address>, // set when an LP funds the invoice (legacy for full funding)
-    pub funded_at: Option<u32>,  // ledger timestamp when funding occurred
-    pub amount_funded: i128,     // cumulative amount funded so far
-    pub amount_paid: i128,       // cumulative amount paid by the payer
+    pub funder: Option<Address>,
+    pub funded_at: Option<u32>,
+    pub amount_funded: i128,
+    pub amount_paid: i128,
     pub referral_code: ReferralCode,
-    pub submitter_reputation: u32, // snapshot of freelancer's reputation at submission time
+    pub submitter_reputation: u32,
 }
 
 #[contracttype]
@@ -156,6 +237,60 @@ pub struct LpFundRequest {
     pub lp: Address,
     /// LP reputation score snapshotted at request time (used for ordering).
     pub score: u32,
+}
+
+// ================================================================
+// Invoice conversion functions — convert between unified and split formats
+// ================================================================
+
+impl Invoice {
+    /// Extract the hot-path core data into InvoiceCore
+    pub fn to_core(&self) -> InvoiceCore {
+        InvoiceCore {
+            id: self.id,
+            freelancer: self.freelancer.clone(),
+            payer: self.payer.clone(),
+            token: self.token.clone(),
+            amount: self.amount,
+            due_date: self.due_date,
+            discount_rate: self.discount_rate,
+            status: self.status.clone(),
+            amount_funded: self.amount_funded,
+            amount_paid: self.amount_paid,
+        }
+    }
+
+    /// Extract the cold-path metadata into InvoiceMetadata
+    pub fn to_metadata(&self) -> InvoiceMetadata {
+        InvoiceMetadata {
+            funder: self.funder.clone(),
+            funded_at: self.funded_at,
+            referral_code: self.referral_code.clone(),
+            submitter_reputation: self.submitter_reputation,
+        }
+    }
+}
+
+impl InvoiceCore {
+    /// Combine core data with metadata to reconstruct full Invoice
+    pub fn with_metadata(self, metadata: InvoiceMetadata) -> Invoice {
+        Invoice {
+            id: self.id,
+            freelancer: self.freelancer,
+            payer: self.payer,
+            token: self.token,
+            amount: self.amount,
+            due_date: self.due_date,
+            discount_rate: self.discount_rate,
+            status: self.status,
+            funder: metadata.funder,
+            funded_at: metadata.funded_at,
+            amount_funded: self.amount_funded,
+            amount_paid: self.amount_paid,
+            referral_code: metadata.referral_code,
+            submitter_reputation: metadata.submitter_reputation,
+        }
+    }
 }
 
 // ----------------------------------------------------------------
@@ -270,7 +405,28 @@ pub fn invoice_exists(env: &Env, id: u64) -> bool {
 /// Load an invoice in a single storage read, returning `None` if it does not
 /// exist (Issue #71). Prefer this over the `invoice_exists` + `load_invoice`
 /// pair in hot paths, which reads the same key twice.
+/// Try to load an invoice, returning None if not found.
+///
+/// This function loads invoices using the optimized split format:
+/// - First tries the new split format (InvoiceCore + InvoiceMetadata)
+/// - Falls back to old format for backwards compatibility
 pub fn try_load_invoice(env: &Env, id: u64) -> Option<Invoice> {
+    // Try new split format first (preferred)
+    if let Some(core) = env
+        .storage()
+        .persistent()
+        .get::<StorageKey, InvoiceCore>(&StorageKey::InvoiceCore(id))
+    {
+        if let Some(metadata) = env
+            .storage()
+            .persistent()
+            .get::<StorageKey, InvoiceMetadata>(&StorageKey::InvoiceMetadata(id))
+        {
+            return Some(core.with_metadata(metadata));
+        }
+    }
+
+    // Fall back to old format for backwards compatibility
     env.storage().persistent().get(&StorageKey::Invoice(id))
 }
 
@@ -325,16 +481,23 @@ pub fn get_payer_score(env: &Env, payer: &Address) -> u32 {
                         u64::from(ledgers_since_activity) / decay_config.decay_period_ledgers;
 
                     // Apply decay: score = score * (1 - decay_rate/10000)^periods
-                    let mut decayed_score = rep.score as u64;
-                    for _ in 0..periods_passed {
-                        // Decay: subtract decay_rate_bps basis points (min 1 point)
-                        let mut decay_amount =
-                            (decayed_score * decay_config.decay_rate_bps as u64) / 10_000;
-                        if decay_amount == 0 && decayed_score > 0 {
-                            decay_amount = 1;
+                    // Issue #601: periods_passed is unbounded (governance-
+                    // configurable decay_period_ledgers can be set to 1),
+                    // so cap iteration and short-circuit to 0 beyond that.
+                    let decayed_score: u64 = if periods_passed > crate::constants::MAX_REPUTATION_DECAY_PERIODS {
+                        0
+                    } else {
+                        let mut decayed_score = rep.score as u64;
+                        for _ in 0..periods_passed {
+                            let mut decay_amount =
+                                (decayed_score * decay_config.decay_rate_bps as u64) / 10_000;
+                            if decay_amount == 0 && decayed_score > 0 {
+                                decay_amount = 1;
+                            }
+                            decayed_score = decayed_score.saturating_sub(decay_amount);
                         }
-                        decayed_score = decayed_score.saturating_sub(decay_amount);
-                    }
+                        decayed_score
+                    };
 
                     let new_score = (decayed_score.min(100)) as u32;
                     if new_score != rep.score {
@@ -458,19 +621,19 @@ pub fn set_reputation(env: &Env, profile: &ReputationProfile) {
 
 pub fn increment_invoices_submitted(env: &Env, address: &Address) {
     let mut profile = get_reputation(env, address);
-    profile.invoices_submitted += 1;
+    profile.invoices_submitted = profile.invoices_submitted.saturating_add(1);
     set_reputation(env, &profile);
 }
 
 pub fn increment_invoices_paid(env: &Env, address: &Address) {
     let mut profile = get_reputation(env, address);
-    profile.invoices_paid += 1;
+    profile.invoices_paid = profile.invoices_paid.saturating_add(1);
     set_reputation(env, &profile);
 }
 
 pub fn increment_invoices_defaulted(env: &Env, address: &Address) {
     let mut profile = get_reputation(env, address);
-    profile.invoices_defaulted += 1;
+    profile.invoices_defaulted = profile.invoices_defaulted.saturating_add(1);
     set_reputation(env, &profile);
 }
 
@@ -619,6 +782,27 @@ pub fn save_queue_resolution(env: &Env, invoice_id: u64, approved_lp: &Address) 
         .persistent()
         .set(&StorageKey::QueueResolution(invoice_id), approved_lp);
 }
+
+/// Record the ledger sequence when the first LP joined the fund queue.
+/// Called once when the queue transitions from empty to non-empty.
+/// Subsequent joins do not overwrite this value.
+pub fn try_set_fund_queue_opened_at(env: &Env, invoice_id: u64) {
+    let key = StorageKey::FundQueueOpenedAt(invoice_id);
+    if !env.storage().persistent().has(&key) {
+        env.storage()
+            .persistent()
+            .set(&key, &env.ledger().sequence());
+    }
+}
+
+/// Return the ledger sequence when the fund queue for `invoice_id` was first
+/// opened (i.e. when the first LP joined), or `None` if the queue is still
+/// empty.
+pub fn get_fund_queue_opened_at(env: &Env, invoice_id: u64) -> Option<u32> {
+    env.storage()
+        .persistent()
+        .get(&StorageKey::FundQueueOpenedAt(invoice_id))
+}
 // Contract stats helpers
 // ----------------------------------------------------------------
 
@@ -698,7 +882,7 @@ pub fn add_volume(env: &Env, token: &Address, amount: i128) {
         .unwrap_or(0);
     env.storage().persistent().set(
         &StorageKey::TokenVolume(token.clone()),
-        &(current_per_token + amount),
+        &current_per_token.saturating_add(amount),
     );
 
     // Preserve legacy aggregate token counters for compatibility.
@@ -711,7 +895,7 @@ pub fn add_volume(env: &Env, token: &Address, amount: i128) {
                 .unwrap_or(0);
             env.storage()
                 .persistent()
-                .set(&StorageKey::TotalVolumeXlm, &(current + amount));
+                .set(&StorageKey::TotalVolumeXlm, &current.saturating_add(amount));
             return;
         }
     }
@@ -732,7 +916,7 @@ pub fn add_volume(env: &Env, token: &Address, amount: i128) {
                     .unwrap_or(0);
                 env.storage()
                     .persistent()
-                    .set(&StorageKey::TotalVolumeUsdc, &(current + amount));
+                    .set(&StorageKey::TotalVolumeUsdc, &current.saturating_add(amount));
             }
         }
     }
@@ -745,7 +929,7 @@ pub fn add_volume(env: &Env, token: &Address, amount: i128) {
                 .unwrap_or(0);
             env.storage()
                 .persistent()
-                .set(&StorageKey::TotalVolumeXlm, &(current + amount));
+                .set(&StorageKey::TotalVolumeXlm, &current.saturating_add(amount));
         }
     }
     if token_list.len() > 2 {
@@ -758,7 +942,7 @@ pub fn add_volume(env: &Env, token: &Address, amount: i128) {
                     .unwrap_or(0);
                 env.storage()
                     .persistent()
-                    .set(&StorageKey::TotalVolumeEurc, &(current + amount));
+                    .set(&StorageKey::TotalVolumeEurc, &current.saturating_add(amount));
             }
         }
     }
@@ -772,7 +956,7 @@ pub fn increment_total_invoices(env: &Env) {
         .unwrap_or(0);
     env.storage()
         .persistent()
-        .set(&StorageKey::TotalInvoices, &(current + 1));
+        .set(&StorageKey::TotalInvoices, &current.saturating_add(1));
 }
 
 pub fn increment_total_funded(env: &Env) {
@@ -783,7 +967,7 @@ pub fn increment_total_funded(env: &Env) {
         .unwrap_or(0);
     env.storage()
         .persistent()
-        .set(&StorageKey::TotalFunded, &(current + 1));
+        .set(&StorageKey::TotalFunded, &current.saturating_add(1));
 }
 
 pub fn increment_total_paid(env: &Env) {
@@ -794,7 +978,7 @@ pub fn increment_total_paid(env: &Env) {
         .unwrap_or(0);
     env.storage()
         .persistent()
-        .set(&StorageKey::TotalPaid, &(current + 1));
+        .set(&StorageKey::TotalPaid, &current.saturating_add(1));
 }
 
 // (add_volume is implemented earlier using the configured token addresses)

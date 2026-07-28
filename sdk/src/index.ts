@@ -22,7 +22,7 @@ export {
 } from "./utils/validate.js";
 export { KeypairSigner } from "./signers/KeypairSigner.js";
 export { FreighterSigner, ILNErrorCode } from "./signers/FreighterSigner.js";
-export { subscribe, parseContractEvent, matchesFilter } from "./events/subscribe.js";
+export { subscribe, parseContractEvent, matchesFilter, replay } from "./events/subscribe.js";
 export { ILNClient, iln } from "./client.js";
 export type { ISigner } from "./signers/ISigner.js";
 export type { ILNClientConfig } from "./client.js";
@@ -44,7 +44,8 @@ export type {
   Unsubscribe,
 } from "./events/types.js";
 
-export { getInvoice, listInvoicesBySubmitter, listInvoicesByLP } from "./methods/queries.js";
+export { getInvoice, listInvoicesBySubmitter, listInvoicesByLP, getSubmitterInvoices, getPayerScore } from "./methods/queries.js";
+export { getLpInvoices } from "./methods/lpInvoices.js";
 export { getNftMetadata, getNftOwner } from "./methods/nft.js";
 export { submitInvoice } from "./methods/submitInvoice.js";
 export { transferLPPosition } from "./methods/transferLPPosition.js";
@@ -77,7 +78,7 @@ export type {
   CreateProposalResult,
 } from "./types/governance.js";
 
-export { ILNError } from "./errors.js";
+export { ILNError, ValidationError, AuthorizationError, InvoiceStateError, ContractExecutionError, NetworkError } from "./errors.js";
 export { disputeInvoice, sha256Hex } from "./methods/disputeInvoice.js";
 export type { DisputeInvoiceParams, DisputeInvoiceResult } from "./methods/disputeInvoice.js";
 export { resolveDispute, DisputeRuling } from "./methods/resolveDispute.js";
@@ -91,6 +92,12 @@ export {
   enrollInsurancePool,
   depositInsurancePremium,
   claimInsurance,
+  isInsuranceEnrolled,
+  getInsurancePremiums,
+  initializeInsurancePool,
+  getTokenAddress,
+  calculatePremiumRate,
+  getTieredCoverage,
   InsuranceContractError,
 } from "./methods/insurance.js";
 export type { InsurancePoolInfo } from "@invoice-liquidity/types";
@@ -104,9 +111,15 @@ export {
   submitReputationInvoice,
   markReputationInvoicePaid,
   handleDefault,
+  getReputationBonusConfig,
+  getReputationBonusReputation,
   ReputationContractError,
 } from "./methods/reputation.js";
-export type { ReputationBonusInvoice } from "./methods/reputation.js";
+export type {
+  ReputationBonusInvoice,
+  ReputationBonusConfig,
+  ReputationBonusScore,
+} from "./methods/reputation.js";
 export { getReferralStats } from "./methods/referralStats.js";
 export { appealInvoice, resolveAppeal } from "./methods/appeal.js";
 export type { AppealInvoiceResult, ResolveAppealResult } from "./methods/appeal.js";
@@ -134,3 +147,10 @@ export type {
   SorobanOperation,
 } from "./utils/feeCalculator.js";
 export { getTokenDecimals } from "./methods/getTokenDecimals.js";
+export {
+  buildBatchTransaction,
+  submitBatchTransaction,
+} from "./methods/batch.js";
+export type { BatchContractCall, BatchTransactionOptions, BatchTransactionResult } from "./methods/batch.js";
+export { setAdmin, upgrade, setDistributionContract, addToken, removeToken, updateFeeRate, updateMaxDiscount, setPriceOracle, setMaxOracleAge } from "./methods/admin.js";
+export { getLpScore } from "./methods/getLpScore.js";

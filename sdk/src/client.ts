@@ -89,12 +89,14 @@ export class ILNClient {
   private _getReputation?: typeof import("./methods/reputation.js").getReputation;
   private _getContractStats?: typeof import("./methods/stats.js").getContractStats;
   private _getTopPayers?: typeof import("./methods/topPayers.js").getTopPayers;
+  private _getLpInvoices?: typeof import("./methods/lpInvoices.js").getLpInvoices;
   private _getPoolBalance?: typeof import("./methods/insurance.js").getPoolBalance;
   private _getCoverage?: typeof import("./methods/insurance.js").getCoverage;
   private _isEnrolled?: typeof import("./methods/insurance.js").isEnrolled;
   private _getPremiumsPaid?: typeof import("./methods/insurance.js").getPremiumsPaid;
   private _getInsurancePoolInfo?: typeof import("./methods/insurance.js").getInsurancePoolInfo;
   private _getDistributionAccrual?: typeof import("./methods/distribution.js").getDistributionAccrual;
+  private _submitBatchTransaction?: typeof import("./methods/batch.js").submitBatchTransaction;
 
   constructor(config: ILNClientConfig) {
     this.rpc = new SorobanRpc.Server(config.rpcUrl);
@@ -232,6 +234,28 @@ export class ILNClient {
   }
 
   /**
+   * Fetch a page of invoices funded by a liquidity provider.
+   *
+   * Read-only; does not require a signer.
+   *
+   * @param lp       - Stellar G… address of the liquidity provider
+   * @param page     - Zero-indexed page number (default 0)
+   * @param pageSize - Number of invoices per page (default 10, capped at 50 by the contract)
+   * @returns Array of invoices for the requested page
+   */
+  async getLpInvoices(
+    lp: string,
+    page: number = 0,
+    pageSize: number = 10
+  ): Promise<import("@invoice-liquidity/types").Invoice[]> {
+    if (!this._getLpInvoices) {
+      this._getLpInvoices = (await import("./methods/lpInvoices.js"))
+        .getLpInvoices;
+    }
+    return this._getLpInvoices(this.rpc, this.contractId, lp, page, pageSize, this.networkPassphrase);
+  }
+
+  /**
    * Fetch the current insurance pool balance.
    *
    * @param insurancePoolContractId - Deployed insurance pool contract address
@@ -322,6 +346,50 @@ export class ILNClient {
     }
     return this._getDistributionAccrual(this.rpc, distributionContractId, participantAddress, this.networkPassphrase);
   }
+
+  /**
+   * Submit a batch of contract calls as a single atomic transaction.
+   *
+   * Combines multiple contract invocations into one transaction, improving UX
+   * and reducing gas costs. All operations succeed or fail together.
+   *
+   * Requires a signer for automatic submission. Returns the transaction hash
+   * if successfully submitted to the network.
+   *
+   * @param calls - Array of contract call specifications
+   * @returns Transaction hash submitted to the network
+   *
+   * @throws If the batch simulation fails or submission is rejected
+   *
+   * @example
+   * ```ts
+   * const txHash = await client.submitBatchTransaction([
+   *   {
+   *     contractId: client.contractId,
+   *     method: "submit_invoice",
+   *     args: [freelancer, payer, token, amount, dueDate, discountRate],
+   *   },
+   *   {
+   *     contractId: client.contractId,
+   *     method: "join_fund_queue",
+   *     args: [invoiceId],
+   *   },
+   * ]);
+   * ```
+   */
+  async submitBatchTransaction(
+    calls: import("./methods/batch.js").BatchContractCall[]
+  ): Promise<string> {
+    if (!this.signer) {
+      throw new Error("Batch transaction submission requires a signer");
+    }
+    if (!this._submitBatchTransaction) {
+      this._submitBatchTransaction = (await import("./methods/batch.js")).submitBatchTransaction;
+    }
+    return this._submitBatchTransaction(calls, this.rpc, this.signer.getPublicKey(), this.signer, {
+      networkPassphrase: this.networkPassphrase,
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -370,6 +438,10 @@ class ILNSingleton {
     return this.client.getTopPayers(limit);
   }
 
+  async getLpInvoices(lp: string, page: number = 0, pageSize: number = 10) {
+    return this.client.getLpInvoices(lp, page, pageSize);
+  }
+
   async getInsurancePoolBalance(insurancePoolContractId: string) {
     return this.client.getInsurancePoolBalance(insurancePoolContractId);
   }
@@ -392,6 +464,10 @@ class ILNSingleton {
 
   async getDistributionAccrual(distributionContractId: string, participantAddress: string) {
     return this.client.getDistributionAccrual(distributionContractId, participantAddress);
+  }
+
+  async submitBatchTransaction(calls: import("./methods/batch.js").BatchContractCall[]) {
+    return this.client.submitBatchTransaction(calls);
   }
 }
 

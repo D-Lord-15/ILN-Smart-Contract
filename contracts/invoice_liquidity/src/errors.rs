@@ -55,4 +55,13 @@ pub enum ContractError {
     OracleDataStale = 35,
     /// Invoice amount is below the configurable minimum threshold.
     AmountTooSmall = 36,
+    /// Reentrant call detected — the function was called while already executing (Issue #535).
+    Reentrancy = 37,
+    /// Rate-limited function called before the cooldown period elapsed (Issue #541).
+    RateLimited = 38,
+    /// resolve_fund_queue called before the minimum queue maturity delay has
+    /// elapsed since the first LP joined the queue.  Prevents MEV/front-running
+    /// attacks where an attacker races to resolve the queue immediately after a
+    /// high-reputation LP joins (Issue #MEV-1).
+    QueueNotMature = 39,
 }

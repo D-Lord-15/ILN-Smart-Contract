@@ -26,6 +26,8 @@
  *   HORIZON_URL            Horizon endpoint     (default: testnet)
  *   INDEXER_URL            Indexer base URL     (default: http://localhost:3000)
  *   NOTIFICATIONS_URL      Notifications base URL (default: http://localhost:3001)
+ *   INSURANCE_POOL_RPC_URL Soroban RPC endpoint for the insurance pool contract
+ *   INSURANCE_POOL_ID      Deployed insurance pool contract address
  *   LEDGER_LAG_THRESHOLD   Max acceptable ledger lag (default: 100)
  *   HEALTH_TIMEOUT_MS      Per-request timeout in ms (default: 5000)
  *   SLACK_WEBHOOK_URL      Incoming webhook used by --alert-slack
@@ -54,6 +56,8 @@ export interface HealthConfig {
   horizonUrl: string;
   indexerUrl: string;
   notificationsUrl: string;
+  insurancePoolRpcUrl: string;
+  insurancePoolId: string;
   ledgerLagThreshold: number;
   timeoutMs: number;
 }
@@ -81,6 +85,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): HealthConfig {
     horizonUrl: (env.HORIZON_URL || "https://horizon-testnet.stellar.org").replace(/\/$/, ""),
     indexerUrl: (env.INDEXER_URL || "http://localhost:3000").replace(/\/$/, ""),
     notificationsUrl: (env.NOTIFICATIONS_URL || "http://localhost:3001").replace(/\/$/, ""),
+    insurancePoolRpcUrl: env.INSURANCE_POOL_RPC_URL || env.SOROBAN_RPC_URL || "https://soroban-testnet.stellar.org",
+    insurancePoolId: env.INSURANCE_POOL_ID || "",
     ledgerLagThreshold: Number(env.LEDGER_LAG_THRESHOLD || 100),
     timeoutMs: Number(env.HEALTH_TIMEOUT_MS || 5000),
   };
@@ -247,6 +253,67 @@ export async function checkLedgerLag(
   }
 }
 
+/** 5. Insurance pool contract — verifies it is initialized (Admin key present). */
+export async function checkInsurancePool(
+  cfg: HealthConfig,
+  deps: Deps = defaultDeps
+): Promise<CheckResult> {
+  const base: CheckResult = {
+    name: "insurance_pool",
+    status: "unknown",
+    critical: false,
+    latencyMs: null,
+    details: { contractId: cfg.insurancePoolId },
+    error: null,
+  };
+
+  if (!cfg.insurancePoolId) {
+    return { ...base, status: "unknown", error: "INSURANCE_POOL_ID not configured" };
+  }
+
+  const body = JSON.stringify({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "getLedgerEntries",
+    params: {
+      keys: [
+        // DataKey::Admin is a unit enum variant — its XDR is a 1-element vec
+        // with symbol "Admin". We request it to confirm the pool is initialised.
+        Buffer.from(
+          JSON.stringify({ contractId: cfg.insurancePoolId, key: { type: "symbol", value: "Admin" } })
+        ).toString("base64"),
+      ],
+    },
+  });
+
+  try {
+    const { res, latencyMs } = await timedFetch(
+      deps,
+      cfg.insurancePoolRpcUrl,
+      { method: "POST", headers: { "content-type": "application/json" }, body },
+      cfg.timeoutMs
+    );
+    base.latencyMs = latencyMs;
+    if (!res.ok) {
+      return { ...base, status: "fail", error: `RPC returned HTTP ${res.status}` };
+    }
+    const json: any = await res.json();
+    if (json.error) {
+      return { ...base, status: "fail", error: `RPC error: ${JSON.stringify(json.error)}` };
+    }
+    const entries: unknown[] = json.result?.entries ?? [];
+    const initialized = entries.length > 0;
+    return {
+      ...base,
+      status: initialized ? "ok" : "fail",
+      details: { ...base.details, initialized },
+      error: initialized ? null : "Insurance pool Admin key not found — pool may not be initialized",
+    };
+  } catch (e) {
+    return { ...base, status: "fail", error: errMsg(e) };
+  }
+}
+
 /** 4. Notification service `/health` endpoint. */
 export async function checkNotifications(
   cfg: HealthConfig,
@@ -294,14 +361,15 @@ export async function runHealthChecks(
     checkContractRpc(cfg, deps),
     checkIndexer(cfg, deps),
   ]);
-  const [lag, notifications] = await Promise.all([
+  const [lag, notifications, insurancePool] = await Promise.all([
     checkLedgerLag(cfg, indexer.lastIndexedLedger, deps),
     checkNotifications(cfg, deps),
+    checkInsurancePool(cfg, deps),
   ]);
 
   // Drop the helper-only field before reporting.
   const { lastIndexedLedger: _ignored, ...indexerResult } = indexer;
-  const checks: CheckResult[] = [rpc, indexerResult, lag, notifications];
+  const checks: CheckResult[] = [rpc, indexerResult, lag, notifications, insurancePool];
 
   const healthy = checks.every((c) => !(c.critical && c.status === "fail"));
 

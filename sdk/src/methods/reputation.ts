@@ -366,3 +366,149 @@ export async function handleDefault(
   );
   return { txHash };
 }
+
+// ---------------------------------------------------------------------------
+// reputation_bonus config & reputation view operations (#426)
+// ---------------------------------------------------------------------------
+
+/** Mirrors `Config` in contracts/reputation_bonus/src/config.rs. */
+export interface ReputationBonusConfig {
+  highRepThreshold: number;
+  bonusBps: number;
+  minDiscountRateBps: number;
+}
+
+/** Mirrors `ReputationScore` in contracts/reputation_bonus/src/reputation.rs. */
+export interface ReputationBonusScore {
+  invoicesSubmitted: number;
+  invoicesPaid: number;
+  invoicesDefaulted: number;
+  score: number;
+}
+
+/**
+ * Fetch the reputation_bonus contract's bonus configuration.
+ *
+ * Wraps the read-only `get_config()` view function. Performs a Soroban
+ * simulation only — no on-chain mutation, no transaction fees, and no
+ * signer required.
+ *
+ * @param server              - Soroban RPC server for the target network
+ * @param contractId          - Deployed reputation_bonus contract address
+ * @param networkPassphrase   - Stellar network passphrase (default: TESTNET)
+ * @returns The bonus configuration (highRepThreshold, bonusBps, minDiscountRateBps)
+ * @throws {ReputationContractError.ConfigErrorUnauthorized} If no config has been set yet
+ *
+ * @example
+ * ```ts
+ * const config = await getReputationBonusConfig(server, CONTRACT_ID);
+ * console.log(`Bonus: ${config.bonusBps} bps above ${config.highRepThreshold} score`);
+ * ```
+ */
+export async function getReputationBonusConfig(
+  server: SorobanRpc.Server,
+  contractId: string,
+  networkPassphrase: string = Networks.TESTNET
+): Promise<ReputationBonusConfig> {
+  const contract = new Contract(contractId);
+  const op = contract.call("get_config");
+
+  const sourceAccount = new Account(
+    "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    "0"
+  );
+
+  const simTx = new TransactionBuilder(sourceAccount, {
+    fee: BASE_FEE,
+    networkPassphrase,
+  })
+    .addOperation(op)
+    .setTimeout(30)
+    .build();
+
+  const sim = await retry(() => server.simulateTransaction(simTx));
+
+  if (SorobanRpc.Api.isSimulationError(sim)) {
+    throw ReputationContractError.fromError(sim.error);
+  }
+  if (!sim.result?.retval) {
+    throw new Error("get_config simulation returned no result");
+  }
+
+  const raw = scValToNative(sim.result.retval) as Record<string, unknown>;
+  return {
+    highRepThreshold: Number(raw["high_rep_threshold"] ?? 0),
+    bonusBps: Number(raw["bonus_bps"] ?? 0),
+    minDiscountRateBps: Number(raw["min_discount_rate_bps"] ?? 0),
+  };
+}
+
+/**
+ * Fetch an address's reputation score from the reputation_bonus contract.
+ *
+ * Wraps the read-only `get_reputation(address)` view function. This targets
+ * the reputation_bonus contract, distinct from {@link getReputation} (which
+ * targets the invoice-liquidity contract) — the two contracts track
+ * reputation independently and `ReputationScore` has no `address` field.
+ * Unknown addresses return a zeroed score (matching the contract's
+ * lazy-init behaviour).
+ *
+ * @param server              - Soroban RPC server for the target network
+ * @param contractId          - Deployed reputation_bonus contract address
+ * @param address             - Stellar G… address to look up
+ * @param networkPassphrase   - Stellar network passphrase (default: TESTNET)
+ * @returns ReputationBonusScore (zeroed for unknown / never-active addresses)
+ * @throws When `address` is not a valid Stellar G-address
+ * @throws When the Soroban simulation fails (RPC unreachable, contract not found)
+ *
+ * @example
+ * ```ts
+ * const score = await getReputationBonusReputation(server, CONTRACT_ID, "GAA...");
+ * console.log(`Score: ${score.score}, Submitted: ${score.invoicesSubmitted}`);
+ * ```
+ */
+export async function getReputationBonusReputation(
+  server: SorobanRpc.Server,
+  contractId: string,
+  address: string,
+  networkPassphrase: string = Networks.TESTNET
+): Promise<ReputationBonusScore> {
+  if (!isValidGAddress(address)) {
+    throw new Error(
+      `Invalid Stellar address: "${address}". Must be a G… public key.`
+    );
+  }
+
+  const contract = new Contract(contractId);
+  const op = contract.call("get_reputation", new Address(address).toScVal());
+
+  const sourceAccount = new Account(
+    "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    "0"
+  );
+
+  const simTx = new TransactionBuilder(sourceAccount, {
+    fee: BASE_FEE,
+    networkPassphrase,
+  })
+    .addOperation(op)
+    .setTimeout(30)
+    .build();
+
+  const sim = await retry(() => server.simulateTransaction(simTx));
+
+  if (SorobanRpc.Api.isSimulationError(sim)) {
+    throw ReputationContractError.fromError(sim.error);
+  }
+
+  const raw = (
+    sim.result?.retval ? scValToNative(sim.result.retval) : {}
+  ) as Record<string, unknown>;
+
+  return {
+    invoicesSubmitted: Number(raw["invoices_submitted"] ?? 0),
+    invoicesPaid: Number(raw["invoices_paid"] ?? 0),
+    invoicesDefaulted: Number(raw["invoices_defaulted"] ?? 0),
+    score: Number(raw["score"] ?? 0),
+  };
+}
