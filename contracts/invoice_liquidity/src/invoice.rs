@@ -775,6 +775,27 @@ pub fn save_queue_resolution(env: &Env, invoice_id: u64, approved_lp: &Address) 
         .persistent()
         .set(&StorageKey::QueueResolution(invoice_id), approved_lp);
 }
+
+/// Record the ledger sequence when the first LP joined the fund queue.
+/// Called once when the queue transitions from empty to non-empty.
+/// Subsequent joins do not overwrite this value.
+pub fn try_set_fund_queue_opened_at(env: &Env, invoice_id: u64) {
+    let key = StorageKey::FundQueueOpenedAt(invoice_id);
+    if !env.storage().persistent().has(&key) {
+        env.storage()
+            .persistent()
+            .set(&key, &env.ledger().sequence());
+    }
+}
+
+/// Return the ledger sequence when the fund queue for `invoice_id` was first
+/// opened (i.e. when the first LP joined), or `None` if the queue is still
+/// empty.
+pub fn get_fund_queue_opened_at(env: &Env, invoice_id: u64) -> Option<u32> {
+    env.storage()
+        .persistent()
+        .get(&StorageKey::FundQueueOpenedAt(invoice_id))
+}
 // Contract stats helpers
 // ----------------------------------------------------------------
 
