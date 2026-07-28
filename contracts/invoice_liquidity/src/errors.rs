@@ -59,4 +59,9 @@ pub enum ContractError {
     Reentrancy = 37,
     /// Rate-limited function called before the cooldown period elapsed (Issue #541).
     RateLimited = 38,
+    /// resolve_fund_queue called before the minimum queue maturity delay has
+    /// elapsed since the first LP joined the queue.  Prevents MEV/front-running
+    /// attacks where an attacker races to resolve the queue immediately after a
+    /// high-reputation LP joins (Issue #MEV-1).
+    QueueNotMature = 39,
 }

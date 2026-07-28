@@ -21,7 +21,7 @@ use access::{check_rate_limit, lock_reentrancy, unlock_reentrancy};
 pub mod constants;
 use constants::{
     ADMIN_CHANGE_COOLDOWN_LEDGERS, DEFAULT_RATE_LIMIT_LEDGERS, ECONOMIC_PARAM_COOLDOWN_LEDGERS,
-    UPGRADE_COOLDOWN_LEDGERS,
+    QUEUE_DELAY_LEDGERS, UPGRADE_COOLDOWN_LEDGERS,
 };
 pub mod oracle_interface;
 pub mod oracle_registry;
@@ -45,22 +45,24 @@ use crate::storage::get_admin;
 use events::{
     AdminChanged, AppealResolved, ContractInitialized, ContractPaused, ContractUnpaused,
     ContractUpgraded, DefaultAppealed, DisputeResolved, DistributionContractUpdated,
-    FundQueueResolved, FundRequested, InsuranceClaimAttempted, InvoiceCancelled, InvoiceDefaulted,
+    FundQueueResolutionAttempted, FundQueueResolved, FundRequested, InsuranceClaimAttempted,
+    InvoiceCancelled, InvoiceDefaulted,
     InvoiceDisputed, InvoiceExpired, InvoiceFunded, InvoicePaid, InvoicePartiallyPaid,
     InvoiceSubmitted, InvoiceTokenChanged, InvoiceTransferred, InvoiceUpdated,
     LPPositionTransferred, ParameterUpdated, PriceOracleUpdated, TokenAdded, TokenRemoved,
 };
 use invoice::{
     add_invoice_to_lp, add_invoice_to_submitter, add_volume, get_appeal, get_contract_stats,
-    get_dispute, get_fund_queue, get_invoice_funders, get_lp_invoices, get_lp_score,
-    get_min_payer_reputation, get_payer_score, get_pre_default_payer_score, get_queue_resolution,
-    get_reputation, get_submitter_invoices, increment_invoices_defaulted, increment_invoices_paid,
-    increment_invoices_submitted, increment_total_funded, increment_total_invoices,
-    increment_total_paid, invoice_exists, is_paused, load_invoice, next_invoice_id,
-    remove_invoice_from_lp, remove_invoice_from_submitter, save_appeal, save_dispute,
-    save_fund_queue, save_invoice, save_invoice_funders, save_pre_default_payer_score,
+    get_dispute, get_fund_queue, get_fund_queue_opened_at, get_invoice_funders, get_lp_invoices,
+    get_lp_score, get_min_payer_reputation, get_payer_score, get_pre_default_payer_score,
+    get_queue_resolution, get_reputation, get_submitter_invoices, increment_invoices_defaulted,
+    increment_invoices_paid, increment_invoices_submitted, increment_total_funded,
+    increment_total_invoices, increment_total_paid, invoice_exists, is_paused, load_invoice,
+    next_invoice_id, remove_invoice_from_lp, remove_invoice_from_submitter, save_appeal,
+    save_dispute, save_fund_queue, save_invoice, save_invoice_funders, save_pre_default_payer_score,
     save_queue_resolution, set_lp_score, set_min_payer_reputation, set_paused, set_payer_score,
-    set_reputation, try_load_invoice, ContractStats, DisputeRecord, StorageKey,
+    set_reputation, try_load_invoice, try_set_fund_queue_opened_at, ContractStats, DisputeRecord,
+    StorageKey,
 };
 // 30-day window in seconds for a payer to file an appeal after a default.
 const APPEAL_WINDOW_SECONDS: u64 = 30 * 24 * 60 * 60;
@@ -1207,6 +1209,12 @@ impl InvoiceLiquidityContract {
 
             // Increment total invoices counter
             increment_total_invoices(&env);
+
+            // Increment detailed reputation invoices_submitted count
+            // (mirrors the same call in submit_invoice so batch submission
+            // does not unfairly penalise high-volume freelancers).
+            increment_invoices_submitted(&env, &params.freelancer);
+
             env.events().publish(
                 (
                     Symbol::new(&env, "submitted"),
@@ -1319,6 +1327,11 @@ impl InvoiceLiquidityContract {
         queue.insert(insert_pos, new_request);
         save_fund_queue(&env, invoice_id, &queue);
 
+        // MEV mitigation (Issue #MEV-1): record the ledger when the first LP
+        // joins so that `resolve_fund_queue` can enforce a minimum maturity
+        // delay before locking in the winner.
+        try_set_fund_queue_opened_at(&env, invoice_id);
+
         env.events().publish(
             (Symbol::new(&env, "fund_requested"), invoice_id, lp.clone()),
             FundRequested {
@@ -1353,12 +1366,46 @@ impl InvoiceLiquidityContract {
             return Err(ContractError::NotFunded); // no one in queue
         }
 
+        // MEV mitigation (Issue #MEV-1): enforce a minimum maturity delay so
+        // that all LPs have a fair window to join before the winner is locked.
+        // The delay is measured in ledger sequences (not timestamps) because
+        // ledger sequence is monotonically increasing and cannot be manipulated.
+        if let Some(opened_at) = get_fund_queue_opened_at(&env, invoice_id) {
+            let current = env.ledger().sequence();
+            if current < opened_at.saturating_add(QUEUE_DELAY_LEDGERS) {
+                // Emit an attempt event so off-chain monitors can detect MEV
+                // probing even on rejected calls.
+                env.events().publish(
+                    (Symbol::new(&env, "queue_resolve_attempt"), invoice_id),
+                    FundQueueResolutionAttempted {
+                        invoice_id,
+                        caller_ledger: opened_at,
+                        attempted_at_ledger: current,
+                        success: false,
+                    },
+                );
+                return Err(ContractError::QueueNotMature);
+            }
+        }
+
         // Queue is sorted by score (descending), so highest score is at index 0.
         let best_entry = queue.get(0).unwrap();
         let best_lp = best_entry.lp.clone();
         let best_score = best_entry.score;
 
         save_queue_resolution(&env, invoice_id, &best_lp);
+
+        // Emit resolution attempt event (successful).
+        let current_ledger = env.ledger().sequence();
+        env.events().publish(
+            (Symbol::new(&env, "queue_resolve_attempt"), invoice_id),
+            FundQueueResolutionAttempted {
+                invoice_id,
+                caller_ledger: get_fund_queue_opened_at(&env, invoice_id).unwrap_or(0),
+                attempted_at_ledger: current_ledger,
+                success: true,
+            },
+        );
 
         env.events().publish(
             (
@@ -1820,6 +1867,10 @@ impl InvoiceLiquidityContract {
     // ------------------------------------------------------------
     /// Access: Anyone
     pub fn expire_invoice(env: Env, invoice_id: u64) -> Result<(), ContractError> {
+        if is_paused(&env) {
+            return Err(ContractError::ContractPaused);
+        }
+
         if !invoice_exists(&env, invoice_id) {
             return Err(ContractError::InvoiceNotFound);
         }
@@ -2231,6 +2282,10 @@ impl InvoiceLiquidityContract {
         invoice_id: u64,
         evidence_hash: BytesN<32>,
     ) -> Result<(), ContractError> {
+        if is_paused(&env) {
+            return Err(ContractError::ContractPaused);
+        }
+
         if !invoice_exists(&env, invoice_id) {
             return Err(ContractError::InvoiceNotFound);
         }
@@ -2978,3 +3033,11 @@ mod tests_new_features;
 mod tests_oracle_registry;
 mod tests_storage;
 mod tests_storage_layout;
+// Issue #MEV-1: resolve_fund_queue maturity delay
+mod tests_mev_mitigation;
+// Issue #invoice-count: get_invoice_count underflow safety
+mod tests_invoice_count;
+// Issue #batch-reputation: batch_submit increments invoices_submitted
+mod tests_batch_submit_reputation;
+// Issue #pause-checks: expire_invoice and appeal_default pause guards
+mod tests_pause_checks;

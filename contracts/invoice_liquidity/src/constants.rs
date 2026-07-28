@@ -24,3 +24,12 @@ pub const UPGRADE_COOLDOWN_LEDGERS: u64 = 1440;
 
 /// Rate limit cooldown for economic parameters — 30 minutes (360 ledgers).
 pub const ECONOMIC_PARAM_COOLDOWN_LEDGERS: u64 = 360;
+
+/// Minimum number of ledgers that must elapse between the first LP joining the
+/// fund queue and `resolve_fund_queue` being callable.  At ~5 s per ledger,
+/// 120 ledgers ≈ 10 minutes, giving other LPs a fair window to join.
+///
+/// Prevents MEV / front-running: an attacker who observes a high-reputation LP
+/// joining the queue can no longer immediately resolve the queue in the same
+/// block to lock-out competing LPs (Issue #MEV-1).
+pub const QUEUE_DELAY_LEDGERS: u32 = 120;
