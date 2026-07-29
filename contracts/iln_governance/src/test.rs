@@ -18,7 +18,7 @@ pub struct MockIln;
 #[contractimpl]
 impl MockIln {
     pub fn update_fee_rate(_env: Env, _rate: u32) {}
-    pub fn add_token(_env: Env, _token: Address) {}
+    pub fn add_token(_env: Env, _token: Address, _decimals: u32) {}
     pub fn remove_token(_env: Env, _token: Address) {}
     pub fn update_max_discount(_env: Env, _rate: u32) {}
     pub fn update_decay_params(_env: Env, _rate_bps: u32, _period_ledgers: u64) {}
@@ -1336,6 +1336,50 @@ fn test_create_and_execute_decay_params_proposal() {
         GovContract::execute_proposal(t.env.clone(), id)
     });
 
+    assert_eq!(
+        t.contract.get_proposal(&id).status,
+        ProposalStatus::Executed
+    );
+}
+
+// ── Issue #fix: AddToken proposal execution ──────────────────────────────────
+
+#[test]
+fn test_create_and_execute_add_token_proposal() {
+    let t = setup();
+    let token_addr = Address::generate(&t.env);
+    let hash = dummy_hash(&t.env);
+
+    let id = t.contract.create_proposal(
+        &t.proposer,
+        &ProposalAction::AddToken(token_addr.clone(), 6_u32),
+        &hash,
+        &0_i128,
+    );
+
+    let p = t.contract.get_proposal(&id);
+    assert_eq!(p.action_type, ProposalAction::AddToken(token_addr, 6_u32));
+    assert_eq!(p.status, ProposalStatus::Active);
+
+    // Vote to pass
+    t.gov_token_admin.mint(&t.voter_a, &10_000);
+    t.contract.cast_vote(&t.voter_a, &id, &true);
+
+    // Advance past voting period
+    t.env
+        .ledger()
+        .set_timestamp(t.env.ledger().timestamp() + VOTING_PERIOD_SECS + 1);
+
+    // First execution transitions Active -> Passed (pending timelock)
+    let _ = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id)
+    });
+    assert_eq!(t.contract.get_proposal(&id).status, ProposalStatus::Passed);
+
+    // Second execution after timelock invokes the ILN contract's add_token
+    let _ = t.env.as_contract(&t.contract.address, || {
+        GovContract::execute_proposal(t.env.clone(), id)
+    });
     assert_eq!(
         t.contract.get_proposal(&id).status,
         ProposalStatus::Executed

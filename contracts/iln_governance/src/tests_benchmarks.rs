@@ -18,7 +18,7 @@ struct MockIlnBench;
 #[contractimpl]
 impl MockIlnBench {
     pub fn update_fee_rate(_env: Env, _rate: u32) {}
-    pub fn add_token(_env: Env, _token: Address) {}
+    pub fn add_token(_env: Env, _token: Address, _decimals: u32) {}
     pub fn remove_token(_env: Env, _token: Address) {}
     pub fn update_max_discount(_env: Env, _rate: u32) {}
 }
