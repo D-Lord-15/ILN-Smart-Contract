@@ -757,6 +757,109 @@ fn test_mark_paid_releases_full_amount_to_lp() {
     );
 }
 
+// ── Issue #619: mark_paid's internal LP payout/earnings math must never
+// panic (debug) or wrap to a corrupting value (release) when protocol-fee
+// deduction plus integer-division truncation makes the payout fall below
+// what the LP originally funded. Settlement must still succeed and pay out
+// the correct, non-negative, non-wrapped amount. ──────────────────────────
+
+#[test]
+fn test_mark_paid_settles_correctly_when_distribute_amount_slightly_less_than_invoice_amount() {
+    let t = setup();
+    let id = submit_standard_invoice(&t);
+
+    // update_fee_rate is rate-limited (ECONOMIC_PARAM_COOLDOWN_LEDGERS = 360)
+    // relative to a fresh RateLimit record's default last-ledger of 0, and
+    // setup()'s baseline sequence_number (100) is below that — advance past
+    // the cooldown first, same as test_update_fee_rate_rate_limited does.
+    let mut ledger_info = t.env.ledger().get();
+    ledger_info.sequence_number += 400;
+    t.env.ledger().set(ledger_info);
+
+    // Small protocol fee (0.1%) makes distribute_amount fall just under
+    // invoice.amount, which is exactly the edge that used to underflow
+    // lp_earned via a bare subtraction.
+    t.contract.update_fee_rate(&10_u32);
+
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+
+    let funder_balance_before = t.token.balance(&t.funder);
+    t.contract.mark_paid(&id, &INVOICE_AMOUNT);
+    let funder_balance_after = t.token.balance(&t.funder);
+
+    let protocol_fee = INVOICE_AMOUNT * 10 / 10_000;
+    let expected_distribution = INVOICE_AMOUNT - protocol_fee;
+
+    assert_eq!(
+        funder_balance_after - funder_balance_before,
+        expected_distribution,
+        "settlement must succeed and pay the correct (non-negative, non-wrapped) amount \
+         even when the protocol fee pushes distribute_amount below invoice.amount"
+    );
+}
+
+#[test]
+fn test_mark_paid_settles_correctly_when_distribute_amount_equals_invoice_amount_no_fee() {
+    let t = setup();
+    let id = submit_standard_invoice(&t);
+
+    let mut ledger_info = t.env.ledger().get();
+    ledger_info.sequence_number += 400;
+    t.env.ledger().set(ledger_info);
+
+    // Explicit no-fee edge: distribute_amount == invoice.amount exactly, so
+    // primary_lp_payout == primary_lp_funded and lp_earned == 0 exactly —
+    // not underflowed, not a coincidental clamp.
+    t.contract.update_fee_rate(&0_u32);
+
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+
+    let funder_balance_before = t.token.balance(&t.funder);
+    t.contract.mark_paid(&id, &INVOICE_AMOUNT);
+    let funder_balance_after = t.token.balance(&t.funder);
+
+    assert_eq!(
+        funder_balance_after - funder_balance_before,
+        INVOICE_AMOUNT,
+        "with no protocol fee, the LP must receive the full invoice amount"
+    );
+}
+
+#[test]
+fn test_mark_paid_settles_correctly_when_distribute_amount_significantly_less_than_invoice_amount()
+{
+    let t = setup();
+    let id = submit_standard_invoice(&t);
+
+    let mut ledger_info = t.env.ledger().get();
+    ledger_info.sequence_number += 400;
+    t.env.ledger().set(ledger_info);
+
+    // Large protocol fee (40%) makes distribute_amount fall significantly
+    // below invoice.amount — the same edge as the first test, but far from
+    // the boundary rather than adjacent to it.
+    t.contract.update_fee_rate(&4_000_u32);
+
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+
+    let funder_balance_before = t.token.balance(&t.funder);
+    t.contract.mark_paid(&id, &INVOICE_AMOUNT);
+    let funder_balance_after = t.token.balance(&t.funder);
+
+    let protocol_fee = INVOICE_AMOUNT * 4_000 / 10_000;
+    let expected_distribution = INVOICE_AMOUNT - protocol_fee;
+
+    assert_eq!(
+        funder_balance_after - funder_balance_before,
+        expected_distribution,
+        "settlement must succeed and pay the correct (non-negative, non-wrapped) amount \
+         even when a large protocol fee pushes distribute_amount well below invoice.amount"
+    );
+}
+
 #[test]
 fn test_mark_paid_updates_status() {
     let t = setup();
