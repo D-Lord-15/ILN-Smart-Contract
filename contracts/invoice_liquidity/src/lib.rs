@@ -2019,14 +2019,22 @@ impl InvoiceLiquidityContract {
         // Total amount funded by primary LP
         let primary_lp_funded = funders.get(0).unwrap().1;
 
-        // LP payout after settlement distribution
+        // LP payout after settlement distribution. A genuine multiplication
+        // overflow here must surface as an error, not silently collapse to a
+        // corrupting zero payout (Issue #619).
         let primary_lp_payout = distribute_amount
             .checked_mul(primary_lp_funded)
-            .unwrap_or(0)
+            .ok_or(ContractError::ArithmeticOverflow)?
             / invoice.amount;
 
-        // LP earnings
-        let lp_earned = primary_lp_payout.saturating_sub(primary_lp_funded);
+        // LP earnings. Protocol-fee deduction plus integer-division
+        // truncation can make primary_lp_payout fall slightly below
+        // primary_lp_funded when distribute_amount is close to
+        // invoice.amount — use checked_sub (never a bare `-`) so this can
+        // never panic in debug builds or silently wrap to an enormous value
+        // in release builds. The LP simply earns zero on that edge, never a
+        // negative or wrapped amount (Issue #619).
+        let lp_earned = primary_lp_payout.checked_sub(primary_lp_funded).unwrap_or(0);
 
         // CEI: update state before external token transfers
         invoice.status = InvoiceStatus::Paid;
@@ -2848,7 +2856,6 @@ fn normalize_xlm_amount(amount: i128) -> i128 {
 }
 
 /// Check if a token address is the USDC address
-#[allow(dead_code)]
 fn is_usdc_token(env: &Env, token: &Address) -> bool {
     if let Some(config) = crate::storage::get_config(env) {
         token == &config.usdc_sac_address

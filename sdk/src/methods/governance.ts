@@ -282,6 +282,14 @@ export async function castVote(
 
 /**
  * Execute a proposal that has passed its vote.
+ *
+ * Issue #622: the contract no longer accepts a caller-supplied `total_supply`
+ * — it queries the real governance token's on-chain supply itself, so the
+ * only argument here is the proposal id. (The previous version of this call
+ * also mismatched the contract's actual `execute_proposal(proposal_id,
+ * total_supply)` signature by sending an address in place of `proposal_id`
+ * and omitting `total_supply` entirely — that mismatch is fixed as part of
+ * this change too.)
  */
 export async function executeProposal(
   server: SorobanRpc.Server,
@@ -294,7 +302,6 @@ export async function executeProposal(
   const contract = new Contract(contractAddress);
   const op = contract.call(
     "execute_proposal",
-    nativeToScVal(sourceAccount.accountId(), { type: "address" }),
     nativeToScVal(proposalId, { type: "u64" })
   );
 

@@ -177,6 +177,62 @@ fn test_full_lifecycle_xlm_sac_token_path() {
     assert_full_lifecycle_for_token("XLM SAC", &env.xlm, &env, 70_000_000);
 }
 
+// ── Issue #620: add_volume must attribute per-token volume by SAC address,
+// never by TokenList position, and must never double-count a single funding
+// call into more than one aggregate counter. ──────────────────────────────
+
+#[test]
+fn test_add_volume_attributes_each_token_without_cross_contamination() {
+    let env = setup();
+
+    let usdc_amount = 1_000_000_000_i128;
+    let eurc_amount = 25_000_000_i128;
+    let xlm_amount = 70_000_000_i128;
+
+    let usdc_id = submit_invoice(&env, &env.usdc, usdc_amount);
+    env.contract.fund_invoice(&env.lp, &usdc_id, &usdc_amount, &false);
+
+    let eurc_id = submit_invoice(&env, &env.eurc, eurc_amount);
+    env.contract.fund_invoice(&env.lp, &eurc_id, &eurc_amount, &false);
+
+    let xlm_id = submit_invoice(&env, &env.xlm, xlm_amount);
+    env.contract.fund_invoice(&env.lp, &xlm_id, &xlm_amount, &false);
+
+    let stats = env.contract.get_contract_stats();
+
+    assert_eq!(stats.total_volume_usdc, usdc_amount, "USDC volume must equal the single USDC funding, not doubled or zero");
+    assert_eq!(stats.total_volume_eurc, eurc_amount, "EURC volume must equal the single EURC funding, not doubled or zero");
+    assert_eq!(stats.total_volume_xlm, xlm_amount, "XLM volume must equal the single XLM funding, not doubled or zero");
+}
+
+#[test]
+fn test_add_volume_attributes_eurc_correctly_after_token_list_reordering() {
+    let env = setup();
+
+    // Give admin a USDC balance so add_token's balance-verification transfer
+    // can succeed, then remove and re-add USDC — this moves USDC from index
+    // 0 to the end of TokenList, shifting EURC away from the hardcoded
+    // index 2 the old buggy code relied on.
+    env.usdc.admin_client.mint(&env.admin, &1_000_000_i128);
+    env.contract.remove_token(&env.usdc.address);
+    env.contract.add_token(&env.usdc.address, &6_u32);
+
+    let eurc_amount = 25_000_000_i128;
+    let eurc_id = submit_invoice(&env, &env.eurc, eurc_amount);
+    env.contract.fund_invoice(&env.lp, &eurc_id, &eurc_amount, &false);
+
+    let stats = env.contract.get_contract_stats();
+
+    assert_eq!(
+        stats.total_volume_eurc, eurc_amount,
+        "EURC volume must be attributed correctly by SAC address even after TokenList order changes"
+    );
+    assert_eq!(
+        stats.total_volume_usdc, 0,
+        "reordering TokenList and funding an EURC invoice must not misattribute volume to USDC"
+    );
+}
+
 #[test]
 fn test_submit_with_unapproved_token_is_rejected() {
     let env = setup();

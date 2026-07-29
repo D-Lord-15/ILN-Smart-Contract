@@ -274,6 +274,11 @@ pub enum StorageKey {
     /// Configurable minimum participation required for proposal passing.
     /// Expressed in basis points (bps) of total supply, e.g. 1000 = 10%.
     MinQuorumBps,
+    /// Issue #622: governance token total supply used as the quorum
+    /// denominator. Seeded at `initialize` time and only updatable via the
+    /// ILN-contract-gated `set_gov_token_total_supply` — no longer a
+    /// caller-supplied `execute_proposal` argument.
+    GovTokenTotalSupply,
     Proposal(u64),
     ProposalCount,
     VoteWeightSnapshot(u64, Address),
@@ -318,6 +323,7 @@ impl GovContract {
         distribution_contract: Address,
         gov_token: Address,
         admin: Address,
+        gov_token_total_supply: i128,
     ) -> Result<(), GovernanceError> {
         if env.storage().instance().has(&StorageKey::IlnContract) {
             return Err(GovernanceError::AlreadyInitialized);
@@ -341,6 +347,19 @@ impl GovContract {
         env.storage()
             .instance()
             .set(&StorageKey::ProposalCount, &0_u64);
+        // Issue #622: total_supply used to be a caller-supplied argument to
+        // execute_proposal, letting any caller inflate or deflate it to
+        // manipulate quorum. soroban-sdk 21.x's token::Client has no
+        // total_supply() query (SEP-41's TokenInterface/StellarAssetInterface
+        // don't expose one), so a live on-chain read isn't available here —
+        // instead this value is seeded at initialize time and can only be
+        // updated afterwards via set_gov_token_total_supply, which requires
+        // the same iln_contract authorization as set_min_quorum_bps /
+        // set_min_proposal_balance. It is no longer settable by whoever
+        // happens to call execute_proposal.
+        env.storage()
+            .instance()
+            .set(&StorageKey::GovTokenTotalSupply, &gov_token_total_supply);
 
         env.events().publish(
             (Symbol::new(&env, "initialized"), admin.clone()),
@@ -359,6 +378,54 @@ impl GovContract {
             .instance()
             .get(&StorageKey::MinQuorumBps)
             .unwrap_or(DEFAULT_MIN_QUORUM_BPS)
+    }
+
+    /// Returns the configured governance token total supply used for quorum
+    /// calculations (see Issue #622).
+    pub fn get_gov_token_total_supply(env: Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&StorageKey::GovTokenTotalSupply)
+            .unwrap_or(0)
+    }
+
+    /// Updates the governance token total supply used for quorum
+    /// calculations.
+    ///
+    /// Authorization: the configured ILN contract address must authorize —
+    /// the same trust boundary as `set_min_quorum_bps` /
+    /// `set_min_proposal_balance`. This replaces the old caller-supplied
+    /// `total_supply` argument on `execute_proposal` (Issue #622): quorum's
+    /// denominator can no longer be chosen by whoever happens to call
+    /// execute_proposal, only by the same authority that already controls
+    /// the quorum bps and proposal-balance thresholds.
+    pub fn set_gov_token_total_supply(env: Env, total_supply: i128) -> Result<(), GovernanceError> {
+        let iln_contract: Address = env
+            .storage()
+            .instance()
+            .get(&StorageKey::IlnContract)
+            .unwrap();
+        iln_contract.require_auth();
+
+        let old_value: i128 = env
+            .storage()
+            .instance()
+            .get(&StorageKey::GovTokenTotalSupply)
+            .unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&StorageKey::GovTokenTotalSupply, &total_supply);
+
+        let pn = Symbol::new(&env, "gov_token_total_supply");
+        env.events().publish(
+            (Symbol::new(&env, "parameter_updated"), pn.clone()),
+            GovernanceParameterUpdated {
+                param_name: pn,
+                old_value,
+                new_value: total_supply,
+            },
+        );
+        Ok(())
     }
 
     /// Updates the minimum quorum configuration.
@@ -848,11 +915,7 @@ impl GovContract {
 
     // ── execute_proposal ─────────────────────────────────────────
 
-    pub fn execute_proposal(
-        env: Env,
-        proposal_id: u64,
-        total_supply: i128,
-    ) -> Result<(), GovernanceError> {
+    pub fn execute_proposal(env: Env, proposal_id: u64) -> Result<(), GovernanceError> {
         let mut proposal: GovernanceProposal = env
             .storage()
             .persistent()
@@ -872,8 +935,18 @@ impl GovContract {
                 .get(&StorageKey::MinQuorumBps)
                 .unwrap_or(DEFAULT_MIN_QUORUM_BPS);
 
-            // TODO(#602): Query total supply from the governance token contract
-            // once a compatible total_supply interface is available.
+            // Issue #622: total_supply used to be a caller-supplied argument,
+            // letting a caller inflate it (lowering the effective quorum) or
+            // deflate it (blocking quorum entirely). Read the contract-stored
+            // value instead (seeded at initialize, only updatable via the
+            // ILN-contract-gated set_gov_token_total_supply) — it can no
+            // longer be chosen by whoever happens to call execute_proposal.
+            let total_supply: i128 = env
+                .storage()
+                .instance()
+                .get(&StorageKey::GovTokenTotalSupply)
+                .unwrap_or(0);
+
             let quorum = if total_supply <= 0 {
                 0_i128
             } else {

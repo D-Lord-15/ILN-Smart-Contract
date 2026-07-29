@@ -885,66 +885,40 @@ pub fn add_volume(env: &Env, token: &Address, amount: i128) {
         &current_per_token.saturating_add(amount),
     );
 
-    // Preserve legacy aggregate token counters for compatibility.
-    if let Some(config) = crate::storage::get_config(env) {
-        if token == &config.xlm_sac_address {
-            let current: i128 = env
-                .storage()
-                .persistent()
-                .get(&StorageKey::TotalVolumeXlm)
-                .unwrap_or(0);
-            env.storage()
-                .persistent()
-                .set(&StorageKey::TotalVolumeXlm, &current.saturating_add(amount));
-            return;
-        }
-    }
-
-    let token_list: soroban_sdk::Vec<Address> = env
-        .storage()
-        .persistent()
-        .get(&StorageKey::TokenList)
-        .unwrap_or(soroban_sdk::Vec::new(env));
-
-    if !token_list.is_empty() {
-        if let Some(usdc_addr) = token_list.get(0) {
-            if token == &usdc_addr {
-                let current: i128 = env
-                    .storage()
-                    .persistent()
-                    .get(&StorageKey::TotalVolumeUsdc)
-                    .unwrap_or(0);
-                env.storage()
-                    .persistent()
-                    .set(&StorageKey::TotalVolumeUsdc, &current.saturating_add(amount));
-            }
-        }
-    }
-    if let Some(config) = crate::storage::get_config(env) {
-        if token == &config.xlm_sac_address {
-            let current: i128 = env
-                .storage()
-                .persistent()
-                .get(&StorageKey::TotalVolumeXlm)
-                .unwrap_or(0);
-            env.storage()
-                .persistent()
-                .set(&StorageKey::TotalVolumeXlm, &current.saturating_add(amount));
-        }
-    }
-    if token_list.len() > 2 {
-        if let Some(eurc_addr) = token_list.get(2) {
-            if token == &eurc_addr {
-                let current: i128 = env
-                    .storage()
-                    .persistent()
-                    .get(&StorageKey::TotalVolumeEurc)
-                    .unwrap_or(0);
-                env.storage()
-                    .persistent()
-                    .set(&StorageKey::TotalVolumeEurc, &current.saturating_add(amount));
-            }
-        }
+    // Preserve legacy aggregate token counters for compatibility. Match by
+    // the token's actual configured SAC address — never by TokenList
+    // position (Issue #620: a hardcoded index silently misattributes volume
+    // whenever the list is reordered or a token is removed) — and increment
+    // at most one counter per call (the previous code re-checked XLM a
+    // second time after the first check's early return, which could
+    // double-count it if the two checks ever disagreed).
+    if crate::is_xlm_token(env, token) {
+        let current: i128 = env
+            .storage()
+            .persistent()
+            .get(&StorageKey::TotalVolumeXlm)
+            .unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&StorageKey::TotalVolumeXlm, &current.saturating_add(amount));
+    } else if crate::is_usdc_token(env, token) {
+        let current: i128 = env
+            .storage()
+            .persistent()
+            .get(&StorageKey::TotalVolumeUsdc)
+            .unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&StorageKey::TotalVolumeUsdc, &current.saturating_add(amount));
+    } else if crate::is_eurc_token(env, token) {
+        let current: i128 = env
+            .storage()
+            .persistent()
+            .get(&StorageKey::TotalVolumeEurc)
+            .unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&StorageKey::TotalVolumeEurc, &current.saturating_add(amount));
     }
 }
 
