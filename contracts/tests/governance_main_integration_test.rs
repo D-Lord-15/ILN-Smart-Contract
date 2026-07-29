@@ -33,7 +33,7 @@ const INVOICE_AMOUNT: i128 = 1_000_000_000; // 100 USDC (7-decimal)
 const DISCOUNT_RATE: u32 = 300; // 3 %
 const DUE_DATE_OFFSET: u64 = 60 * 60 * 24 * 30; // 30 days
 const LEDGER_TIMESTAMP: u64 = 1_700_000_000;
-const GOV_TOTAL_SUPPLY: i128 = 20_000; // used in execute_proposal()
+const GOV_TOTAL_SUPPLY: i128 = 20_000; // seeded via initialize()'s gov_token_total_supply param
 
 struct GovIntegrationEnv {
     env: Env,
@@ -135,10 +135,10 @@ fn pass_and_execute(t: &GovIntegrationEnv, proposal_id: u64) {
 
     // Active → Passed
     t.governance
-        .execute_proposal(&proposal_id, &GOV_TOTAL_SUPPLY);
+        .execute_proposal(&proposal_id);
     // Passed → Executed  (zero-delay timelock: eta_ledger == current_sequence)
     t.governance
-        .execute_proposal(&proposal_id, &GOV_TOTAL_SUPPLY);
+        .execute_proposal(&proposal_id);
 }
 
 // ── Test 1 ────────────────────────────────────────────────────────────────────
@@ -286,7 +286,7 @@ fn test_veto_proposal_prevents_execution() {
     // Attempting to execute a vetoed proposal must return AlreadyResolved.
     let execute_result = t
         .governance
-        .try_execute_proposal(&proposal_id, &GOV_TOTAL_SUPPLY);
+        .try_execute_proposal(&proposal_id);
     assert_eq!(
         execute_result,
         Err(Ok(GovernanceError::AlreadyResolved)),
