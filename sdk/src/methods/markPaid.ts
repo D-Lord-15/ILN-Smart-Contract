@@ -53,12 +53,10 @@ export async function markPaid(
   }
 
   const contract = new Contract(contractAddress);
-  const payerAddress = sourceAccount.accountId();
 
   const op = contract.call(
     "mark_paid",
     nativeToScVal(invoiceId, { type: "u64" }),
-    nativeToScVal(payerAddress, { type: "address" }),
     nativeToScVal(paymentAmount, { type: "i128" })
   );
 
