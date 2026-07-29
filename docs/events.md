@@ -462,29 +462,41 @@ Topics: `["init", admin]`
 
 ### Enrolled
 
+Emitted when an LP enrolls in the insurance program (either via explicit `enroll()` call or automatically on first `deposit_premium()`).
+
 Topics: `["enrolled", lp]`
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | `lp` | `Address` | LP enrolled in the pool |
 
+**Example**: An LP calls `enroll()` or makes their first premium deposit, triggering enrollment.
+
 ### PremiumDeposited
+
+Emitted when an LP deposits a premium payment. The amount is the premium paid in stroops.
 
 Topics: `["premium", lp]`
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | `lp` | `Address` | LP paying the premium |
-| `amount` | `i128` | Premium amount transferred |
+| `amount` | `i128` | Premium amount transferred (in stroops) |
+
+**Example**: An LP deposits 100 USDC as premium, which is recorded as 100,000,000 stroops.
 
 ### ClaimProcessed
+
+Emitted when a claim is processed for a defaulted invoice. The payout is the compensation amount credited to the LP.
 
 Topics: `["claimed", invoice_id]`
 
 | Field | Type | Description |
 | ----- | ---- | ----------- |
 | `invoice_id` | `u64` | Defaulted invoice identifier |
-| `payout` | `i128` | Compensation amount paid to LP |
+| `payout` | `i128` | Compensation amount paid to LP (in stroops) |
+
+**Example**: An invoice with ID 123 defaults, and the LP receives a payout of 50 USDC (50,000,000 stroops) from the insurance pool.
 
 ### CoverageChangeProposed
 
