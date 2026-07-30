@@ -843,6 +843,21 @@
                         "key": {
                           "vec": [
                             {
+                              "symbol": "GovTokenTotalSupply"
+                            }
+                          ]
+                        },
+                        "val": {
+                          "i128": {
+                            "hi": 0,
+                            "lo": 11000
+                          }
+                        }
+                      },
+                      {
+                        "key": {
+                          "vec": [
+                            {
                               "symbol": "IlnContract"
                             }
                           ]
@@ -1508,6 +1523,12 @@
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                },
+                {
+                  "i128": {
+                    "hi": 0,
+                    "lo": 11000
+                  }
                 }
               ]
             }

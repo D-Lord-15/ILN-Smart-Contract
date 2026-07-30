@@ -57,7 +57,6 @@ export async function transferLPPosition(
   const op = contract.call(
     "transfer_lp_position",
     nativeToScVal(invoiceId, { type: "u64" }),
-    nativeToScVal(currentLP, { type: "address" }),
     nativeToScVal(newLP, { type: "address" })
   );
 
