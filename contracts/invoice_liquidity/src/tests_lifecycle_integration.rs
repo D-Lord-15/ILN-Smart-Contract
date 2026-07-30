@@ -2,9 +2,9 @@
 
 use super::*;
 use soroban_sdk::{
-    testutils::{Address as _, Ledger},
+    testutils::{Address as _, Events, Ledger},
     token::{Client as TokenClient, StellarAssetClient},
-    Address, Env,
+    Address, BytesN, Env,
 };
 
 const DUE_DATE_OFFSET: u64 = 60 * 60 * 24 * 30;
@@ -230,4 +230,122 @@ fn test_cancel_invoice_nonexistent_fails() {
 
     let result = env.contract.try_cancel_invoice(&999);
     assert_eq!(result, Err(Ok(ContractError::InvoiceNotFound)));
+}
+
+// ================================================================
+// dispute resolution tests
+// ================================================================
+
+#[test]
+fn test_dispute_upheld_with_partial_payment_refunds_payer() {
+    let env = setup();
+
+    let invoice_id = env.contract.submit_invoice(
+        &env.freelancer,
+        &env.payer,
+        &INVOICE_AMOUNT,
+        &due_date(&env),
+        &DISCOUNT_RATE,
+        &env.token.address,
+        &ReferralCode::None,
+    );
+
+    env.contract
+        .fund_invoice(&env.lp, &invoice_id, &INVOICE_AMOUNT, &false);
+
+    let partial_payment = INVOICE_AMOUNT / 4;
+    env.contract.mark_paid(&invoice_id, &partial_payment);
+
+    let invoice_after_partial = env.contract.get_invoice(&invoice_id);
+    assert_eq!(invoice_after_partial.amount_paid, partial_payment);
+
+    let payer_balance_before_dispute = env.token.client.balance(&env.payer);
+
+    let reason_hash = BytesN::from_array(&env.env, &[1u8; 32]);
+    env.contract.dispute_invoice(&invoice_id, &reason_hash);
+
+    let invoice_disputed = env.contract.get_invoice(&invoice_id);
+    assert_eq!(invoice_disputed.status, InvoiceStatus::Disputed);
+
+    let resolution_hash = BytesN::from_array(&env.env, &[2u8; 32]);
+    env.contract
+        .resolve_dispute(&invoice_id, &resolution_hash, &1);
+
+    let invoice_cancelled = env.contract.get_invoice(&invoice_id);
+    assert_eq!(invoice_cancelled.status, InvoiceStatus::Cancelled);
+
+    let payer_balance_after_dispute = env.token.client.balance(&env.payer);
+    assert_eq!(
+        payer_balance_after_dispute - payer_balance_before_dispute,
+        partial_payment,
+        "Payer should receive partial payment refund when dispute is upheld"
+    );
+
+    let contract_balance = env.token.client.balance(&env.contract.address);
+    assert_eq!(
+        contract_balance, 0,
+        "Contract balance must be zero after dispute resolution"
+    );
+
+    let events = env.env.events().all();
+    let refund_event_exists = events
+        .events()
+        .into_iter()
+        .any(|e| format!("{:?}", e).contains("dispute_upheld_payer_refund"));
+    assert!(
+        refund_event_exists,
+        "DisputeUpheldPayerRefund event should be emitted"
+    );
+}
+
+#[test]
+fn test_dispute_upheld_with_zero_payment_no_payer_refund() {
+    let env = setup();
+
+    let invoice_id = env.contract.submit_invoice(
+        &env.freelancer,
+        &env.payer,
+        &INVOICE_AMOUNT,
+        &due_date(&env),
+        &DISCOUNT_RATE,
+        &env.token.address,
+        &ReferralCode::None,
+    );
+
+    env.contract
+        .fund_invoice(&env.lp, &invoice_id, &INVOICE_AMOUNT, &false);
+
+    let payer_balance_before = env.token.client.balance(&env.payer);
+
+    let reason_hash = BytesN::from_array(&env.env, &[1u8; 32]);
+    env.contract.dispute_invoice(&invoice_id, &reason_hash);
+
+    let resolution_hash = BytesN::from_array(&env.env, &[2u8; 32]);
+    env.contract
+        .resolve_dispute(&invoice_id, &resolution_hash, &1);
+
+    let invoice_cancelled = env.contract.get_invoice(&invoice_id);
+    assert_eq!(invoice_cancelled.status, InvoiceStatus::Cancelled);
+
+    let payer_balance_after = env.token.client.balance(&env.payer);
+    assert_eq!(
+        payer_balance_after, payer_balance_before,
+        "Payer balance should remain unchanged when no partial payment was made"
+    );
+
+    let contract_balance = env.token.client.balance(&env.contract.address);
+    assert_eq!(
+        contract_balance, 0,
+        "Contract balance must be zero after dispute resolution"
+    );
+
+    let events = env.env.events().all();
+    let refund_event_exists = events
+        .events()
+        .into_iter()
+        .any(|e| format!("{:?}", e).contains("dispute_upheld_payer_refund"));
+    assert!(
+        !refund_event_exists,
+        "No DisputeUpheldPayerRefund event should be emitted for zero payment"
+    );
 }

@@ -308,6 +308,16 @@ pub struct DisputeResolved {
     pub resolved_at: u64,
 }
 
+/// Emitted when a dispute resolution in favor of the payer refunds partial payments to the payer.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct DisputeUpheldPayerRefund {
+    pub invoice_id: u64,
+    pub payer: Address,
+    pub amount: i128,
+}
+
+
 // ── Issue #34: LP priority queue events ───────────────────────────────────────
 
 /// Emitted when an LP registers their intent to fund via the priority queue.

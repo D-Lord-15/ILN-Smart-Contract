@@ -4,7 +4,7 @@ use super::*;
 use crate::config::Config;
 use crate::invoice::InvoiceStatus;
 use soroban_sdk::{
-    testutils::{Address as _, Ledger},
+    testutils::{Address as _, Events, Ledger},
     token::{Client as TokenClient, StellarAssetClient},
     Address, Env,
 };
@@ -165,4 +165,50 @@ fn test_reputation_activity_resets_decay() {
 
     let score = t.contract.payer_score(&t.payer);
     assert_eq!(score, 85, "Score should not decay after activity reset");
+}
+
+#[test]
+fn test_get_payer_score_persists_decayed_score() {
+    let t = setup();
+    set_payer_score_direct(&t, 80);
+    setup_decay_config(&t, 100, 1000);
+
+    let mut ledger = t.env.ledger().get();
+    ledger.sequence_number += 1000;
+    t.env.ledger().set(ledger);
+
+    // Call get_payer_score via contract
+    let score = t.contract.payer_score(&t.payer);
+    assert_eq!(score, 79);
+
+    // Verify raw storage has persisted the decayed score (79)
+    t.env.as_contract(&t.contract.address, || {
+        let rep = crate::invoice::get_reputation(&t.env, &t.payer);
+        assert_eq!(rep.score, 79, "Decayed score must be persisted in ReputationProfile");
+    });
+}
+
+#[test]
+fn test_get_payer_score_emits_reputation_updated_event() {
+    let t = setup();
+    set_payer_score_direct(&t, 80);
+    setup_decay_config(&t, 100, 1000);
+
+    let mut ledger = t.env.ledger().get();
+    ledger.sequence_number += 1000;
+    t.env.ledger().set(ledger);
+
+    // Call get_payer_score via contract
+    t.contract.payer_score(&t.payer);
+
+    // Check events emitted
+    let events = t.env.events().all();
+    let reputation_event_exists = events
+        .events()
+        .into_iter()
+        .any(|e| format!("{:?}", e).contains("reputation_updated"));
+    assert!(
+        reputation_event_exists,
+        "ReputationUpdated event should be emitted when score decays during get_payer_score"
+    );
 }
