@@ -3,11 +3,13 @@ name = "invoice_liquidity"
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
+publish = false
 
 [lib]
 crate-type = ["lib", "cdylib"]
 
 [dependencies]
+insurance_pool = { path = "../insurance_pool", version = "0.1.0" }
 soroban-sdk = { workspace = true }
 
 [dev-dependencies]

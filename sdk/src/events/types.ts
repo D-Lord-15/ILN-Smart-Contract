@@ -190,10 +190,54 @@ export interface FundQueueResolvedEvent {
   score: number;
 }
 
+export interface InsurancePoolEnrolledEvent {
+  type: "insurance_pool_enrolled";
+  lp: string;
+  timestamp: bigint;
+}
+
+export interface InsurancePremiumDepositedEvent {
+  type: "insurance_premium_deposited";
+  lp: string;
+  amount: bigint;
+  timestamp: bigint;
+}
+
+export interface InsuranceClaimProcessedEvent {
+  type: "insurance_claim_processed";
+  invoiceId: bigint;
+  payout: bigint;
+  timestamp: bigint;
+}
+
 // ---------------------------------------------------------------------------
 // Discriminated union
 // ---------------------------------------------------------------------------
 
+export type ContractEvent =
+  | InvoiceSubmittedEvent
+  | InvoiceFundedEvent
+  | InvoicePaidEvent
+  | InvoicePartiallyPaidEvent
+  | InvoiceDefaultedEvent
+  | DefaultAppealedEvent
+  | AppealResolvedEvent
+  | InvoiceDisputedEvent
+  | DisputeResolvedEvent
+  | TokenAddedEvent
+  | TokenRemovedEvent
+  | ParameterUpdatedEvent
+  | InvoiceTransferredEvent
+  | InvoiceCancelledEvent
+  | ContractPausedEvent
+  | ContractUnpausedEvent
+  | ContractUpgradedEvent
+  | AdminChangedEvent
+  | FundRequestedEvent
+  | FundQueueResolvedEvent
+  | InsurancePoolEnrolledEvent
+  | InsurancePremiumDepositedEvent
+  | InsuranceClaimProcessedEvent;
 
 // ---------------------------------------------------------------------------
 // Filter
@@ -213,9 +257,14 @@ export interface EventFilter {
    * (freelancer, payer, LP, admin, token …).
    */
   address?: string;
+  /**
+   * The starting ledger sequence for historical event replay.
+   */
+  fromLedger?: number;
 }
 
 /** Call to stop the subscription and close the underlying stream. */
 export type Unsubscribe = () => void;
 
 export type { ILNEventType, ILNEvent };
+export { ContractEvent };

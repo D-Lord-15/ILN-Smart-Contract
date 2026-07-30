@@ -118,9 +118,10 @@ help:
 	@echo ""
 	@grep -E '^## ' Makefile | sed 's/^## /  /'
 	@echo ""
-.PHONY: help install build build-rust build-sdk test test-rust test-e2e fuzz lint \
+.PHONY: help install build build-rust build-sdk test test-rust test-e2e fuzz test-fuzz lint \
         fmt fmt-check clippy deploy-testnet seed reset reset-testnet docs spec \
-        changelog soroban-optimize health
+        changelog soroban-optimize health test-insurance test-invoice test-governance test-distribution
+
 
 # Package manager for the TypeScript workspaces (sdk, indexer, notifications,
 # tests/e2e). Prefer pnpm when available, otherwise fall back to npm.
@@ -153,6 +154,11 @@ build-rust: ## Build optimized contract WASM (wasm32v1-none release)
 build-sdk: ## Build the @iln/sdk TypeScript package
 	cd sdk && $(PKG) run build
 
+build-insurance: ## Build the insurance pool contract to optimised WASM
+	cargo build --target wasm32v1-none --release -p insurance_pool
+	@echo "--- Built insurance_pool WASM artefact ---"
+	@ls -lh target/wasm32v1-none/release/insurance_pool.wasm
+
 soroban-optimize: ## Build WASM via the wasm32-unknown-unknown target
 	cargo build --release --target wasm32-unknown-unknown
 
@@ -160,10 +166,25 @@ test: test-rust ## Run the Rust unit/integration test suite
 test-rust: ## Run cargo test for the whole workspace
 	cargo test
 
+test-invoice: ## Run tests for the invoice liquidity contract
+	cargo test -p invoice_liquidity
+
+test-governance: ## Run tests for the governance contract
+	cargo test -p iln_governance
+
+test-distribution: ## Run tests for the distribution contract
+	cargo test -p iln_distribution
+
+test-insurance: ## Run tests for the insurance pool contract
+	cargo test -p insurance_pool
+
 test-e2e: ## Run the end-to-end test suite (tests/e2e)
 	cd tests/e2e && $(PKG) run test:e2e
 
 fuzz: ## Run the property/fuzz test suite
+	cargo test -p iln_fuzz
+
+test-fuzz: ## Run fuzz tests for the iln_fuzz crate
 	cargo test -p iln_fuzz
 
 lint: fmt-check clippy ## Lint everything (rustfmt check + clippy)

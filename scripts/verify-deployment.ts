@@ -23,6 +23,7 @@ function loadContractIds(): ContractInfo[] {
       iln_governance: { varName: "ILN_GOVERNANCE_ID", stats: false },
       iln_distribution: { varName: "ILN_DISTRIBUTION_ID", stats: false },
       reputation_bonus: { varName: "REPUTATION_BONUS_ID", stats: false },
+      insurance_pool: { varName: "INSURANCE_POOL_ID", stats: false },
     };
     for (const [name, cfg] of Object.entries(envVarMap)) {
       const id = process.env[cfg.varName];
@@ -46,6 +47,7 @@ function loadContractIds(): ContractInfo[] {
     else if (key === "ILN_GOVERNANCE_ID") ids.push({ name: "iln_governance", id: value, hasContractStats: false });
     else if (key === "ILN_DISTRIBUTION_ID") ids.push({ name: "iln_distribution", id: value, hasContractStats: false });
     else if (key === "REPUTATION_BONUS_ID") ids.push({ name: "reputation_bonus", id: value, hasContractStats: false });
+    else if (key === "INSURANCE_POOL_ID") ids.push({ name: "insurance_pool", id: value, hasContractStats: false });
   }
   return ids;
 }
@@ -195,6 +197,56 @@ async function main() {
       } catch (err: any) {
         console.log(`  FAIL  submit/cancel flow  => ${err.message}`);
         tests.push({ name: "submit_invoice", passed: false, error: err.message });
+      }
+    }
+
+    if (contract.name === "insurance_pool") {
+      try {
+        const coverageSim = await simulateViewFunction(server, contract.id, "get_coverage");
+        if (coverageSim.result?.retval) {
+          const coverage = scValToNative(coverageSim.result.retval);
+          console.log(`  PASS  get_coverage  => ${coverage} stroops`);
+          tests.push({ name: "get_coverage", passed: true });
+        } else {
+          throw new Error("No return value");
+        }
+      } catch (err: any) {
+        console.log(`  FAIL  get_coverage  => ${err.message}`);
+        tests.push({ name: "get_coverage", passed: false, error: err.message });
+      }
+
+      try {
+        const balanceSim = await simulateViewFunction(server, contract.id, "get_pool_balance");
+        if (balanceSim.result?.retval) {
+          const balance = scValToNative(balanceSim.result.retval);
+          console.log(`  PASS  get_pool_balance  => ${balance} stroops`);
+          tests.push({ name: "get_pool_balance", passed: true });
+        } else {
+          throw new Error("No return value");
+        }
+      } catch (err: any) {
+        console.log(`  FAIL  get_pool_balance  => ${err.message}`);
+        tests.push({ name: "get_pool_balance", passed: false, error: err.message });
+      }
+
+      try {
+        const lp = Keypair.random();
+        const enrollSim = await simulateViewFunction(
+          server,
+          contract.id,
+          "is_enrolled",
+          [Address.fromString(lp.publicKey()).toScVal()]
+        );
+        if (enrollSim.result?.retval) {
+          const enrolled = scValToNative(enrollSim.result.retval);
+          console.log(`  PASS  is_enrolled  => ${enrolled}`);
+          tests.push({ name: "is_enrolled", passed: true });
+        } else {
+          throw new Error("No return value");
+        }
+      } catch (err: any) {
+        console.log(`  FAIL  is_enrolled  => ${err.message}`);
+        tests.push({ name: "is_enrolled", passed: false, error: err.message });
       }
     }
 

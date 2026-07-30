@@ -8,6 +8,10 @@
 //!             disable mechanism.
 
 #![no_std]
+
+#[cfg(test)]
+extern crate std;
+
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, token::Client as TokenClient, vec,
     Address, BytesN, Env, IntoVal, Symbol, Vec,
@@ -60,6 +64,9 @@ pub enum GovernanceError {
     VetoPowerDisabled = 18,
     /// Proposer does not hold the minimum required token balance.
     InsufficientProposerBalance = 19,
+    /// Issue #531: the cross-contract execution call failed. The proposal
+    /// remains in `Passed` status so `execute_proposal` can be retried.
+    ExecutionFailed = 20,
 }
 
 // ================================================================
@@ -76,6 +83,55 @@ pub enum ProposalAction {
     AddToken(Address, u32),
     RemoveToken(Address),
     UpdateMaxDiscountRate(u32),
+    /// Issue #545: Update reputation decay parameters on the ILN contract.
+    /// Tuple: (rate_bps, period_ledgers)
+    UpdateDecayParams(u32, u64),
+    /// Issue #544: Update distribution reward parameters.
+    /// Tuple: (half_token, hundred_usdc_stroops, lp_multiplier)
+    UpdateDistributionRewardParams(i128, i128, i128),
+    /// Issue #533: Update fee tier configuration on the ILN contract.
+    UpdateFeeTiers(Vec<FeeTierConfig>),
+    /// Issue #539: Upgrade the ILN contract WASM via governance vote.
+    Upgrade(BytesN<32>),
+    /// Update LP reward rate (in stroops per 100 USDC volume).
+    UpdateLpRewardRate(i128),
+    /// Update freelancer reward rate (in stroops per settlement).
+    UpdateFreelancerRewardRate(i128),
+    /// Update payer reward rate (in stroops per on-time settlement).
+    UpdatePayerRewardRate(i128),
+    /// Update insurance pool coverage cap (in stroops).
+    UpdateInsuranceCoverageCap(i128),
+    /// Update insurance pool premium rates (in bps).
+    UpdateInsurancePremiumRate(u32),
+    /// Issue #532: register (or update) the default oracle for a feed type
+    /// on the ILN contract's oracle registry.
+    RegisterOracle(OracleFeedType, Address),
+    /// Issue #532: remove the default oracle for a feed type from the ILN
+    /// contract's oracle registry.
+    RemoveOracle(OracleFeedType),
+}
+
+/// Issue #532: mirrors `invoice_liquidity::oracle_registry::OracleFeedType`.
+/// Soroban contracts share no Rust types across crates — cross-contract
+/// calls decode structurally (same unit-variant names, same order), the
+/// same way `FeeTierConfig` below mirrors the ILN contract's fee tier
+/// struct. Keep variant names/order in sync with the ILN contract's enum.
+#[contracttype]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OracleFeedType {
+    Price,
+    Identity,
+    Credit,
+}
+
+/// Issue #533: Fee tier configuration.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct FeeTierConfig {
+    /// Minimum invoice amount for this tier (inclusive, in stroops).
+    pub min_amount: i128,
+    /// Fee rate in basis points for this tier.
+    pub fee_rate_bps: u32,
 }
 
 // ================================================================
@@ -151,6 +207,16 @@ pub struct ProposalExecuted {
     pub votes_against: i128,
 }
 
+/// Issue #531: emitted when a proposal's cross-contract execution call
+/// fails. The proposal remains `Passed` (not `Executed`) so a subsequent
+/// `execute_proposal` call can retry it.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct ProposalExecutionFailed {
+    pub proposal_id: u64,
+    pub action_type: ProposalAction,
+}
+
 /// Issue #68: emitted when the admin vetoes a proposal.
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
@@ -171,6 +237,32 @@ pub struct ProposalCreated {
     pub voting_end: u64,
 }
 
+/// Emitted once, when the contract is initialised (Issue #538).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct GovernanceInitialized {
+    pub iln_contract: Address,
+    pub gov_token: Address,
+    pub admin: Address,
+}
+
+/// Emitted whenever a governance-controlled numeric parameter changes
+/// (Issue #538: event emission completeness audit).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct GovernanceParameterUpdated {
+    pub param_name: Symbol,
+    pub old_value: i128,
+    pub new_value: i128,
+}
+
+/// Emitted when admin veto power is permanently disabled (Issue #68 / #538).
+#[contracttype]
+#[derive(Clone, Debug, PartialEq)]
+pub struct VetoPowerDisabled {
+    pub disabled_by: Address,
+}
+
 // ================================================================
 // Storage keys
 // ================================================================
@@ -182,10 +274,23 @@ pub enum StorageKey {
     /// Configurable minimum participation required for proposal passing.
     /// Expressed in basis points (bps) of total supply, e.g. 1000 = 10%.
     MinQuorumBps,
+    /// Issue #622: governance token total supply used as the quorum
+    /// denominator. Seeded at `initialize` time and only updatable via the
+    /// ILN-contract-gated `set_gov_token_total_supply` — no longer a
+    /// caller-supplied `execute_proposal` argument.
+    GovTokenTotalSupply,
     Proposal(u64),
     ProposalCount,
     VoteWeightSnapshot(u64, Address),
     HasVoted(u64, Address),
+    /// Issue #530: `true` when vote weight is `sqrt(balance + delegated)`
+    /// instead of linear. Defaults to `false` for backwards compatibility.
+    QuadraticVotingEnabled,
+    /// Issue #530: the actual weight applied to the tally for this voter on
+    /// this proposal (post square-root transform when quadratic voting is
+    /// enabled, otherwise equal to the linear balance). Recorded alongside
+    /// `HasVoted` as the vote receipt.
+    AppliedVoteWeight(u64, Address),
     /// Issue #64: forward delegation pointer — Delegation(X) = Y means X delegates to Y.
     Delegation(Address),
     /// Issue #64: running tally of total delegated weight pointing (transitively) at Address.
@@ -197,6 +302,8 @@ pub enum StorageKey {
     VetoPowerEnabled,
     /// Configurable minimum token balance a proposer must hold.
     MinProposalBalance,
+    /// Issue #544: distribution contract address for reward param updates.
+    DistributionContract,
 }
 
 // ================================================================
@@ -213,8 +320,10 @@ impl GovContract {
     pub fn initialize(
         env: Env,
         iln_contract: Address,
+        distribution_contract: Address,
         gov_token: Address,
         admin: Address,
+        gov_token_total_supply: i128,
     ) -> Result<(), GovernanceError> {
         if env.storage().instance().has(&StorageKey::IlnContract) {
             return Err(GovernanceError::AlreadyInitialized);
@@ -222,6 +331,9 @@ impl GovContract {
         env.storage()
             .instance()
             .set(&StorageKey::IlnContract, &iln_contract);
+        env.storage()
+            .instance()
+            .set(&StorageKey::DistributionContract, &distribution_contract);
         env.storage()
             .instance()
             .set(&StorageKey::GovToken, &gov_token);
@@ -235,6 +347,28 @@ impl GovContract {
         env.storage()
             .instance()
             .set(&StorageKey::ProposalCount, &0_u64);
+        // Issue #622: total_supply used to be a caller-supplied argument to
+        // execute_proposal, letting any caller inflate or deflate it to
+        // manipulate quorum. soroban-sdk 21.x's token::Client has no
+        // total_supply() query (SEP-41's TokenInterface/StellarAssetInterface
+        // don't expose one), so a live on-chain read isn't available here —
+        // instead this value is seeded at initialize time and can only be
+        // updated afterwards via set_gov_token_total_supply, which requires
+        // the same iln_contract authorization as set_min_quorum_bps /
+        // set_min_proposal_balance. It is no longer settable by whoever
+        // happens to call execute_proposal.
+        env.storage()
+            .instance()
+            .set(&StorageKey::GovTokenTotalSupply, &gov_token_total_supply);
+
+        env.events().publish(
+            (Symbol::new(&env, "initialized"), admin.clone()),
+            GovernanceInitialized {
+                iln_contract,
+                gov_token,
+                admin,
+            },
+        );
         Ok(())
     }
 
@@ -244,6 +378,54 @@ impl GovContract {
             .instance()
             .get(&StorageKey::MinQuorumBps)
             .unwrap_or(DEFAULT_MIN_QUORUM_BPS)
+    }
+
+    /// Returns the configured governance token total supply used for quorum
+    /// calculations (see Issue #622).
+    pub fn get_gov_token_total_supply(env: Env) -> i128 {
+        env.storage()
+            .instance()
+            .get(&StorageKey::GovTokenTotalSupply)
+            .unwrap_or(0)
+    }
+
+    /// Updates the governance token total supply used for quorum
+    /// calculations.
+    ///
+    /// Authorization: the configured ILN contract address must authorize —
+    /// the same trust boundary as `set_min_quorum_bps` /
+    /// `set_min_proposal_balance`. This replaces the old caller-supplied
+    /// `total_supply` argument on `execute_proposal` (Issue #622): quorum's
+    /// denominator can no longer be chosen by whoever happens to call
+    /// execute_proposal, only by the same authority that already controls
+    /// the quorum bps and proposal-balance thresholds.
+    pub fn set_gov_token_total_supply(env: Env, total_supply: i128) -> Result<(), GovernanceError> {
+        let iln_contract: Address = env
+            .storage()
+            .instance()
+            .get(&StorageKey::IlnContract)
+            .unwrap();
+        iln_contract.require_auth();
+
+        let old_value: i128 = env
+            .storage()
+            .instance()
+            .get(&StorageKey::GovTokenTotalSupply)
+            .unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&StorageKey::GovTokenTotalSupply, &total_supply);
+
+        let pn = Symbol::new(&env, "gov_token_total_supply");
+        env.events().publish(
+            (Symbol::new(&env, "parameter_updated"), pn.clone()),
+            GovernanceParameterUpdated {
+                param_name: pn,
+                old_value,
+                new_value: total_supply,
+            },
+        );
+        Ok(())
     }
 
     /// Updates the minimum quorum configuration.
@@ -261,9 +443,24 @@ impl GovContract {
             .unwrap();
         iln_contract.require_auth();
 
+        let old_value: u32 = env
+            .storage()
+            .instance()
+            .get(&StorageKey::MinQuorumBps)
+            .unwrap_or(DEFAULT_MIN_QUORUM_BPS);
         env.storage()
             .instance()
             .set(&StorageKey::MinQuorumBps, &min_quorum_bps);
+
+        let pn = Symbol::new(&env, "min_quorum_bps");
+        env.events().publish(
+            (Symbol::new(&env, "parameter_updated"), pn.clone()),
+            GovernanceParameterUpdated {
+                param_name: pn,
+                old_value: old_value as i128,
+                new_value: min_quorum_bps as i128,
+            },
+        );
         Ok(())
     }
 
@@ -298,10 +495,10 @@ impl GovContract {
             .instance()
             .get(&StorageKey::ProposalCount)
             .unwrap_or(0);
-        let id = count + 1;
+        let id = count.saturating_add(1);
 
         let now = env.ledger().timestamp();
-        let voting_end = now + VOTING_PERIOD_SECS;
+        let voting_end = now.saturating_add(VOTING_PERIOD_SECS);
 
         let proposal = GovernanceProposal {
             id,
@@ -344,6 +541,78 @@ impl GovContract {
         Ok(id)
     }
 
+    // ── Issue #530: quadratic voting toggle ───────────────────────
+
+    /// Returns whether quadratic voting (`sqrt(balance + delegated)` weight)
+    /// is enabled. Defaults to `false` (linear weighting) for backwards
+    /// compatibility with proposals created before this feature existed.
+    pub fn is_quadratic_voting_enabled(env: Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&StorageKey::QuadraticVotingEnabled)
+            .unwrap_or(false)
+    }
+
+    /// Enables or disables quadratic voting.
+    ///
+    /// Authorization: the configured ILN contract address must authorize
+    /// (same governance-controlled-toggle pattern as `set_min_quorum_bps`).
+    pub fn set_quadratic_voting_enabled(env: Env, enabled: bool) -> Result<(), GovernanceError> {
+        let iln_contract: Address = env
+            .storage()
+            .instance()
+            .get(&StorageKey::IlnContract)
+            .unwrap();
+        iln_contract.require_auth();
+
+        let old_value: bool = env
+            .storage()
+            .instance()
+            .get(&StorageKey::QuadraticVotingEnabled)
+            .unwrap_or(false);
+        env.storage()
+            .instance()
+            .set(&StorageKey::QuadraticVotingEnabled, &enabled);
+
+        let pn = Symbol::new(&env, "quadratic_voting_enabled");
+        env.events().publish(
+            (Symbol::new(&env, "parameter_updated"), pn.clone()),
+            GovernanceParameterUpdated {
+                param_name: pn,
+                old_value: old_value as i128,
+                new_value: enabled as i128,
+            },
+        );
+        Ok(())
+    }
+
+    /// Returns the actual weight applied to `voter`'s vote on `proposal_id`,
+    /// i.e. the vote receipt recorded by Issue #530. `None` if the address
+    /// has not voted on this proposal (or its temporary-storage TTL expired).
+    pub fn get_applied_vote_weight(env: Env, proposal_id: u64, voter: Address) -> Option<i128> {
+        env.storage()
+            .temporary()
+            .get(&StorageKey::AppliedVoteWeight(proposal_id, voter))
+    }
+
+    /// Integer square root (floor) via binary search. `n` is assumed `>= 0`
+    /// (token balances and delegated weight tallies are non-negative).
+    fn isqrt(n: i128) -> i128 {
+        if n <= 1 {
+            return n.max(0);
+        }
+        let mut lo: i128 = 0;
+        let mut hi: i128 = n;
+        while lo < hi {
+            let mid = lo + (hi - lo + 1) / 2;
+            match mid.checked_mul(mid) {
+                Some(sq) if sq <= n => lo = mid,
+                _ => hi = mid - 1,
+            }
+        }
+        lo
+    }
+
     /// Returns the configured minimum proposer balance.
     pub fn get_min_proposal_balance(env: Env) -> i128 {
         env.storage()
@@ -363,9 +632,24 @@ impl GovContract {
             .unwrap();
         iln_contract.require_auth();
 
+        let old_value: i128 = env
+            .storage()
+            .instance()
+            .get(&StorageKey::MinProposalBalance)
+            .unwrap_or(DEFAULT_MIN_PROPOSAL_BALANCE);
         env.storage()
             .instance()
             .set(&StorageKey::MinProposalBalance, &min_balance);
+
+        let pn = Symbol::new(&env, "min_proposal_balance");
+        env.events().publish(
+            (Symbol::new(&env, "parameter_updated"), pn.clone()),
+            GovernanceParameterUpdated {
+                param_name: pn,
+                old_value,
+                new_value: min_balance,
+            },
+        );
         Ok(())
     }
 
@@ -526,21 +810,40 @@ impl GovContract {
             .get(&StorageKey::DelegatedToMe(voter.clone()))
             .unwrap_or(0_i128);
 
-        let weight = own_balance + delegated;
+        let raw_weight = own_balance.saturating_add(delegated);
+
+        // Issue #530: quadratic voting reduces whale influence by weighting
+        // votes by sqrt(balance + delegated) instead of the raw balance.
+        // Off by default so proposals created before this feature shipped
+        // keep their original linear semantics.
+        let weight = if Self::is_quadratic_voting_enabled(env.clone()) {
+            Self::isqrt(raw_weight)
+        } else {
+            raw_weight
+        };
 
         if weight == 0 {
             return Err(GovernanceError::NoVotingPower);
         }
 
         if support {
-            proposal.votes_for += weight;
+            proposal.votes_for = proposal.votes_for.saturating_add(weight);
         } else {
-            proposal.votes_against += weight;
+            proposal.votes_against = proposal.votes_against.saturating_add(weight);
         }
 
         env.storage().temporary().set(&voted_key, &true);
         env.storage().temporary().extend_ttl(
             &voted_key,
+            VOTE_RECEIPT_TTL_THRESHOLD_LEDGERS,
+            VOTE_RECEIPT_TTL_LEDGERS,
+        );
+
+        // Issue #530: record the actual weight applied (vote receipt).
+        let applied_weight_key = StorageKey::AppliedVoteWeight(proposal_id, voter.clone());
+        env.storage().temporary().set(&applied_weight_key, &weight);
+        env.storage().temporary().extend_ttl(
+            &applied_weight_key,
             VOTE_RECEIPT_TTL_THRESHOLD_LEDGERS,
             VOTE_RECEIPT_TTL_LEDGERS,
         );
@@ -582,9 +885,24 @@ impl GovContract {
             env.storage().instance().set(&StorageKey::Admin, &admin);
         }
 
+        let old_value: u32 = env
+            .storage()
+            .instance()
+            .get(&StorageKey::ExecutionDelay)
+            .unwrap_or(0_u32);
         env.storage()
             .instance()
             .set(&StorageKey::ExecutionDelay, &delay);
+
+        let pn = Symbol::new(&env, "execution_delay");
+        env.events().publish(
+            (Symbol::new(&env, "parameter_updated"), pn.clone()),
+            GovernanceParameterUpdated {
+                param_name: pn,
+                old_value: old_value as i128,
+                new_value: delay as i128,
+            },
+        );
         Ok(())
     }
 
@@ -597,11 +915,7 @@ impl GovContract {
 
     // ── execute_proposal ─────────────────────────────────────────
 
-    pub fn execute_proposal(
-        env: Env,
-        proposal_id: u64,
-        total_supply: i128,
-    ) -> Result<(), GovernanceError> {
+    pub fn execute_proposal(env: Env, proposal_id: u64) -> Result<(), GovernanceError> {
         let mut proposal: GovernanceProposal = env
             .storage()
             .persistent()
@@ -614,12 +928,25 @@ impl GovContract {
         }
 
         if proposal.status == ProposalStatus::Active {
-            let total_votes = proposal.votes_for + proposal.votes_against;
+            let total_votes = proposal.votes_for.saturating_add(proposal.votes_against);
             let min_quorum_bps: u32 = env
                 .storage()
                 .instance()
                 .get(&StorageKey::MinQuorumBps)
                 .unwrap_or(DEFAULT_MIN_QUORUM_BPS);
+
+            // Issue #622: total_supply used to be a caller-supplied argument,
+            // letting a caller inflate it (lowering the effective quorum) or
+            // deflate it (blocking quorum entirely). Read the contract-stored
+            // value instead (seeded at initialize, only updatable via the
+            // ILN-contract-gated set_gov_token_total_supply) — it can no
+            // longer be chosen by whoever happens to call execute_proposal.
+            let total_supply: i128 = env
+                .storage()
+                .instance()
+                .get(&StorageKey::GovTokenTotalSupply)
+                .unwrap_or(0);
+
             let quorum = if total_supply <= 0 {
                 0_i128
             } else {
@@ -649,7 +976,7 @@ impl GovContract {
                 .instance()
                 .get(&StorageKey::ExecutionDelay)
                 .unwrap_or(0_u32);
-            proposal.eta_ledger = env.ledger().sequence() + delay;
+            proposal.eta_ledger = env.ledger().sequence().saturating_add(delay);
 
             env.storage()
                 .persistent()
@@ -669,35 +996,136 @@ impl GovContract {
                 .get(&StorageKey::IlnContract)
                 .unwrap();
 
-            match proposal.action_type.clone() {
+            // Issue #531: capture the outcome of the cross-contract call instead
+            // of firing-and-forgetting it. A failed call (callee panics / returns
+            // an error) must NOT mark the proposal `Executed` — it stays `Passed`
+            // so a subsequent `execute_proposal` call can retry it.
+            let succeeded = match proposal.action_type.clone() {
                 ProposalAction::UpdateFeeRate(rate) => {
                     let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
-                    env.invoke_contract::<()>(
-                        &iln_contract,
-                        &Symbol::new(&env, "update_fee_rate"),
-                        args,
-                    );
+                    Self::invoke_and_check(&env, &iln_contract, "update_fee_rate", args)
                 }
-                ProposalAction::AddToken(token, _decimals) => {
-                    let args: Vec<soroban_sdk::Val> = vec![&env, token.into_val(&env)];
-                    env.invoke_contract::<()>(&iln_contract, &Symbol::new(&env, "add_token"), args);
+                ProposalAction::AddToken(token, decimals) => {
+                    let args: Vec<soroban_sdk::Val> = vec![&env, token.into_val(&env), decimals.into_val(&env)];
+                    Self::invoke_and_check(&env, &iln_contract, "add_token", args)
                 }
                 ProposalAction::RemoveToken(token) => {
                     let args: Vec<soroban_sdk::Val> = vec![&env, token.into_val(&env)];
-                    env.invoke_contract::<()>(
-                        &iln_contract,
-                        &Symbol::new(&env, "remove_token"),
-                        args,
-                    );
+                    Self::invoke_and_check(&env, &iln_contract, "remove_token", args)
                 }
                 ProposalAction::UpdateMaxDiscountRate(rate) => {
                     let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
-                    env.invoke_contract::<()>(
-                        &iln_contract,
-                        &Symbol::new(&env, "update_max_discount"),
-                        args,
-                    );
+                    Self::invoke_and_check(&env, &iln_contract, "update_max_discount", args)
                 }
+                ProposalAction::UpdateDecayParams(rate_bps, period_ledgers) => {
+                    let args: Vec<soroban_sdk::Val> =
+                        vec![&env, rate_bps.into_val(&env), period_ledgers.into_val(&env)];
+                    Self::invoke_and_check(&env, &iln_contract, "update_decay_params", args)
+                }
+                ProposalAction::UpdateDistributionRewardParams(
+                    half_token,
+                    hundred_usdc_stroops,
+                    lp_multiplier,
+                ) => {
+                    let dist_contract: Address = env
+                        .storage()
+                        .instance()
+                        .get(&StorageKey::DistributionContract)
+                        .unwrap();
+                    let args: Vec<soroban_sdk::Val> = vec![
+                        &env,
+                        half_token.into_val(&env),
+                        hundred_usdc_stroops.into_val(&env),
+                        lp_multiplier.into_val(&env),
+                    ];
+                    Self::invoke_and_check(&env, &dist_contract, "update_reward_params", args)
+                }
+                ProposalAction::UpdateFeeTiers(tiers) => {
+                    let args: Vec<soroban_sdk::Val> = vec![&env, tiers.into_val(&env)];
+                    Self::invoke_and_check(&env, &iln_contract, "update_fee_tiers", args)
+                }
+                ProposalAction::Upgrade(new_wasm_hash) => {
+                    let args: Vec<soroban_sdk::Val> = vec![&env, new_wasm_hash.into_val(&env)];
+                    Self::invoke_and_check(&env, &iln_contract, "upgrade", args)
+                }
+                ProposalAction::UpdateLpRewardRate(rate) => {
+                    let dist_contract: Address = env
+                        .storage()
+                        .instance()
+                        .get(&StorageKey::DistributionContract)
+                        .unwrap();
+                    let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
+                    Self::invoke_and_check(&env, &dist_contract, "set_lp_reward_rate", args)
+                }
+                ProposalAction::UpdateFreelancerRewardRate(rate) => {
+                    let dist_contract: Address = env
+                        .storage()
+                        .instance()
+                        .get(&StorageKey::DistributionContract)
+                        .unwrap();
+                    let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
+                    Self::invoke_and_check(&env, &dist_contract, "set_freelancer_reward_rate", args)
+                }
+                ProposalAction::UpdatePayerRewardRate(rate) => {
+                    let dist_contract: Address = env
+                        .storage()
+                        .instance()
+                        .get(&StorageKey::DistributionContract)
+                        .unwrap();
+                    let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
+                    Self::invoke_and_check(&env, &dist_contract, "set_payer_reward_rate", args)
+                }
+                ProposalAction::UpdateInsuranceCoverageCap(cap) => {
+                    let insurance_contract: Address = env
+                        .storage()
+                        .instance()
+                        .get(&StorageKey::IlnContract)
+                        .unwrap();
+                    let args: Vec<soroban_sdk::Val> = vec![&env, cap.into_val(&env)];
+                    Self::invoke_and_check(
+                        &env,
+                        &insurance_contract,
+                        "set_coverage_via_governance",
+                        args,
+                    )
+                }
+                ProposalAction::UpdateInsurancePremiumRate(rate) => {
+                    let insurance_contract: Address = env
+                        .storage()
+                        .instance()
+                        .get(&StorageKey::IlnContract)
+                        .unwrap();
+                    let args: Vec<soroban_sdk::Val> = vec![&env, rate.into_val(&env)];
+                    Self::invoke_and_check(
+                        &env,
+                        &insurance_contract,
+                        "set_premium_rate_via_governance",
+                        args,
+                    )
+                }
+                ProposalAction::RegisterOracle(feed_type, oracle) => {
+                    let args: Vec<soroban_sdk::Val> =
+                        vec![&env, feed_type.into_val(&env), oracle.into_val(&env)];
+                    Self::invoke_and_check(&env, &iln_contract, "register_oracle", args)
+                }
+                ProposalAction::RemoveOracle(feed_type) => {
+                    let args: Vec<soroban_sdk::Val> = vec![&env, feed_type.into_val(&env)];
+                    Self::invoke_and_check(&env, &iln_contract, "remove_oracle", args)
+                }
+            };
+
+            if !succeeded {
+                env.events().publish(
+                    (Symbol::new(&env, "proposal_execution_failed"), proposal_id),
+                    ProposalExecutionFailed {
+                        proposal_id,
+                        action_type: proposal.action_type,
+                    },
+                );
+                // Proposal storage is untouched here — it remains `Passed` with
+                // its original `eta_ledger`, so calling `execute_proposal` again
+                // retries the same cross-contract call (Issue #531 retry mechanism).
+                return Err(GovernanceError::ExecutionFailed);
             }
 
             proposal.status = ProposalStatus::Executed;
@@ -808,6 +1236,13 @@ impl GovContract {
             .instance()
             .set(&StorageKey::VetoPowerEnabled, &false);
 
+        env.events().publish(
+            (Symbol::new(&env, "veto_power_disabled"),),
+            VetoPowerDisabled {
+                disabled_by: iln_contract,
+            },
+        );
+
         Ok(())
     }
 
@@ -846,7 +1281,7 @@ impl GovContract {
         }
 
         let actual_page_size = if page_size > 20 { 20 } else { page_size };
-        let skip = (page * actual_page_size) as u64;
+        let skip = page.saturating_mul(actual_page_size) as u64;
         let mut skipped = 0_u64;
 
         for id in (1..=count).rev() {
@@ -884,6 +1319,25 @@ impl GovContract {
 
     // ── Private helpers ──────────────────────────────────────────
 
+    /// Issue #531: invoke a cross-contract call and report whether it
+    /// succeeded, instead of letting a trapped/failed call silently mark the
+    /// proposal `Executed`. Uses `try_invoke_contract` so a callee panic or
+    /// returned error surfaces here rather than aborting the whole
+    /// `execute_proposal` transaction.
+    fn invoke_and_check(
+        env: &Env,
+        contract: &Address,
+        func_name: &str,
+        args: Vec<soroban_sdk::Val>,
+    ) -> bool {
+        let result = env.try_invoke_contract::<(), soroban_sdk::Error>(
+            contract,
+            &Symbol::new(env, func_name),
+            args,
+        );
+        matches!(result, Ok(Ok(())))
+    }
+
     fn get_delegate_raw(env: &Env, addr: &Address) -> Option<Address> {
         env.storage()
             .persistent()
@@ -920,7 +1374,7 @@ impl GovContract {
     fn adjust_delegated_to_me(env: &Env, addr: &Address, delta: i128) {
         let key = StorageKey::DelegatedToMe(addr.clone());
         let current: i128 = env.storage().persistent().get(&key).unwrap_or(0_i128);
-        let updated = current + delta;
+        let updated = current.saturating_add(delta);
         if updated <= 0 {
             env.storage().persistent().remove(&key);
         } else {
@@ -931,3 +1385,5 @@ impl GovContract {
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod tests_benchmarks;

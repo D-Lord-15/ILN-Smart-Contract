@@ -2,14 +2,14 @@
   "name": "@iln/sdk",
   "version": "0.1.0",
   "description": "TypeScript SDK for the Invoice Liquidity Network smart contracts",
-  "main": "dist/index.js",
-  "module": "dist/index.mjs",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     }
   },
   "type": "module",
@@ -46,6 +46,7 @@
     "@iln/test-utils": "workspace:*",
     "@types/node": "^20.0.0",
     "@vitest/coverage-v8": "^1.6.1",
+    "fast-check": "^3.15.0",
     "@size-limit/file": "^11.1.6",
     "git-cliff": "^2.2.1",
     "size-limit": "^11.1.6",

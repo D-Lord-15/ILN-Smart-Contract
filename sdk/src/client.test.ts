@@ -154,4 +154,35 @@ describe("iln singleton", () => {
       "not configured"
     );
   });
+
+  it("throws if getTopPayers is called before configure", async () => {
+    await expect(iln.getTopPayers()).rejects.toThrow(
+      "not configured"
+    );
+  });
+
+  it("throws if getLpInvoices is called before configure", async () => {
+    await expect(iln.getLpInvoices("GAA")).rejects.toThrow(
+      "not configured"
+    );
+  });
+
+  it("throws if insurance methods are called before configure", async () => {
+    const contractId = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4";
+    await expect(iln.getInsurancePoolBalance(contractId)).rejects.toThrow(
+      "not configured"
+    );
+    await expect(iln.getInsurancePoolCoverage(contractId)).rejects.toThrow(
+      "not configured"
+    );
+    await expect(iln.isInsurancePoolEnrolled(contractId, "GAA")).rejects.toThrow(
+      "not configured"
+    );
+    await expect(iln.getInsurancePoolPremiumsPaid(contractId, "GAA")).rejects.toThrow(
+      "not configured"
+    );
+    await expect(iln.getInsurancePoolInfo(contractId, "GAA")).rejects.toThrow(
+      "not configured"
+    );
+  });
 });

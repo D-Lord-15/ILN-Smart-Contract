@@ -5,11 +5,18 @@ import {
   executeProposal,
   getProposal,
   listProposals,
-  getDelegate,
-  getMinQuorumBps,
-  getMinProposalBalance,
+  delegateVotes,
+  undelegateVotes,
+  vetoProposal,
+  disableVetoPower,
+  setExecutionDelay,
   getExecutionDelay,
-  isVetoPowerEnabled,
+  setMinQuorumBps,
+  setMinProposalBalance,
+  setQuadraticVotingEnabled,
+  isQuadraticVotingEnabled,
+  getAppliedVoteWeight,
+  GovernanceContractError,
 } from "./governance.js";
 import { ProposalAction, ProposalStatus } from "../types/governance.js";
 import { Account, SorobanRpc, scValToNative } from "@stellar/stellar-sdk";
@@ -20,6 +27,7 @@ vi.mock("@stellar/stellar-sdk", async () => {
 });
 
 const PROPOSER = "GBR7RT4MZTLKK2JNZPOSWVY74VFDR4HVR24QZNH2WONHPQFJZPKHWOTP";
+const DELEGATE = "GDQP2KPQGKIHYJGXNUIYOMHARUARCA7DJT5FO2FFOOKY3B2WSQHG4W37";
 const CONTRACT = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4";
 const PASS = "Test SDF Network ; September 2015";
 const HASH32 = "ab".repeat(32);
@@ -100,45 +108,138 @@ describe("governance", () => {
     expect(active[0].id).toBe(1n);
   });
 
-  it("getDelegate returns the delegate address or null", async () => {
-    mockScValToNative.mockReturnValue(PROPOSER);
-    const delegate = await getDelegate(mockServer, CONTRACT, PROPOSER, account, PASS);
-    expect(delegate).toBe(PROPOSER);
+  it("delegateVotes submits and returns txHash", async () => {
+    const res = await delegateVotes(mockServer, CONTRACT, PROPOSER, DELEGATE, account, sign, PASS);
+    expect(res.txHash).toBe("txGOV");
   });
 
-  it("getDelegate returns null when no delegate set", async () => {
-    mockScValToNative.mockReturnValue(undefined);
-    const delegate = await getDelegate(mockServer, CONTRACT, PROPOSER, account, PASS);
-    expect(delegate).toBeNull();
+  it("delegateVotes throws GovernanceContractError.CannotDelegateToSelf on Error(Contract, 11)", async () => {
+    // @ts-expect-error mock
+    mockServer.simulateTransaction.mockResolvedValueOnce({ error: "Error(Contract, 11)" });
+    await expect(
+      delegateVotes(mockServer, CONTRACT, PROPOSER, PROPOSER, account, sign, PASS)
+    ).rejects.toBeInstanceOf(GovernanceContractError.CannotDelegateToSelf);
   });
 
-  it("getMinQuorumBps returns the quorum in basis points", async () => {
-    mockScValToNative.mockReturnValue(1000);
-    const q = await getMinQuorumBps(mockServer, CONTRACT, account, PASS);
-    expect(q).toBe(1000);
+  it("delegateVotes throws GovernanceContractError.DelegationCyclePrevented on Error(Contract, 12)", async () => {
+    // @ts-expect-error mock
+    mockServer.simulateTransaction.mockResolvedValueOnce({ error: "Error(Contract, 12)" });
+    await expect(
+      delegateVotes(mockServer, CONTRACT, PROPOSER, DELEGATE, account, sign, PASS)
+    ).rejects.toBeInstanceOf(GovernanceContractError.DelegationCyclePrevented);
   });
 
-  it("getMinProposalBalance returns the minimum balance", async () => {
-    mockScValToNative.mockReturnValue(1000);
-    const b = await getMinProposalBalance(mockServer, CONTRACT, account, PASS);
-    expect(b).toBe(1000n);
+  it("undelegateVotes submits and returns txHash", async () => {
+    const res = await undelegateVotes(mockServer, CONTRACT, PROPOSER, account, sign, PASS);
+    expect(res.txHash).toBe("txGOV");
   });
 
-  it("getExecutionDelay returns the delay in ledgers", async () => {
-    mockScValToNative.mockReturnValue(42);
-    const d = await getExecutionDelay(mockServer, CONTRACT, account, PASS);
-    expect(d).toBe(42);
+  it("vetoProposal submits and returns txHash", async () => {
+    const res = await vetoProposal(mockServer, CONTRACT, 5n, HASH32, account, sign, PASS);
+    expect(res.txHash).toBe("txGOV");
   });
 
-  it("isVetoPowerEnabled returns true when active", async () => {
+  it("vetoProposal throws GovernanceContractError.VetoPowerDisabled on Error(Contract, 18)", async () => {
+    // @ts-expect-error mock
+    mockServer.simulateTransaction.mockResolvedValueOnce({ error: "Error(Contract, 18)" });
+    await expect(
+      vetoProposal(mockServer, CONTRACT, 5n, HASH32, account, sign, PASS)
+    ).rejects.toBeInstanceOf(GovernanceContractError.VetoPowerDisabled);
+  });
+
+  it("vetoProposal throws GovernanceContractError.NotVetoable on Error(Contract, 17)", async () => {
+    // @ts-expect-error mock
+    mockServer.simulateTransaction.mockResolvedValueOnce({ error: "Error(Contract, 17)" });
+    await expect(
+      vetoProposal(mockServer, CONTRACT, 5n, HASH32, account, sign, PASS)
+    ).rejects.toBeInstanceOf(GovernanceContractError.NotVetoable);
+  });
+
+  it("disableVetoPower submits and returns txHash", async () => {
+    const res = await disableVetoPower(mockServer, CONTRACT, account, sign, PASS);
+    expect(res.txHash).toBe("txGOV");
+  });
+
+  it("setExecutionDelay submits and returns txHash", async () => {
+    const res = await setExecutionDelay(mockServer, CONTRACT, PROPOSER, 3600, account, sign, PASS);
+    expect(res.txHash).toBe("txGOV");
+  });
+
+  it("setExecutionDelay throws GovernanceContractError.Unauthorized on Error(Contract, 14)", async () => {
+    // @ts-expect-error mock
+    mockServer.simulateTransaction.mockResolvedValueOnce({ error: "Error(Contract, 14)" });
+    await expect(
+      setExecutionDelay(mockServer, CONTRACT, PROPOSER, 3600, account, sign, PASS)
+    ).rejects.toBeInstanceOf(GovernanceContractError.Unauthorized);
+  });
+
+  it("getExecutionDelay returns the decoded delay", async () => {
+    mockScValToNative.mockReturnValue(3600);
+    const delay = await getExecutionDelay(mockServer, CONTRACT, account, PASS);
+    expect(delay).toBe(3600);
+  });
+
+  it("getExecutionDelay returns 0 when unset", async () => {
+    // @ts-expect-error mock
+    mockServer.simulateTransaction.mockResolvedValueOnce({ result: { retval: null } });
+    const delay = await getExecutionDelay(mockServer, CONTRACT, account, PASS);
+    expect(delay).toBe(0);
+  });
+
+  it("setMinQuorumBps submits and returns txHash", async () => {
+    const res = await setMinQuorumBps(mockServer, CONTRACT, 1000, account, sign, PASS);
+    expect(res.txHash).toBe("txGOV");
+  });
+
+  it("setMinQuorumBps throws GovernanceContractError.InvalidQuorumBps on Error(Contract, 15)", async () => {
+    // @ts-expect-error mock
+    mockServer.simulateTransaction.mockResolvedValueOnce({ error: "Error(Contract, 15)" });
+    await expect(
+      setMinQuorumBps(mockServer, CONTRACT, 0, account, sign, PASS)
+    ).rejects.toBeInstanceOf(GovernanceContractError.InvalidQuorumBps);
+  });
+
+  it("setMinProposalBalance submits and returns txHash", async () => {
+    const res = await setMinProposalBalance(mockServer, CONTRACT, 500n, account, sign, PASS);
+    expect(res.txHash).toBe("txGOV");
+  });
+
+  it("setQuadraticVotingEnabled submits and returns txHash", async () => {
+    const res = await setQuadraticVotingEnabled(mockServer, CONTRACT, true, account, sign, PASS);
+    expect(res.txHash).toBe("txGOV");
+  });
+
+  it("setQuadraticVotingEnabled throws GovernanceContractError.Unauthorized on Error(Contract, 14)", async () => {
+    // @ts-expect-error mock
+    mockServer.simulateTransaction.mockResolvedValueOnce({ error: "Error(Contract, 14)" });
+    await expect(
+      setQuadraticVotingEnabled(mockServer, CONTRACT, true, account, sign, PASS)
+    ).rejects.toBeInstanceOf(GovernanceContractError.Unauthorized);
+  });
+
+  it("isQuadraticVotingEnabled returns the decoded flag", async () => {
     mockScValToNative.mockReturnValue(true);
-    const enabled = await isVetoPowerEnabled(mockServer, CONTRACT, account, PASS);
+    const enabled = await isQuadraticVotingEnabled(mockServer, CONTRACT, account, PASS);
     expect(enabled).toBe(true);
   });
 
-  it("isVetoPowerEnabled returns false when disabled", async () => {
-    mockScValToNative.mockReturnValue(false);
-    const enabled = await isVetoPowerEnabled(mockServer, CONTRACT, account, PASS);
+  it("isQuadraticVotingEnabled returns false when unset", async () => {
+    // @ts-expect-error mock
+    mockServer.simulateTransaction.mockResolvedValueOnce({ result: { retval: null } });
+    const enabled = await isQuadraticVotingEnabled(mockServer, CONTRACT, account, PASS);
     expect(enabled).toBe(false);
+  });
+
+  it("getAppliedVoteWeight returns the decoded weight", async () => {
+    mockScValToNative.mockReturnValue(100);
+    const weight = await getAppliedVoteWeight(mockServer, CONTRACT, 5n, PROPOSER, account, PASS);
+    expect(weight).toBe(100n);
+  });
+
+  it("getAppliedVoteWeight returns undefined when the voter has no receipt", async () => {
+    // @ts-expect-error mock
+    mockServer.simulateTransaction.mockResolvedValueOnce({ result: { retval: null } });
+    const weight = await getAppliedVoteWeight(mockServer, CONTRACT, 5n, PROPOSER, account, PASS);
+    expect(weight).toBeUndefined();
   });
 });

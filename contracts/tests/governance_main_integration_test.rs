@@ -33,7 +33,7 @@ const INVOICE_AMOUNT: i128 = 1_000_000_000; // 100 USDC (7-decimal)
 const DISCOUNT_RATE: u32 = 300; // 3 %
 const DUE_DATE_OFFSET: u64 = 60 * 60 * 24 * 30; // 30 days
 const LEDGER_TIMESTAMP: u64 = 1_700_000_000;
-const GOV_TOTAL_SUPPLY: i128 = 20_000; // used in execute_proposal()
+const GOV_TOTAL_SUPPLY: i128 = 20_000; // seeded via initialize()'s gov_token_total_supply param
 
 struct GovIntegrationEnv {
     env: Env,
@@ -90,7 +90,8 @@ fn setup() -> GovIntegrationEnv {
 
     let iln_id = env.register_contract(None, InvoiceLiquidityContract);
     let iln = InvoiceLiquidityContractClient::new(&env, &iln_id);
-    iln.initialize(&admin, &payment_token_addr, &xlm_addr);
+    let eurc_addr = Address::generate(&env);
+    iln.initialize(&admin, &payment_token_addr, &eurc_addr, &xlm_addr);
 
     // ── Governance contract ───────────────────────────────────────────────
     let governance_id = env.register_contract(None, GovContract);
@@ -134,10 +135,10 @@ fn pass_and_execute(t: &GovIntegrationEnv, proposal_id: u64) {
 
     // Active → Passed
     t.governance
-        .execute_proposal(&proposal_id, &GOV_TOTAL_SUPPLY);
+        .execute_proposal(&proposal_id);
     // Passed → Executed  (zero-delay timelock: eta_ledger == current_sequence)
     t.governance
-        .execute_proposal(&proposal_id, &GOV_TOTAL_SUPPLY);
+        .execute_proposal(&proposal_id);
 }
 
 // ── Test 1 ────────────────────────────────────────────────────────────────────
@@ -235,9 +236,9 @@ fn test_update_fee_rate_via_governance_takes_effect() {
 
     // Run the invoice lifecycle: submit → fund → mark_paid.
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.iln.submit_invoice(&ReferralCode::None);
+    let invoice_id = t.iln.submit_invoice(&t.freelancer, &t.payer, &INVOICE_AMOUNT, &(t.env.ledger().timestamp() + DUE_DATE_OFFSET), &DISCOUNT_RATE, &t.payment_token_addr, &ReferralCode::None);
 
-    t.iln.fund_invoice(&t.lp, &invoice_id, &INVOICE_AMOUNT);
+    t.iln.fund_invoice(&t.lp, &invoice_id, &INVOICE_AMOUNT, &false);
     t.iln.mark_paid(&invoice_id, &INVOICE_AMOUNT);
 
     // Admin should have received the protocol fee.
@@ -285,7 +286,7 @@ fn test_veto_proposal_prevents_execution() {
     // Attempting to execute a vetoed proposal must return AlreadyResolved.
     let execute_result = t
         .governance
-        .try_execute_proposal(&proposal_id, &GOV_TOTAL_SUPPLY);
+        .try_execute_proposal(&proposal_id);
     assert_eq!(
         execute_result,
         Err(Ok(GovernanceError::AlreadyResolved)),
@@ -295,8 +296,8 @@ fn test_veto_proposal_prevents_execution() {
     // The ILN fee rate was NOT changed — submitting and funding an invoice
     // with the default fee (0) means admin receives no fee.
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.iln.submit_invoice(&ReferralCode::None);
-    t.iln.fund_invoice(&t.lp, &invoice_id, &INVOICE_AMOUNT);
+    let invoice_id = t.iln.submit_invoice(&t.freelancer, &t.payer, &INVOICE_AMOUNT, &(t.env.ledger().timestamp() + DUE_DATE_OFFSET), &DISCOUNT_RATE, &t.payment_token_addr, &ReferralCode::None);
+    t.iln.fund_invoice(&t.lp, &invoice_id, &INVOICE_AMOUNT, &false);
     t.iln.mark_paid(&invoice_id, &INVOICE_AMOUNT);
 
     // With fee_rate still at 0, admin receives no protocol fee.

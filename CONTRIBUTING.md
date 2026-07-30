@@ -46,6 +46,7 @@ falls back to `npm`:
 make install      # install dependencies across all TS packages
 make build        # build the contracts (cargo) + the @iln/sdk package
 make test         # cargo test (Rust workspace)
+make test-insurance  # cargo test -p insurance_pool (insurance pool contract)
 make test-e2e     # end-to-end suite in tests/e2e
 make lint         # cargo fmt --check + clippy
 make docs         # regenerate the SDK API docs
@@ -308,6 +309,7 @@ cargo test -p invoice_liquidity
 cargo test -p iln_governance
 cargo test -p iln_distribution
 cargo test -p reputation_bonus
+cargo test -p insurance_pool
 
 # Useful flags
 cargo test -p invoice_liquidity -- --nocapture   # show stdout
@@ -416,6 +418,7 @@ Closes #101
 - [ ] `cargo clippy --all-targets -- -D warnings` — zero warnings
 - [ ] `cargo test` — all tests pass
 - [ ] `cargo test -p iln_fuzz` — fuzz suite passes
+- [ ] `cargo test -p insurance_pool` — insurance pool tests pass (if `insurance_pool` was modified)
 - [ ] Coverage ≥ 95 % if `invoice_liquidity` was modified
 - [ ] New behaviour is covered by tests
 - [ ] `cargo build-wasm` succeeds (required for any contract change)
@@ -474,9 +477,9 @@ CD3TE3IAHM737P236XZL2OYU275ZKD6MN7YH7PYYAXYIGEH55OPEWYJC
 ### Benchmark regression guard
 
 The `scripts/check_benchmark_regression.sh` script compares instruction counts
-against stored baselines.  CI runs it as a warning-only step, but a large
-regression in `invoice_liquidity` will be flagged during review.  Run it
-locally after performance-sensitive changes:
+against stored baselines for `invoice_liquidity` and `iln_governance`.  CI
+runs it as a warning-only step, but a large regression will be flagged during
+review.  Run it locally after performance-sensitive changes:
 
 ```bash
 bash scripts/check_benchmark_regression.sh

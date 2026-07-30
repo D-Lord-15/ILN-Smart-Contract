@@ -7,6 +7,11 @@ declare module "@iln/sdk" {
     invoicesDefaulted: number;
   }
 
+  export interface TopPayer {
+    address: string;
+    score: number;
+  }
+
   export class ILNClient {
     static testnet(
       signer?: unknown,
@@ -23,5 +28,6 @@ declare module "@iln/sdk" {
       signer?: unknown;
     }): ILNClient;
     getReputation(address: string): Promise<ReputationProfile>;
+    getTopPayers(limit: number): Promise<TopPayer[]>;
   }
 }

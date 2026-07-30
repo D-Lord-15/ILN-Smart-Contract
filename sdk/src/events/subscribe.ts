@@ -84,6 +84,17 @@ function extractEventType(topics: string[] | undefined): string | null {
 export function parseContractEvent(
   raw: HorizonContractEvent
 ): ILNEvent | null {
+  const event = parseContractEventInternal(raw);
+  if (event) {
+    event.ledger = raw.ledger;
+    event.pagingToken = raw.id;
+  }
+  return event;
+}
+
+function parseContractEventInternal(
+  raw: HorizonContractEvent
+): ILNEvent | null {
   const eventType = extractEventType(raw.topic);
   if (!eventType) return null;
 
@@ -397,25 +408,84 @@ export function subscribe(
   let closeStream: (() => void) | null = null;
   let backoffMs = INITIAL_BACKOFF_MS;
 
+  let lastProcessedLedger: number | undefined = filter.fromLedger ? filter.fromLedger - 1 : undefined;
+  let lastProcessedCursor: string | undefined = undefined;
+  const processedTokens = new Set<string>();
+
+  function trackEvent(event: ILNEvent) {
+    if (event.pagingToken) {
+      processedTokens.add(event.pagingToken);
+      if (processedTokens.size > 1000) {
+        const firstVal = processedTokens.values().next().value;
+        if (firstVal !== undefined) {
+          processedTokens.delete(firstVal);
+        }
+      }
+      lastProcessedCursor = event.pagingToken;
+    }
+    if (event.ledger !== undefined) {
+      lastProcessedLedger = event.ledger;
+    }
+  }
+
   function connect(): void {
     if (stopped) return;
 
     try {
       // Horizon's contractEvents() returns an EventSource-like stream.
       // The SDK builder pattern: horizon.contractEvents(contractId).stream(...)
-      const builder = (horizon as unknown)
+      let builder = (horizon as unknown)
         .contractEvents()
         .forContract(contractId)
         .limit(200);
 
+      if (lastProcessedCursor) {
+        builder = (builder as any).cursor(lastProcessedCursor);
+      }
+
       closeStream = builder.stream({
-        onmessage(raw: any) {
+        async onmessage(raw: any) {
           if (stopped) return;
           try {
             const event = parseContractEvent(raw);
-            if (event && matchesFilter(event, filter)) {
+            if (!event) return;
+
+            // Avoid duplicate processing
+            if (event.pagingToken && processedTokens.has(event.pagingToken)) {
+              return;
+            }
+
+            // Ledger Gap Recovery
+            if (
+              lastProcessedLedger !== undefined &&
+              event.ledger !== undefined &&
+              event.ledger > lastProcessedLedger + 1
+            ) {
+              try {
+                const replayStartLedger = lastProcessedLedger + 1;
+                await replay(horizon, contractId, filter, replayStartLedger, (replayEv) => {
+                  if (replayEv.pagingToken && processedTokens.has(replayEv.pagingToken)) {
+                    return;
+                  }
+                  if (matchesFilter(replayEv, filter)) {
+                    handler(replayEv);
+                  }
+                  trackEvent(replayEv);
+                });
+              } catch (replayErr) {
+                onError?.(replayErr);
+              }
+            }
+
+            // Final deduplication check after potential replay catch-up
+            if (event.pagingToken && processedTokens.has(event.pagingToken)) {
+              return;
+            }
+
+            if (matchesFilter(event, filter)) {
               handler(event);
             }
+            trackEvent(event);
           } catch (parseErr) {
             onError?.(parseErr);
           }
@@ -447,8 +517,33 @@ export function subscribe(
     backoffMs = Math.min(backoffMs * BACKOFF_FACTOR, MAX_BACKOFF_MS);
   }
 
-  // Initial connection
-  connect();
+  // Handle optional initial event replay
+  if (filter.fromLedger !== undefined) {
+    replay(horizon, contractId, filter, filter.fromLedger, (replayEv) => {
+      if (replayEv.pagingToken && processedTokens.has(replayEv.pagingToken)) {
+        return;
+      }
+      if (matchesFilter(replayEv, filter)) {
+        handler(replayEv);
+      }
+      trackEvent(replayEv);
+    })
+      .then((finalCursor) => {
+        if (stopped) return;
+        if (finalCursor) {
+          lastProcessedCursor = finalCursor;
+        }
+        connect();
+      })
+      .catch((err) => {
+        onError?.(err);
+        if (!stopped) {
+          connect();
+        }
+      });
+  } else {
+    connect();
+  }
 
   return function unsubscribe(): void {
     stopped = true;
@@ -459,4 +554,61 @@ export function subscribe(
     closeStream?.();
     closeStream = null;
   };
+}
+
+/**
+ * Replay historical events starting from `fromLedger` sequence number.
+ * Paginates forward and calls the handler for matching events.
+ * Returns the final paging token cursor.
+ */
+export async function replay(
+  horizon: Horizon.Server,
+  contractId: string,
+  filter: EventFilter,
+  fromLedger: number,
+  handler: (event: ILNEvent) => void
+): Promise<string | undefined> {
+  let cursor: string | undefined = `${fromLedger}`;
+  let lastCursor: string | undefined = undefined;
+
+  while (true) {
+    let builder = (horizon as any)
+      .contractEvents()
+      .forContract(contractId)
+      .limit(200)
+      .order("asc");
+
+    if (cursor) {
+      builder = builder.cursor(cursor);
+    }
+
+    const page = await builder.call();
+    if (!page || !page.records || page.records.length === 0) {
+      break;
+    }
+
+    let processedAny = false;
+    for (const record of page.records) {
+      if (record.id === lastCursor) continue;
+
+      // Filter out events below the target ledger
+      if (record.ledger !== undefined && record.ledger < fromLedger) {
+        continue;
+      }
+
+      const event = parseContractEvent(record);
+      if (event && matchesFilter(event, filter)) {
+        handler(event);
+      }
+      cursor = record.id;
+      processedAny = true;
+    }
+
+    if (!processedAny || cursor === lastCursor) {
+      break;
+    }
+    lastCursor = cursor;
+  }
+
+  return lastCursor;
 }
