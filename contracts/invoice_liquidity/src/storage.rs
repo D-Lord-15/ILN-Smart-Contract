@@ -291,51 +291,6 @@ pub fn save_invoice_funders(env: &Env, id: u64, funders: &soroban_sdk::Vec<(Addr
 // Reputation Helpers
 // ----------------------------------------------------------------
 
-pub fn get_payer_score(env: &Env, payer: &Address) -> u32 {
-    match env
-        .storage()
-        .persistent()
-        .get::<DataKey, ReputationScore>(&DataKey::PayerScore(payer.clone()))
-    {
-        Some(mut rep) => {
-            if let Some(decay_config) = get_config(env) {
-                let current_ledger = env.ledger().sequence() as u64;
-                let ledgers_since_activity =
-                    current_ledger.saturating_sub(rep.last_activity_ledger.into());
-
-                if ledgers_since_activity >= decay_config.decay_period_ledgers
-                    && decay_config.decay_period_ledgers > 0
-                    && decay_config.decay_rate_bps > 0
-                {
-                    let periods_passed = ledgers_since_activity / decay_config.decay_period_ledgers;
-                    let mut decayed_score = rep.score as u64;
-                    for _ in 0..periods_passed {
-                        let decay_amount =
-                            (decayed_score * decay_config.decay_rate_bps as u64) / 10_000;
-                        decayed_score = decayed_score.saturating_sub(decay_amount);
-                    }
-                    rep.score = (decayed_score.min(100)) as u32;
-                }
-            }
-            rep.score
-        }
-        None => 50,
-    }
-}
-
-pub fn set_payer_score(env: &Env, payer: &Address, score: u32) {
-    let score = score.min(100);
-    // Note: To preserve `last_activity_ledger`, we should actually retrieve the old Rep or create a new one.
-    // In `invoice.rs` the old function was `set_payer_score(env: &Env, payer: &Address, score: u32) { env.storage().persistent().set(..., &rep) }` which didn't compile correctly in the snippet I saw (`&rep` not defined). Let's fix that.
-    let current_ledger = env.ledger().sequence() as u64;
-    let rep = ReputationScore {
-        score,
-        last_activity_ledger: current_ledger as u32,
-    };
-    env.storage()
-        .persistent()
-        .set(&DataKey::PayerScore(payer.clone()), &rep);
-}
 
 pub fn get_lp_score(env: &Env, lp: &Address) -> u32 {
     env.storage()
