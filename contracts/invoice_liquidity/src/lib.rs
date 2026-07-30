@@ -44,7 +44,8 @@ use soroban_sdk::{
 use crate::storage::get_admin;
 use events::{
     AdminChanged, AppealResolved, ContractInitialized, ContractPaused, ContractUnpaused,
-    ContractUpgraded, DefaultAppealed, DisputeResolved, DistributionContractUpdated,
+    ContractUpgraded, DefaultAppealed, DisputeResolved, DisputeUpheldPayerRefund,
+    DistributionContractUpdated,
     FundQueueResolutionAttempted, FundQueueResolved, FundRequested, InsuranceClaimAttempted,
     InvoiceCancelled, InvoiceDefaulted,
     InvoiceDisputed, InvoiceExpired, InvoiceFunded, InvoicePaid, InvoicePartiallyPaid,
@@ -1966,15 +1967,13 @@ impl InvoiceLiquidityContract {
         };
 
         // CEI: state update before external call
-        invoice.amount_paid += amount;
-
-        // Payer sends partial/full amount to the contract
-        token.transfer(&invoice.payer, &contract_address, &normalized_amount);
-
         invoice.amount_paid = invoice
             .amount_paid
             .checked_add(amount)
             .ok_or(ContractError::ArithmeticOverflow)?;
+
+        // Payer sends partial/full amount to the contract
+        token.transfer(&invoice.payer, &contract_address, &normalized_amount);
 
         // If not fully paid, save and emit partial event
         if invoice.amount_paid < invoice.amount {
@@ -2526,11 +2525,12 @@ impl InvoiceLiquidityContract {
                 invoice.status = InvoiceStatus::Cancelled;
                 save_invoice(&env, &invoice);
 
+                let token = token_client(&env, &invoice.token);
+                let contract_address = env.current_contract_address();
+
                 // Refund LPs if it was funded.
                 let funders = get_invoice_funders(&env, invoice_id);
                 if !funders.is_empty() {
-                    let token = token_client(&env, &invoice.token);
-                    let contract_address = env.current_contract_address();
                     for i in 0..funders.len() {
                         let (funder_addr, fund_amt) = funders.get(i).unwrap();
                         let fund_discount = fund_amt
@@ -2540,6 +2540,25 @@ impl InvoiceLiquidityContract {
                         let refund = fund_amt.saturating_sub(fund_discount);
                         token.transfer(&contract_address, &funder_addr, &refund);
                     }
+                }
+
+                // Refund payer if a partial payment was made.
+                if invoice.amount_paid > 0 {
+                    let refund_amount = invoice.amount_paid;
+                    token.transfer(&contract_address, &invoice.payer, &refund_amount);
+
+                    env.events().publish(
+                        (
+                            Symbol::new(&env, "dispute_upheld_payer_refund"),
+                            invoice_id,
+                            invoice.payer.clone(),
+                        ),
+                        DisputeUpheldPayerRefund {
+                            invoice_id,
+                            payer: invoice.payer.clone(),
+                            amount: refund_amount,
+                        },
+                    );
                 }
             }
             2 => {
