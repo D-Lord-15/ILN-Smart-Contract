@@ -51,6 +51,10 @@ pub enum InsuranceError {
     NoPendingProposal = 6,
     /// The proposal's timelock has not yet expired.
     TimelockNotExpired = 7,
+    /// A checked arithmetic operation overflowed.
+    ArithmeticOverflow = 8,
+    /// Premium deposit would exceed the configured pool balance cap.
+    BalanceCapExceeded = 9,
 }
 
 /// Storage keys for the pool.
@@ -91,6 +95,8 @@ pub enum DataKey {
     ClaimCount(Address),
     /// Tiered coverage caps: (tier_threshold, coverage_amount) (Issue #528).
     CoverageTiers,
+    /// Optional maximum pool balance cap (governance-configurable).
+    BalanceCap,
 }
 
 #[contract]
@@ -488,6 +494,27 @@ impl InsurancePool {
         Ok(())
     }
 
+    /// Get the current pool balance cap, or `None` if uncapped.
+    pub fn get_balance_cap(env: Env) -> Option<i128> {
+        env.storage().instance().get(&DataKey::BalanceCap)
+    }
+
+    /// Set (or clear) the pool balance cap. Pass `0` to remove the cap.
+    /// Requires admin auth.
+    pub fn set_balance_cap(env: Env, cap: i128) -> Result<(), InsuranceError> {
+        Self::require_admin(&env);
+        if cap < 0 {
+            return Err(InsuranceError::InvalidAmount);
+        }
+        if cap == 0 {
+            env.storage().instance().remove(&DataKey::BalanceCap);
+        } else {
+            env.storage().instance().set(&DataKey::BalanceCap, &cap);
+        }
+        env.events().publish((symbol_short!("cap_set"),), cap);
+        Ok(())
+    }
+
     fn require_admin(env: &Env) -> Address {
         match env
             .storage()
@@ -545,15 +572,29 @@ impl InsurancePoolInterface for InsurancePool {
             .persistent()
             .get(&DataKey::Premiums(lp.clone()))
             .unwrap_or(0);
+        let new_premium = prev_premium
+            .checked_add(amount)
+            .unwrap_or_else(|| panic_with_error!(&env, InsuranceError::ArithmeticOverflow));
         env.storage().persistent().set(
             &DataKey::Premiums(lp.clone()),
-            &prev_premium.saturating_add(amount),
+            &new_premium,
         );
 
         let balance: i128 = env.storage().instance().get(&DataKey::Balance).unwrap_or(0);
+        let new_balance = balance
+            .checked_add(amount)
+            .unwrap_or_else(|| panic_with_error!(&env, InsuranceError::ArithmeticOverflow));
+
+        // Enforce the optional balance cap.
+        if let Some(cap) = env.storage().instance().get::<DataKey, i128>(&DataKey::BalanceCap) {
+            if new_balance > cap {
+                panic_with_error!(&env, InsuranceError::BalanceCapExceeded);
+            }
+        }
+
         env.storage()
             .instance()
-            .set(&DataKey::Balance, &balance.saturating_add(amount));
+            .set(&DataKey::Balance, &new_balance);
 
         // Transfer tokens from LP to pool (checks-effects-interactions pattern).
         // State changes above must complete before this external call.

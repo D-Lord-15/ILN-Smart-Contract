@@ -65,6 +65,8 @@ Source of truth: [`contracts/insurance_pool/src/lib.rs`](../contracts/insurance_
 | 5 | `AlreadyInitialized` | Contract is already initialised. | `initialize()` called more than once. | Initialisation is one-shot; redeploy if a fresh pool is needed. |
 | 6 | `NoPendingProposal` | No pending proposal exists for the requested admin action. | `execute_coverage_change` / `execute_admin_transfer` / `cancel_*` called with no queued proposal. | Queue a proposal first via `propose_coverage_change` or `propose_admin_transfer`. |
 | 7 | `TimelockNotExpired` | The proposal's timelock has not yet expired. | Attempted to execute a timelocked action before the 3-day delay elapsed. | Wait until `env.ledger().timestamp() >= eta` and retry. |
+| 8 | `ArithmeticOverflow` | A checked arithmetic operation overflowed during premium accumulation. | Depositing an amount that would overflow `i128` on the running balance or per-LP premium counter. | Ensure deposit amounts are within sane bounds; this should only occur with extreme/malicious inputs. |
+| 9 | `BalanceCapExceeded` | Premium deposit would push the pool balance above the configured cap. | The admin has set a `BalanceCap` and the incoming deposit would exceed it. | Reduce the deposit amount or ask the admin to raise the cap via `set_balance_cap`. |
 
 ---
 
