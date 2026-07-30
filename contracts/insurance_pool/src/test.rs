@@ -408,17 +408,97 @@ fn coverage_update_affects_future_claims() {
     let s = setup();
     let lp = Address::generate(&s.env);
 
-    // Deposit with default coverage
-    s.client.deposit_premium(&lp, &(COVERAGE * 2));
-    let payout1 = s.client.claim(&1);
-    assert_eq!(payout1, COVERAGE);
+    // Deposit with default coverage (LP pays > 50% → tier 4: 150%)
+    let deposit_large = COVERAGE * 2;
+    s.token_admin.mint(&lp, &deposit_large);
+    s.client.deposit_premium(&lp, &deposit_large);
+    let payout1 = s.client.claim(&1, &lp);
+    assert_eq!(payout1, (COVERAGE * 150) / 100);
 
-    // Update coverage to higher value
+    // Update coverage to higher value via governance
     let new_coverage = 3_000_000_000;
     s.client.set_coverage_via_governance(&new_coverage);
 
-    // Reset balance for testing
-    s.client.deposit_premium(&lp, &(new_coverage * 2));
-    let payout2 = s.client.claim(&2);
-    assert_eq!(payout2, new_coverage);
+    // Add more balance so the pool can pay out at the new coverage level
+    let deposit2 = new_coverage * 2;
+    s.token_admin.mint(&lp, &deposit2);
+    s.client.deposit_premium(&lp, &deposit2);
+    let payout2 = s.client.claim(&2, &lp);
+    // LP still has > 50% of new coverage → tier 4 (150%)
+    assert_eq!(payout2, (new_coverage * 150) / 100);
 }
+
+// ── Overflow and balance cap tests ──────────────────────────────────────────
+
+#[test]
+fn deposit_premium_at_i128_max_overflows() {
+    let s = setup();
+
+    // Seed the premium record to (i128::MAX - 1) by depositing a large amount.
+    // Then depositing 1 more triggers a checked overflow.
+    let near_max: i128 = i128::MAX - 1;
+    // Mint enough tokens; i128::MAX won't fit in a typical test but we can simulate
+    // the state by pre-setting storage and then trying to add 2.
+    // We use two deposits: first near_max, then a small extra amount.
+    s.token_admin.mint(&s.lp, &near_max);
+    // This should succeed (within i128 bounds)
+    s.client.deposit_premium(&s.lp, &near_max);
+    assert_eq!(s.client.get_premiums_paid(&s.lp), near_max);
+
+    // Now depositing even 1 more should overflow the pool balance (near_max + 1 > i128::MAX - 1, balance check).
+    // Actually balance is now near_max; adding 1 more gives i128::MAX which barely fits.
+    // Adding 2 will cause i128 checked_add to return None.
+    s.token_admin.mint(&s.lp, &2);
+    let result = s.client.try_deposit_premium(&s.lp, &2);
+    // checked_add(near_max + 2) overflows → ArithmeticOverflow
+    assert!(
+        result.is_err(),
+        "Depositing beyond i128::MAX must fail with overflow error"
+    );
+}
+
+#[test]
+fn deposit_premium_enforces_balance_cap() {
+    let s = setup();
+
+    // Set a cap of 1_000 tokens
+    let cap: i128 = 1_000;
+    s.client.set_balance_cap(&cap);
+    assert_eq!(s.client.get_balance_cap(), Some(cap));
+
+    // Deposit up to the cap — should succeed
+    s.token_admin.mint(&s.lp, &cap);
+    s.client.deposit_premium(&s.lp, &cap);
+    assert_eq!(s.client.get_pool_balance(), cap);
+
+    // Depositing even 1 more must be rejected
+    s.token_admin.mint(&s.lp, &1);
+    let result = s.client.try_deposit_premium(&s.lp, &1);
+    assert!(
+        result.is_err(),
+        "Deposit exceeding the balance cap must fail"
+    );
+
+    // Pool balance must remain unchanged after the failed deposit
+    assert_eq!(s.client.get_pool_balance(), cap);
+}
+
+#[test]
+fn balance_cap_can_be_cleared() {
+    let s = setup();
+
+    let cap: i128 = 500;
+    s.client.set_balance_cap(&cap);
+    assert_eq!(s.client.get_balance_cap(), Some(cap));
+
+    // Clear cap by passing 0
+    s.client.set_balance_cap(&0);
+    assert_eq!(s.client.get_balance_cap(), None);
+
+    // Now deposits beyond the old cap should succeed
+    let amount: i128 = 1_000;
+    s.token_admin.mint(&s.lp, &amount);
+    s.client.deposit_premium(&s.lp, &amount);
+    assert_eq!(s.client.get_pool_balance(), amount);
+}
+
