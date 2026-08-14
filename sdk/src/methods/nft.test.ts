@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { Account, SorobanRpc } from "@stellar/stellar-sdk";
+import { Account, SorobanRpc, nativeToScVal } from "@stellar/stellar-sdk";
 import { getNftMetadata, getNftOwner } from "./nft.js";
 import type { InvoiceNftMetadata } from "../utils/xdrDecoder.js";
 import { ILNError } from "../errors.js";
@@ -7,7 +7,7 @@ import { ILNError } from "../errors.js";
 describe("NFT Query Methods", () => {
   let server: SorobanRpc.Server;
   let sourceAccount: Account;
-  const contractAddress = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
+  const contractAddress = "CDVZ3ADHUQK5OPJTTZCEAX3OMQWDI2B7VVQCI7EDWV747RMCRRMGAFJO";
   const networkPassphrase = "Test SDF Network ; September 2015";
   const invoiceId = 42n;
 
@@ -19,7 +19,7 @@ describe("NFT Query Methods", () => {
 
     // Create a mock source account
     sourceAccount = new Account(
-      "GBRPYHIL2CI3WHZDTOOQFC6EB4RBDAPPLYAT2FOSSYOWLCDTIR35IWJP",
+      "GBZNA4VFAQNBXG7ZUGYEG3IZB4FYWCYMKI75NPCABRZ27OPB6A7ENNDV",
       "0"
     );
   });
@@ -32,25 +32,25 @@ describe("NFT Query Methods", () => {
         dueDate: 1704067200,
         discountRate: 300,
         token: "CCJZ375JREG7DSHBG44D7ZLBFOXQFSWBM3L4AZXC3NZYBV3MYQ4GOHB",
-        owner: "GBRPYHIL2CI3WHZDTOOQFC6EB4RBDAPPLYAT2FOSSYOWLCDTIR35IWJP",
+        owner: "GBZNA4VFAQNBXG7ZUGYEG3IZB4FYWCYMKI75NPCABRZ27OPB6A7ENNDV",
         mintedAt: 1704067200,
       };
 
       // Mock successful simulation
       vi.mocked(server.simulateTransaction).mockResolvedValueOnce({
         result: {
-          retval: {
-            type: "obj",
-            fields: [
-              { key: { type: "sym", sym: "invoice_id" }, val: { type: "u64", u64: "42" } },
-              { key: { type: "sym", sym: "amount" }, val: { type: "i128", i128: "1000000" } },
-              { key: { type: "sym", sym: "due_date" }, val: { type: "u32", u32: "1704067200" } },
-              { key: { type: "sym", sym: "discount_rate" }, val: { type: "u32", u32: "300" } },
-              { key: { type: "sym", sym: "token" }, val: { type: "addr", addr: "CCJZ375JREG7DSHBG44D7ZLBFOXQFSWBM3L4AZXC3NZYBV3MYQ4GOHB" } },
-              { key: { type: "sym", sym: "owner" }, val: { type: "addr", addr: "GBRPYHIL2CI3WHZDTOOQFC6EB4RBDAPPLYAT2FOSSYOWLCDTIR35IWJP" } },
-              { key: { type: "sym", sym: "minted_at" }, val: { type: "u32", u32: "1704067200" } },
-            ],
-          },
+          retval: nativeToScVal(
+            {
+              invoice_id: 42n,
+              amount: 1000000n,
+              due_date: 1704067200,
+              discount_rate: 300,
+              token: "CD2OPBKYWTPLVETA3ZC4FVWONKUMR3PRLOH2AK23KDMPTCXJIM5JNOFE",
+              owner: "GBZNA4VFAQNBXG7ZUGYEG3IZB4FYWCYMKI75NPCABRZ27OPB6A7ENNDV",
+              minted_at: 1704067200,
+            },
+            { type: "instance" }
+          ),
         },
       } as any);
 
@@ -66,7 +66,7 @@ describe("NFT Query Methods", () => {
       expect(result?.invoiceId).toBe(42n);
       expect(result?.amount).toBe(1000000n);
       expect(result?.discountRate).toBe(300);
-      expect(result?.owner).toBe("GBRPYHIL2CI3WHZDTOOQFC6EB4RBDAPPLYAT2FOSSYOWLCDTIR35IWJP");
+      expect(result?.owner).toBe("GBZNA4VFAQNBXG7ZUGYEG3IZB4FYWCYMKI75NPCABRZ27OPB6A7ENNDV");
     });
 
     it("should return null when NFT does not exist", async () => {
@@ -102,15 +102,12 @@ describe("NFT Query Methods", () => {
 
   describe("getNftOwner", () => {
     it("should return owner address when NFT exists", async () => {
-      const ownerAddress = "GBRPYHIL2CI3WHZDTOOQFC6EB4RBDAPPLYAT2FOSSYOWLCDTIR35IWJP";
+      const ownerAddress = "GBZNA4VFAQNBXG7ZUGYEG3IZB4FYWCYMKI75NPCABRZ27OPB6A7ENNDV";
 
       // Mock successful simulation
       vi.mocked(server.simulateTransaction).mockResolvedValueOnce({
         result: {
-          retval: {
-            type: "addr",
-            addr: ownerAddress,
-          },
+          retval: nativeToScVal(ownerAddress, { type: "address" }),
         },
       } as any);
 

@@ -18,13 +18,13 @@ describe('markPaid', () => {
   it('throws if payment exceeds outstanding', async () => {
     // @ts-ignore
     queries.getInvoice.mockResolvedValue({ amount: 100n, amountPaid: 0n });
-    await expect(markPaid(mockServer, 'C123', 1n, 200n, mockAccount, mockSign, 'pass')).rejects.toThrow(ILNError.InsufficientAmount);
+    await expect(markPaid(mockServer, 'CDVZ3ADHUQK5OPJTTZCEAX3OMQWDI2B7VVQCI7EDWV747RMCRRMGAFJO', 1n, 200n, mockAccount, mockSign, 'pass')).rejects.toThrow(ILNError.InsufficientAmount);
   });
 
   it('throws if amount is 0', async () => {
     // @ts-ignore
     queries.getInvoice.mockResolvedValue({ amount: 100n, amountPaid: 0n });
-    await expect(markPaid(mockServer, 'C123', 1n, 0n, mockAccount, mockSign, 'pass')).rejects.toThrow(ILNError.InsufficientAmount);
+    await expect(markPaid(mockServer, 'CDVZ3ADHUQK5OPJTTZCEAX3OMQWDI2B7VVQCI7EDWV747RMCRRMGAFJO', 1n, 0n, mockAccount, mockSign, 'pass')).rejects.toThrow(ILNError.InsufficientAmount);
   });
 
   it('successfully processes full payment', async () => {
@@ -32,7 +32,7 @@ describe('markPaid', () => {
     queries.getInvoice.mockResolvedValue({ amount: 100n, amountPaid: 0n });
     // @ts-ignore
     mockServer.simulateTransaction.mockResolvedValue({
-      result: { xdr: 'AAAA' },
+      results: [{ xdr: 'AAAAAQ==', auth: [] }],
       cost: { cpu: 100, mem: 100 },
       latestLedger: 12345,
     });
@@ -41,7 +41,7 @@ describe('markPaid', () => {
     // @ts-ignore
     mockServer.getTransaction.mockResolvedValue({ status: SorobanRpc.Api.GetTransactionStatus.SUCCESS });
 
-    const result = await markPaid(mockServer, 'C123', 1n, 100n, mockAccount, mockSign, 'pass');
+    const result = await markPaid(mockServer, 'CDVZ3ADHUQK5OPJTTZCEAX3OMQWDI2B7VVQCI7EDWV747RMCRRMGAFJO', 1n, 100n, mockAccount, mockSign, 'pass');
 
     expect(result.txHash).toBe('TXHASH123');
     expect(result.remainingBalance).toBe(0n);
@@ -54,7 +54,7 @@ describe('markPaid', () => {
     queries.getInvoice.mockResolvedValue({ amount: 100n, amountPaid: 0n });
     // @ts-ignore
     mockServer.simulateTransaction.mockResolvedValue({
-      result: { xdr: 'AAAA' },
+      results: [{ xdr: 'AAAAAQ==', auth: [] }],
       cost: { cpu: 100, mem: 100 },
       latestLedger: 12345,
     });
@@ -63,7 +63,7 @@ describe('markPaid', () => {
     // @ts-ignore
     mockServer.getTransaction.mockResolvedValue({ status: SorobanRpc.Api.GetTransactionStatus.SUCCESS });
 
-    const result = await markPaid(mockServer, 'C123', 1n, 50n, mockAccount, mockSign, 'pass');
+    const result = await markPaid(mockServer, 'CDVZ3ADHUQK5OPJTTZCEAX3OMQWDI2B7VVQCI7EDWV747RMCRRMGAFJO', 1n, 50n, mockAccount, mockSign, 'pass');
 
     expect(result.txHash).toBe('TXHASH456');
     expect(result.remainingBalance).toBe(50n);
@@ -75,7 +75,7 @@ describe('markPaid', () => {
     queries.getInvoice.mockResolvedValue({ amount: 100n, amountPaid: 0n });
     // @ts-ignore
     mockServer.simulateTransaction.mockResolvedValue({
-      result: { xdr: 'AAAA' },
+      results: [{ xdr: 'AAAAAQ==', auth: [] }],
       cost: { cpu: 100, mem: 100 },
       latestLedger: 12345,
     });
@@ -84,7 +84,7 @@ describe('markPaid', () => {
     // @ts-ignore
     mockServer.getTransaction.mockResolvedValue({ status: SorobanRpc.Api.GetTransactionStatus.SUCCESS });
 
-    await markPaid(mockServer, 'C123', 1n, 100n, mockAccount, mockSign, 'pass');
+    await markPaid(mockServer, 'CDVZ3ADHUQK5OPJTTZCEAX3OMQWDI2B7VVQCI7EDWV747RMCRRMGAFJO', 1n, 100n, mockAccount, mockSign, 'pass');
 
     // Verify that simulateTransaction was called
     expect(mockServer.simulateTransaction).toHaveBeenCalled();
@@ -101,7 +101,7 @@ describe('markPaid', () => {
     queries.getInvoice.mockResolvedValue({ amount: 100n, amountPaid: 0n });
     // @ts-ignore
     mockServer.simulateTransaction.mockResolvedValue({
-      result: { xdr: 'AAAA' },
+      results: [{ xdr: 'AAAAAQ==', auth: [] }],
       cost: { cpu: 100, mem: 100 },
       latestLedger: 12345,
     });
@@ -110,7 +110,7 @@ describe('markPaid', () => {
     // @ts-ignore
     mockServer.getTransaction.mockResolvedValue({ status: SorobanRpc.Api.GetTransactionStatus.FAILED });
 
-    await expect(markPaid(mockServer, 'C123', 1n, 100n, mockAccount, mockSign, 'pass')).rejects.toThrow('Transaction failed during execution');
+    await expect(markPaid(mockServer, 'CDVZ3ADHUQK5OPJTTZCEAX3OMQWDI2B7VVQCI7EDWV747RMCRRMGAFJO', 1n, 100n, mockAccount, mockSign, 'pass')).rejects.toThrow('Transaction failed during execution');
   });
 
   it('rejects payment when simulation fails', async () => {
@@ -124,6 +124,6 @@ describe('markPaid', () => {
       latestLedger: 12345,
     });
 
-    await expect(markPaid(mockServer, 'C123', 1n, 100n, mockAccount, mockSign, 'pass')).rejects.toThrow();
+    await expect(markPaid(mockServer, 'CDVZ3ADHUQK5OPJTTZCEAX3OMQWDI2B7VVQCI7EDWV747RMCRRMGAFJO', 1n, 100n, mockAccount, mockSign, 'pass')).rejects.toThrow();
   });
 });

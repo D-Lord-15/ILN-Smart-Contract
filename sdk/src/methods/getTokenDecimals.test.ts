@@ -37,7 +37,7 @@ function mockClientWith(sim: unknown): ILNClient {
 }
 
 describe("getTokenDecimals", () => {
-  const TOKEN_ADDRESS = "CB64D3G7SM2RTH6JSGG34DDTFTQ5CFDKVDZJZF3TDG4BTO3OBKLU6RVQ";
+  const TOKEN_ADDRESS = "CDXH33UREGM444AHGH4WANVQ6UYWYZ32YF3R2LFKIT7WMB6XHNEGR7CG";
 
   it("returns the decimals when simulation succeeds", async () => {
     mockScValToNative.mockReturnValue(7);

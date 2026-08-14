@@ -254,7 +254,7 @@ rustup component add rustfmt clippy
 ### Stellar CLI
 
 ```bash
-cargo install --locked stellar-cli --features opt
+cargo install --locked stellar-cli
 stellar --version
 ```
 

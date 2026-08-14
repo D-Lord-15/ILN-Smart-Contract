@@ -390,25 +390,27 @@ export async function hasVoted(
 
 /**
  * List proposals, optionally filtered by status and/or proposer (read-only).
- * @param status Optional proposal status to filter by
+ * @param filter Optional filters (status sent on-chain, proposer applied client-side)
  * @param page Page number (0-indexed, defaults to 0)
  * @param pageSize Results per page (defaults to 20, max 20)
- * @param filter Optional additional client-side filters (proposer)
  */
 export async function listProposals(
   server: SorobanRpc.Server,
   contractAddress: string,
   sourceAccount: Account,
   networkPassphrase: string,
-  status?: ProposalStatus,
+  filter?: ProposalFilter,
   page: number = 0,
-  pageSize: number = 20,
-  filter?: ProposalFilter
+  pageSize: number = 20
 ): Promise<Proposal[]> {
   const contract = new Contract(contractAddress);
+  const statusScVal =
+    filter?.status !== undefined
+      ? nativeToScVal({ tag: filter.status, values: [] }, { type: "instance" })
+      : nativeToScVal(undefined);
   const op = contract.call(
     "list_proposals",
-    nativeToScVal(status, { type: "option" }),
+    statusScVal,
     nativeToScVal(page, { type: "u32" }),
     nativeToScVal(pageSize, { type: "u32" })
   );
@@ -432,6 +434,9 @@ export async function listProposals(
   const rawArr = scValToNative(sim.result.retval) as Record<string, unknown>[];
   let proposals = rawArr.map(raw => decodeGovernanceProposal(raw as Record<string, unknown>));
 
+  if (filter?.status !== undefined) {
+    proposals = proposals.filter(p => p.status === filter.status);
+  }
   if (filter?.proposer) {
     proposals = proposals.filter(p => p.proposer === filter.proposer);
   }

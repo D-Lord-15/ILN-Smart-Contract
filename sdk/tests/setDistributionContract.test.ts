@@ -2,6 +2,14 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 import { setDistributionContract } from "../src/methods/admin.js";
 import { Account, SorobanRpc } from "@stellar/stellar-sdk";
 
+vi.mock("@stellar/stellar-sdk", async () => {
+  const actual = await vi.importActual<typeof import("@stellar/stellar-sdk")>("@stellar/stellar-sdk");
+  return {
+    ...actual,
+    SorobanRpc: { ...actual.SorobanRpc, assembleTransaction: vi.fn() },
+  };
+});
+
 const VALID_CONTRACT = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4";
 const MOCK_HASH = "abc123";
 
@@ -64,7 +72,7 @@ describe("setDistributionContract", () => {
       status: SorobanRpc.Api.GetTransactionStatus.SUCCESS,
     });
 
-    vi.spyOn(SorobanRpc, "assembleTransaction" as never).mockReturnValue({
+    vi.mocked(SorobanRpc.assembleTransaction).mockReturnValue({
       build: () => ({} as never),
     } as never);
 

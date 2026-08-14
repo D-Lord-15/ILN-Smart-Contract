@@ -30,35 +30,11 @@ export class ILNError extends Error {
     Object.setPrototypeOf(this, new.target.prototype);
   }
 
-  static ValidationError = class ValidationError extends ILNError {
-    constructor(message: string, code?: number, context?: ILNErrorContext) {
-      super(message, code, context, false);
-    }
-  };
-
-  static AuthorizationError = class AuthorizationError extends ILNError {
-    constructor(message: string, code?: number, context?: ILNErrorContext) {
-      super(message, code, context, false);
-    }
-  };
-
-  static InvoiceStateError = class InvoiceStateError extends ILNError {
-    constructor(message: string, code?: number, context?: ILNErrorContext) {
-      super(message, code, context, false);
-    }
-  };
-
-  static ContractExecutionError = class ContractExecutionError extends ILNError {
-    constructor(message: string, code?: number, context?: ILNErrorContext, recommendRetry: boolean = false) {
-      super(message, code, context, recommendRetry);
-    }
-  };
-
-  static NetworkError = class NetworkError extends ILNError {
-    constructor(message: string, context?: ILNErrorContext) {
-      super(message, undefined, context, true);
-    }
-  };
+  static ValidationError: any;
+  static AuthorizationError: any;
+  static InvoiceStateError: any;
+  static ContractExecutionError: any;
+  static NetworkError: any;
 
   static InvoiceNotFound: any;
   static AlreadyFunded: any;
@@ -253,6 +229,12 @@ export class InvoiceNotCancellable extends InvoiceStateError { constructor(msg =
 export class InvalidAddress extends ValidationError { constructor(msg = "Invalid address", context?: ILNErrorContext) { super(msg, 38, context); } }
 export class InvalidTransfer extends ContractExecutionError { constructor(msg = "Invalid transfer", context?: ILNErrorContext) { super(msg, 39, context); } }
 export class InsufficientAmount extends ContractExecutionError { constructor(msg = "Insufficient amount", context?: ILNErrorContext) { super(msg, 999, context); } }
+
+ILNError.ValidationError = ValidationError;
+ILNError.AuthorizationError = AuthorizationError;
+ILNError.InvoiceStateError = InvoiceStateError;
+ILNError.ContractExecutionError = ContractExecutionError;
+ILNError.NetworkError = NetworkError;
 
 ILNError.InvoiceNotFound = InvoiceNotFound;
 ILNError.AlreadyFunded = AlreadyFunded;

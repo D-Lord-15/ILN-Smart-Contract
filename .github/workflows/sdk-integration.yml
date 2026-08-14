@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   integration:
-    runs-on: namespace-profile-nursca
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: sdk

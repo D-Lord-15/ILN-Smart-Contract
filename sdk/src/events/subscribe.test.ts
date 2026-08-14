@@ -665,8 +665,7 @@ describe("replay and gap recovery", () => {
     subscribe(horizon, "CBCONTRACT", {}, (ev) => events.push(ev));
 
     // Send first live event (ledger 100)
-    triggerMessage(makeRaw("paused", [], { timestamp: "100" }));
-    events[0] = { ...events[0], ledger: 100, pagingToken: "100-1" } as any;
+    triggerMessage({ ...makeRaw("paused", [], { timestamp: "100" }), id: "100-1", ledger: 100 });
 
     // Create a gap! Send live event on ledger 105.
     const mockGapEvent = {

@@ -570,6 +570,11 @@ export async function replay(
 ): Promise<string | undefined> {
   let cursor: string | undefined = `${fromLedger}`;
   let lastCursor: string | undefined = undefined;
+  // Tracks every record id already handled so a page that repeats previously-seen
+  // records (e.g. a non-advancing or misbehaving pagination source) can't cause
+  // records to be reprocessed forever — `lastCursor` alone only catches one id
+  // per page and lets other repeated records slip through indefinitely.
+  const seenIds = new Set<string>();
 
   while (true) {
     let builder = (horizon as any)
@@ -589,7 +594,7 @@ export async function replay(
 
     let processedAny = false;
     for (const record of page.records) {
-      if (record.id === lastCursor) continue;
+      if (record.id !== undefined && seenIds.has(record.id)) continue;
 
       // Filter out events below the target ledger
       if (record.ledger !== undefined && record.ledger < fromLedger) {
@@ -600,6 +605,7 @@ export async function replay(
       if (event && matchesFilter(event, filter)) {
         handler(event);
       }
+      if (record.id !== undefined) seenIds.add(record.id);
       cursor = record.id;
       processedAny = true;
     }

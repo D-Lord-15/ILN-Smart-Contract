@@ -248,7 +248,7 @@ describe("claimInsurance", () => {
     const adminAccount = new Account(VALID_LP, "1");
     const sign = vi.fn((tx) => tx);
 
-    const result = await claimInsurance(server, CONTRACT_ID, 42n, adminAccount, sign);
+    const result = await claimInsurance(server, CONTRACT_ID, 42n, VALID_LP, adminAccount, sign);
     expect(result.txHash).toBe("txABC");
     expect(result.payout).toBe(500n);
   });
@@ -257,7 +257,7 @@ describe("claimInsurance", () => {
     const server = serverWith({ error: "HostError: Error(Contract, 2)" });
     const adminAccount = new Account(VALID_LP, "1");
     await expect(
-      claimInsurance(server, CONTRACT_ID, 42n, adminAccount, vi.fn((tx) => tx))
+      claimInsurance(server, CONTRACT_ID, 42n, VALID_LP, adminAccount, vi.fn((tx) => tx))
     ).rejects.toThrow(InsuranceContractError.AlreadyClaimed);
   });
 });
