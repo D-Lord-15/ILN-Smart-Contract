@@ -183,7 +183,9 @@ fn initialize_sets_coverage_and_zero_balance() {
 fn initialize_is_single_shot() {
     let s = setup();
     let other = Address::generate(&s.env);
-    let res = s.client.try_initialize(&other, &COVERAGE, &s.token_client.address);
+    let res = s
+        .client
+        .try_initialize(&other, &COVERAGE, &s.token_client.address);
     assert_eq!(res, Err(Ok(InsuranceError::AlreadyInitialized)));
 }
 
@@ -256,7 +258,10 @@ fn claim_pays_tiered_coverage_when_pool_is_large() {
 
     // Verify token balances
     assert_eq!(s.token_client.balance(&s.lp), expected_payout); // LP receives payout
-    assert_eq!(s.token_client.balance(&s.client.address), COVERAGE * 3 - expected_payout); // Pool keeps remainder
+    assert_eq!(
+        s.token_client.balance(&s.client.address),
+        COVERAGE * 3 - expected_payout
+    ); // Pool keeps remainder
 }
 
 #[test]
@@ -309,10 +314,7 @@ fn coverage_change_requires_timelock_expiry() {
 
     // Too early.
     let res = s.client.try_execute_coverage_change();
-    assert_eq!(
-        res,
-        Err(Ok(InsuranceError::TimelockNotExpired))
-    );
+    assert_eq!(res, Err(Ok(InsuranceError::TimelockNotExpired)));
 
     s.env.ledger().set_timestamp(eta);
     s.client.execute_coverage_change();
@@ -343,10 +345,7 @@ fn admin_transfer_requires_timelock_expiry() {
     assert_eq!(s.client.get_pending_admin(), Some((new_admin.clone(), eta)));
 
     let res = s.client.try_execute_admin_transfer();
-    assert_eq!(
-        res,
-        Err(Ok(InsuranceError::TimelockNotExpired))
-    );
+    assert_eq!(res, Err(Ok(InsuranceError::TimelockNotExpired)));
 
     s.env.ledger().set_timestamp(eta);
     s.client.execute_admin_transfer();
@@ -501,4 +500,3 @@ fn balance_cap_can_be_cleared() {
     s.client.deposit_premium(&s.lp, &amount);
     assert_eq!(s.client.get_pool_balance(), amount);
 }
-

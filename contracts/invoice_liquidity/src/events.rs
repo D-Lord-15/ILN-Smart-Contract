@@ -317,7 +317,6 @@ pub struct DisputeUpheldPayerRefund {
     pub amount: i128,
 }
 
-
 // ── Issue #34: LP priority queue events ───────────────────────────────────────
 
 /// Emitted when an LP registers their intent to fund via the priority queue.

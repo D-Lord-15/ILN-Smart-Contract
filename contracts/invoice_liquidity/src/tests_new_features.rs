@@ -94,10 +94,7 @@ fn make_invoice_params(t: &TestEnv) -> InvoiceParams {
     }
 }
 
-fn make_invoice_params_with_referral(
-    t: &TestEnv,
-    referral: ReferralCode,
-) -> InvoiceParams {
+fn make_invoice_params_with_referral(t: &TestEnv, referral: ReferralCode) -> InvoiceParams {
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
     InvoiceParams {
         freelancer: t.freelancer.clone(),
@@ -683,7 +680,10 @@ fn test_batch_submit_referral_tracking() {
     // Verify each invoice has the referral code
     for i in 0..3 {
         let invoice = t.contract.get_invoice(&ids.get(i).unwrap());
-        assert_eq!(invoice.referral_code, ReferralCode::Present(referral_code.clone()));
+        assert_eq!(
+            invoice.referral_code,
+            ReferralCode::Present(referral_code.clone())
+        );
     }
 }
 
@@ -928,9 +928,9 @@ fn test_convert_invoice_token_success_in_pending() {
         &ReferralCode::None,
     );
 
-    let result =
-        t.contract
-            .try_convert_invoice_token(&t.freelancer, &invoice_id, &t.eurc_address);
+    let result = t
+        .contract
+        .try_convert_invoice_token(&t.freelancer, &invoice_id, &t.eurc_address);
     assert!(result.is_ok());
 
     let invoice = t.contract.get_invoice(&invoice_id);
@@ -956,9 +956,9 @@ fn test_convert_invoice_token_rejects_when_not_pending() {
     t.contract
         .fund_invoice(&t.funder, &invoice_id, &INVOICE_AMOUNT, &false);
 
-    let result =
-        t.contract
-            .try_convert_invoice_token(&t.freelancer, &invoice_id, &t.eurc_address);
+    let result = t
+        .contract
+        .try_convert_invoice_token(&t.freelancer, &invoice_id, &t.eurc_address);
     assert_eq!(result, Err(Ok(ContractError::AlreadyFunded)));
 
     // Token must be unchanged.
@@ -984,11 +984,9 @@ fn test_convert_invoice_token_rejects_unapproved_token() {
     let unapproved_contract = t.env.register_stellar_asset_contract_v2(unapproved_admin);
     let unapproved_address = unapproved_contract.address();
 
-    let result = t.contract.try_convert_invoice_token(
-        &t.freelancer,
-        &invoice_id,
-        &unapproved_address,
-    );
+    let result =
+        t.contract
+            .try_convert_invoice_token(&t.freelancer, &invoice_id, &unapproved_address);
     assert_eq!(result, Err(Ok(ContractError::Unauthorized)));
 
     let invoice = t.contract.get_invoice(&invoice_id);
@@ -1014,9 +1012,9 @@ fn test_convert_invoice_token_rejects_when_expired() {
     ledger_info.timestamp = due_date + 1;
     t.env.ledger().set(ledger_info);
 
-    let result =
-        t.contract
-            .try_convert_invoice_token(&t.freelancer, &invoice_id, &t.eurc_address);
+    let result = t
+        .contract
+        .try_convert_invoice_token(&t.freelancer, &invoice_id, &t.eurc_address);
     assert_eq!(result, Err(Ok(ContractError::InvoiceExpired)));
 
     // convert_invoice_token flips the invoice to Expired as a side effect,
@@ -1045,7 +1043,11 @@ fn test_convert_invoice_token_emits_token_changed_event() {
         .convert_invoice_token(&t.freelancer, &invoice_id, &t.eurc_address);
 
     let events = t.env.events().all();
-    assert_eq!(events.len(), events_before + 1, "expected exactly one new event");
+    assert_eq!(
+        events.len(),
+        events_before + 1,
+        "expected exactly one new event"
+    );
 
     let last_event = events.last().expect("event should have been emitted");
     let contract_id = last_event.0.clone();

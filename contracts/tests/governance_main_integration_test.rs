@@ -134,11 +134,9 @@ fn pass_and_execute(t: &GovIntegrationEnv, proposal_id: u64) {
     t.env.ledger().set(ledger);
 
     // Active → Passed
-    t.governance
-        .execute_proposal(&proposal_id);
+    t.governance.execute_proposal(&proposal_id);
     // Passed → Executed  (zero-delay timelock: eta_ledger == current_sequence)
-    t.governance
-        .execute_proposal(&proposal_id);
+    t.governance.execute_proposal(&proposal_id);
 }
 
 // ── Test 1 ────────────────────────────────────────────────────────────────────
@@ -236,9 +234,18 @@ fn test_update_fee_rate_via_governance_takes_effect() {
 
     // Run the invoice lifecycle: submit → fund → mark_paid.
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.iln.submit_invoice(&t.freelancer, &t.payer, &INVOICE_AMOUNT, &(t.env.ledger().timestamp() + DUE_DATE_OFFSET), &DISCOUNT_RATE, &t.payment_token_addr, &ReferralCode::None);
+    let invoice_id = t.iln.submit_invoice(
+        &t.freelancer,
+        &t.payer,
+        &INVOICE_AMOUNT,
+        &(t.env.ledger().timestamp() + DUE_DATE_OFFSET),
+        &DISCOUNT_RATE,
+        &t.payment_token_addr,
+        &ReferralCode::None,
+    );
 
-    t.iln.fund_invoice(&t.lp, &invoice_id, &INVOICE_AMOUNT, &false);
+    t.iln
+        .fund_invoice(&t.lp, &invoice_id, &INVOICE_AMOUNT, &false);
     t.iln.mark_paid(&invoice_id, &INVOICE_AMOUNT);
 
     // Admin should have received the protocol fee.
@@ -284,9 +291,7 @@ fn test_veto_proposal_prevents_execution() {
     t.env.ledger().set(ledger);
 
     // Attempting to execute a vetoed proposal must return AlreadyResolved.
-    let execute_result = t
-        .governance
-        .try_execute_proposal(&proposal_id);
+    let execute_result = t.governance.try_execute_proposal(&proposal_id);
     assert_eq!(
         execute_result,
         Err(Ok(GovernanceError::AlreadyResolved)),
@@ -296,8 +301,17 @@ fn test_veto_proposal_prevents_execution() {
     // The ILN fee rate was NOT changed — submitting and funding an invoice
     // with the default fee (0) means admin receives no fee.
     let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
-    let invoice_id = t.iln.submit_invoice(&t.freelancer, &t.payer, &INVOICE_AMOUNT, &(t.env.ledger().timestamp() + DUE_DATE_OFFSET), &DISCOUNT_RATE, &t.payment_token_addr, &ReferralCode::None);
-    t.iln.fund_invoice(&t.lp, &invoice_id, &INVOICE_AMOUNT, &false);
+    let invoice_id = t.iln.submit_invoice(
+        &t.freelancer,
+        &t.payer,
+        &INVOICE_AMOUNT,
+        &(t.env.ledger().timestamp() + DUE_DATE_OFFSET),
+        &DISCOUNT_RATE,
+        &t.payment_token_addr,
+        &ReferralCode::None,
+    );
+    t.iln
+        .fund_invoice(&t.lp, &invoice_id, &INVOICE_AMOUNT, &false);
     t.iln.mark_paid(&invoice_id, &INVOICE_AMOUNT);
 
     // With fee_rate still at 0, admin receives no protocol fee.

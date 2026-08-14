@@ -60,9 +60,12 @@ describe("iln insurance", () => {
     const cmd = makeInsuranceCommand(vi.fn(), vi.fn(), vi.fn(), executeClaim);
     vi.spyOn(console, "log").mockImplementation(() => {});
 
-    await cmd.parseAsync(["claim", "--contract", CONTRACT, "--invoice", "42"], { from: "user" });
+    await cmd.parseAsync(
+      ["claim", "--contract", CONTRACT, "--invoice", "42", "--lp", LP],
+      { from: "user" }
+    );
 
-    expect(executeClaim).toHaveBeenCalledWith(CONTRACT, "42");
+    expect(executeClaim).toHaveBeenCalledWith(CONTRACT, "42", LP);
     vi.restoreAllMocks();
   });
 });

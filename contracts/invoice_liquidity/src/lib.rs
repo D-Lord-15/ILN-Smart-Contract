@@ -45,12 +45,11 @@ use crate::storage::get_admin;
 use events::{
     AdminChanged, AppealResolved, ContractInitialized, ContractPaused, ContractUnpaused,
     ContractUpgraded, DefaultAppealed, DisputeResolved, DisputeUpheldPayerRefund,
-    DistributionContractUpdated,
-    FundQueueResolutionAttempted, FundQueueResolved, FundRequested, InsuranceClaimAttempted,
-    InvoiceCancelled, InvoiceDefaulted,
-    InvoiceDisputed, InvoiceExpired, InvoiceFunded, InvoicePaid, InvoicePartiallyPaid,
-    InvoiceSubmitted, InvoiceTokenChanged, InvoiceTransferred, InvoiceUpdated,
-    LPPositionTransferred, ParameterUpdated, PriceOracleUpdated, TokenAdded, TokenRemoved,
+    DistributionContractUpdated, FundQueueResolutionAttempted, FundQueueResolved, FundRequested,
+    InsuranceClaimAttempted, InvoiceCancelled, InvoiceDefaulted, InvoiceDisputed, InvoiceExpired,
+    InvoiceFunded, InvoicePaid, InvoicePartiallyPaid, InvoiceSubmitted, InvoiceTokenChanged,
+    InvoiceTransferred, InvoiceUpdated, LPPositionTransferred, ParameterUpdated,
+    PriceOracleUpdated, TokenAdded, TokenRemoved,
 };
 use invoice::{
     add_invoice_to_lp, add_invoice_to_submitter, add_volume, get_appeal, get_contract_stats,
@@ -60,10 +59,10 @@ use invoice::{
     increment_invoices_paid, increment_invoices_submitted, increment_total_funded,
     increment_total_invoices, increment_total_paid, invoice_exists, is_paused, load_invoice,
     next_invoice_id, remove_invoice_from_lp, remove_invoice_from_submitter, save_appeal,
-    save_dispute, save_fund_queue, save_invoice, save_invoice_funders, save_pre_default_payer_score,
-    save_queue_resolution, set_lp_score, set_min_payer_reputation, set_paused, set_payer_score,
-    set_reputation, try_load_invoice, try_set_fund_queue_opened_at, ContractStats, DisputeRecord,
-    StorageKey,
+    save_dispute, save_fund_queue, save_invoice, save_invoice_funders,
+    save_pre_default_payer_score, save_queue_resolution, set_lp_score, set_min_payer_reputation,
+    set_paused, set_payer_score, set_reputation, try_load_invoice, try_set_fund_queue_opened_at,
+    ContractStats, DisputeRecord, StorageKey,
 };
 // 30-day window in seconds for a payer to file an appeal after a default.
 const APPEAL_WINDOW_SECONDS: u64 = 30 * 24 * 60 * 60;
@@ -355,7 +354,11 @@ impl InvoiceLiquidityContract {
         distribution_contract: Address,
     ) -> Result<(), ContractError> {
         require_admin(&env)?;
-        check_rate_limit(&env, "set_distribution_contract", DEFAULT_RATE_LIMIT_LEDGERS)?;
+        check_rate_limit(
+            &env,
+            "set_distribution_contract",
+            DEFAULT_RATE_LIMIT_LEDGERS,
+        )?;
 
         let old_distribution_contract: Option<Address> = env
             .storage()
@@ -775,23 +778,15 @@ impl InvoiceLiquidityContract {
     ///
     /// An empty list disables tiered fees and falls back to the flat FeeRate.
     /// Access: Admin only
-    pub fn update_fee_tiers(
-        env: Env,
-        tiers: Vec<(i128, u32)>,
-    ) -> Result<(), ContractError> {
+    pub fn update_fee_tiers(env: Env, tiers: Vec<(i128, u32)>) -> Result<(), ContractError> {
         require_admin(&env)?;
         check_rate_limit(&env, "update_fee_tiers", ECONOMIC_PARAM_COOLDOWN_LEDGERS)?;
         let admin = get_admin(&env).ok_or(ContractError::Unauthorized)?;
 
-        env.storage()
-            .instance()
-            .set(&StorageKey::FeeTiers, &tiers);
+        env.storage().instance().set(&StorageKey::FeeTiers, &tiers);
 
         env.events().publish(
-            (
-                Symbol::new(&env, "fee_tiers_updated"),
-                admin.clone(),
-            ),
+            (Symbol::new(&env, "fee_tiers_updated"), admin.clone()),
             tiers.len(),
         );
 
@@ -2033,7 +2028,9 @@ impl InvoiceLiquidityContract {
         // never panic in debug builds or silently wrap to an enormous value
         // in release builds. The LP simply earns zero on that edge, never a
         // negative or wrapped amount (Issue #619).
-        let lp_earned = primary_lp_payout.checked_sub(primary_lp_funded).unwrap_or(0);
+        let lp_earned = primary_lp_payout
+            .checked_sub(primary_lp_funded)
+            .unwrap_or(0);
 
         // CEI: update state before external token transfers
         invoice.status = InvoiceStatus::Paid;
@@ -2735,7 +2732,11 @@ impl InvoiceLiquidityContract {
     /// Access: Admin only
     pub fn set_min_payer_reputation(env: Env, value: u32) -> Result<(), ContractError> {
         require_admin(&env)?;
-        check_rate_limit(&env, "set_min_payer_reputation", ECONOMIC_PARAM_COOLDOWN_LEDGERS)?;
+        check_rate_limit(
+            &env,
+            "set_min_payer_reputation",
+            ECONOMIC_PARAM_COOLDOWN_LEDGERS,
+        )?;
         let updated_by = get_admin(&env).ok_or(ContractError::Unauthorized)?;
         let old_value = get_min_payer_reputation(&env);
         set_min_payer_reputation(&env, value);

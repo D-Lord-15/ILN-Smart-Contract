@@ -80,15 +80,15 @@ pub enum InvoiceStatus {
 #[derive(Clone, Debug, PartialEq)]
 pub struct InvoiceCore {
     pub id: u64,
-    pub freelancer: Address,      // who submitted the invoice (receives liquidity)
-    pub payer: Address,           // the client who owes the money
-    pub token: Address,           // token used for this invoice lifecycle
-    pub amount: i128,             // full invoice value in stroops (1 USDC = 10_000_000)
-    pub due_date: u32,            // Unix timestamp — when the payer must settle by
-    pub discount_rate: u32,       // basis points, e.g. 300 = 3.00%
+    pub freelancer: Address, // who submitted the invoice (receives liquidity)
+    pub payer: Address,      // the client who owes the money
+    pub token: Address,      // token used for this invoice lifecycle
+    pub amount: i128,        // full invoice value in stroops (1 USDC = 10_000_000)
+    pub due_date: u32,       // Unix timestamp — when the payer must settle by
+    pub discount_rate: u32,  // basis points, e.g. 300 = 3.00%
     pub status: InvoiceStatus,
-    pub amount_funded: i128,      // cumulative amount funded so far
-    pub amount_paid: i128,        // cumulative amount paid by the payer
+    pub amount_funded: i128, // cumulative amount funded so far
+    pub amount_paid: i128,   // cumulative amount paid by the payer
 }
 
 // ----------------------------------------------------------------
@@ -101,8 +101,8 @@ pub struct InvoiceCore {
 #[contracttype]
 #[derive(Clone, Debug, PartialEq)]
 pub struct InvoiceMetadata {
-    pub funder: Option<Address>,  // set when an LP funds the invoice (legacy for full funding)
-    pub funded_at: Option<u32>,   // ledger timestamp when funding occurred
+    pub funder: Option<Address>, // set when an LP funds the invoice (legacy for full funding)
+    pub funded_at: Option<u32>,  // ledger timestamp when funding occurred
     pub referral_code: ReferralCode,
     pub submitter_reputation: u32, // snapshot of freelancer's reputation at submission time
 }
@@ -484,20 +484,21 @@ pub fn get_payer_score(env: &Env, payer: &Address) -> u32 {
                     // Issue #601: periods_passed is unbounded (governance-
                     // configurable decay_period_ledgers can be set to 1),
                     // so cap iteration and short-circuit to 0 beyond that.
-                    let decayed_score: u64 = if periods_passed > crate::constants::MAX_REPUTATION_DECAY_PERIODS {
-                        0
-                    } else {
-                        let mut decayed_score = rep.score as u64;
-                        for _ in 0..periods_passed {
-                            let mut decay_amount =
-                                (decayed_score * decay_config.decay_rate_bps as u64) / 10_000;
-                            if decay_amount == 0 && decayed_score > 0 {
-                                decay_amount = 1;
+                    let decayed_score: u64 =
+                        if periods_passed > crate::constants::MAX_REPUTATION_DECAY_PERIODS {
+                            0
+                        } else {
+                            let mut decayed_score = rep.score as u64;
+                            for _ in 0..periods_passed {
+                                let mut decay_amount =
+                                    (decayed_score * decay_config.decay_rate_bps as u64) / 10_000;
+                                if decay_amount == 0 && decayed_score > 0 {
+                                    decay_amount = 1;
+                                }
+                                decayed_score = decayed_score.saturating_sub(decay_amount);
                             }
-                            decayed_score = decayed_score.saturating_sub(decay_amount);
-                        }
-                        decayed_score
-                    };
+                            decayed_score
+                        };
 
                     let new_score = (decayed_score.min(100)) as u32;
                     if new_score != rep.score {
@@ -907,18 +908,20 @@ pub fn add_volume(env: &Env, token: &Address, amount: i128) {
             .persistent()
             .get(&StorageKey::TotalVolumeUsdc)
             .unwrap_or(0);
-        env.storage()
-            .persistent()
-            .set(&StorageKey::TotalVolumeUsdc, &current.saturating_add(amount));
+        env.storage().persistent().set(
+            &StorageKey::TotalVolumeUsdc,
+            &current.saturating_add(amount),
+        );
     } else if crate::is_eurc_token(env, token) {
         let current: i128 = env
             .storage()
             .persistent()
             .get(&StorageKey::TotalVolumeEurc)
             .unwrap_or(0);
-        env.storage()
-            .persistent()
-            .set(&StorageKey::TotalVolumeEurc, &current.saturating_add(amount));
+        env.storage().persistent().set(
+            &StorageKey::TotalVolumeEurc,
+            &current.saturating_add(amount),
+        );
     }
 }
 

@@ -133,7 +133,11 @@ pub fn unlock_reentrancy(env: &Env) {
 /// Check whether the given rate-limited function may be called.
 /// Returns `RateLimited` if the cooldown has not yet elapsed.
 /// Otherwise records the current ledger as the last call time.
-pub fn check_rate_limit(env: &Env, fn_name: &str, cooldown_ledgers: u64) -> Result<(), ContractError> {
+pub fn check_rate_limit(
+    env: &Env,
+    fn_name: &str,
+    cooldown_ledgers: u64,
+) -> Result<(), ContractError> {
     let key = StorageKey::RateLimit(Symbol::new(env, fn_name));
     let last_ledger: u32 = env.storage().instance().get(&key).unwrap_or(0);
     let current_ledger = env.ledger().sequence();

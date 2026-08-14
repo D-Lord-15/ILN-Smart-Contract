@@ -95,9 +95,10 @@ impl IlnDistribution {
         env.storage()
             .instance()
             .set(&StorageKey::LpRewardRate, &DEFAULT_LP_REWARD_RATE);
-        env.storage()
-            .instance()
-            .set(&StorageKey::FreelancerRewardRate, &DEFAULT_FREELANCER_REWARD_RATE);
+        env.storage().instance().set(
+            &StorageKey::FreelancerRewardRate,
+            &DEFAULT_FREELANCER_REWARD_RATE,
+        );
         env.storage()
             .instance()
             .set(&StorageKey::PayerRewardRate, &DEFAULT_PAYER_REWARD_RATE);
@@ -155,11 +156,7 @@ impl IlnDistribution {
         }
 
         env.events().publish(
-            (
-                symbol_short!("settled"),
-                freelancer.clone(),
-                payer.clone(),
-            ),
+            (symbol_short!("settled"), freelancer.clone(), payer.clone()),
             SettlementAccrued {
                 freelancer,
                 payer,
@@ -498,7 +495,10 @@ mod test {
         dist.initialize(&iln_id, &gov_token);
 
         // Check default rate
-        assert_eq!(dist.get_freelancer_reward_rate(), DEFAULT_FREELANCER_REWARD_RATE);
+        assert_eq!(
+            dist.get_freelancer_reward_rate(),
+            DEFAULT_FREELANCER_REWARD_RATE
+        );
 
         // Update rate
         dist.set_freelancer_reward_rate(&8_000_000);

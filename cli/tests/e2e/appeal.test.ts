@@ -20,6 +20,7 @@ describe("iln appeal", () => {
   it("does not submit an appeal for a non-defaulted invoice", async () => {
     const executor = vi.fn();
     vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(process, "exit").mockImplementation((() => {}) as never);
     await makeAppealCommand(vi.fn().mockResolvedValue({ id: "42", status: "Funded" }), executor)
       .parseAsync(["--invoice-id", "42", "--evidence-hash", HASH], { from: "user" });
     expect(executor).not.toHaveBeenCalled();
@@ -29,6 +30,7 @@ describe("iln appeal", () => {
   it("rejects malformed evidence before reading the invoice", async () => {
     const fetcher = vi.fn();
     vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(process, "exit").mockImplementation((() => {}) as never);
     await makeAppealCommand(fetcher, vi.fn()).parseAsync(
       ["--invoice-id", "42", "--evidence-hash", "not-a-hash"], { from: "user" }
     );

@@ -579,7 +579,8 @@ fn test_transfer_lp_position_updates_funder_and_lp_index() {
     let t = setup();
     let id = submit_standard_invoice(&t);
 
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
 
     let new_lp = Address::generate(&t.env);
     t.contract.transfer_lp_position(&id, &new_lp);
@@ -599,7 +600,8 @@ fn test_transfer_lp_position_pays_new_lp_on_settlement() {
     let t = setup();
     let id = submit_standard_invoice(&t);
 
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
 
     let new_lp = Address::generate(&t.env);
     t.contract.transfer_lp_position(&id, &new_lp);
@@ -621,7 +623,8 @@ fn test_transfer_lp_position_can_transfer_twice() {
     let t = setup();
     let id = submit_standard_invoice(&t);
 
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
 
     let new_lp = Address::generate(&t.env);
     let second_lp = Address::generate(&t.env);
@@ -1093,7 +1096,9 @@ fn test_fund_expired_invoice_fails() {
 
     t.contract.expire_invoice(&id);
 
-    let result = t.contract.try_fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+    let result = t
+        .contract
+        .try_fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     assert_eq!(result, Err(Ok(ContractError::InvoiceExpired)));
 
     let invoice = t.contract.get_invoice(&id);
@@ -1348,7 +1353,10 @@ fn test_reputation_decay_bounded_for_extremely_long_inactivity() {
 
     let score = t.contract.payer_score(&t.payer);
 
-    assert_eq!(score, 0, "Score for a long-inactive payer should floor at 0, not hang or panic");
+    assert_eq!(
+        score, 0,
+        "Score for a long-inactive payer should floor at 0, not hang or panic"
+    );
 }
 
 #[test]
@@ -1385,7 +1393,10 @@ fn test_reputation_decay_bounded_when_decay_period_is_one_ledger() {
 
     let score = t.contract.payer_score(&t.payer);
 
-    assert_eq!(score, 0, "decay_period_ledgers=1 with a large gap should floor at 0, not hang or panic");
+    assert_eq!(
+        score, 0,
+        "decay_period_ledgers=1 with a large gap should floor at 0, not hang or panic"
+    );
 }
 
 #[test]
@@ -1429,10 +1440,7 @@ fn test_upgrade_emits_correct_event() {
         timestamp: t.env.ledger().timestamp(),
     };
 
-    assert!(
-        events.len() > 0,
-        "ContractUpgraded event should be emitted"
-    );
+    assert!(events.len() > 0, "ContractUpgraded event should be emitted");
 }
 
 #[test]

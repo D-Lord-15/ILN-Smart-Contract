@@ -340,10 +340,8 @@ impl InsurancePool {
         storage.set(&DataKey::PendingCoverage, &new_coverage);
         storage.set(&DataKey::CoverageEta, &eta);
 
-        env.events().publish(
-            (symbol_short!("cov_prop"),),
-            (new_coverage, eta),
-        );
+        env.events()
+            .publish((symbol_short!("cov_prop"),), (new_coverage, eta));
         Ok(eta)
     }
 
@@ -469,7 +467,11 @@ impl InsurancePool {
             .ok_or(InsuranceError::NotInitialized)?;
         admin.require_auth();
 
-        let old_coverage: i128 = env.storage().instance().get(&DataKey::Coverage).unwrap_or(0);
+        let old_coverage: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::Coverage)
+            .unwrap_or(0);
         env.storage()
             .instance()
             .set(&DataKey::Coverage, &new_coverage);
@@ -489,8 +491,7 @@ impl InsurancePool {
             .ok_or(InsuranceError::NotInitialized)?;
         admin.require_auth();
 
-        env.events()
-            .publish((symbol_short!("prem_gov"),), _rate);
+        env.events().publish((symbol_short!("prem_gov"),), _rate);
         Ok(())
     }
 
@@ -575,10 +576,9 @@ impl InsurancePoolInterface for InsurancePool {
         let new_premium = prev_premium
             .checked_add(amount)
             .unwrap_or_else(|| panic_with_error!(&env, InsuranceError::ArithmeticOverflow));
-        env.storage().persistent().set(
-            &DataKey::Premiums(lp.clone()),
-            &new_premium,
-        );
+        env.storage()
+            .persistent()
+            .set(&DataKey::Premiums(lp.clone()), &new_premium);
 
         let balance: i128 = env.storage().instance().get(&DataKey::Balance).unwrap_or(0);
         let new_balance = balance
@@ -586,7 +586,11 @@ impl InsurancePoolInterface for InsurancePool {
             .unwrap_or_else(|| panic_with_error!(&env, InsuranceError::ArithmeticOverflow));
 
         // Enforce the optional balance cap.
-        if let Some(cap) = env.storage().instance().get::<DataKey, i128>(&DataKey::BalanceCap) {
+        if let Some(cap) = env
+            .storage()
+            .instance()
+            .get::<DataKey, i128>(&DataKey::BalanceCap)
+        {
             if new_balance > cap {
                 panic_with_error!(&env, InsuranceError::BalanceCapExceeded);
             }
@@ -600,8 +604,8 @@ impl InsurancePoolInterface for InsurancePool {
         // State changes above must complete before this external call.
         let token = Self::get_token_client(&env);
         token.transfer(
-            &lp,                               // from (caller)
-            &env.current_contract_address(),   // to (this contract)
+            &lp,                             // from (caller)
+            &env.current_contract_address(), // to (this contract)
             &amount,
         );
 

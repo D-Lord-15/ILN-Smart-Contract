@@ -184,7 +184,10 @@ fn test_get_payer_score_persists_decayed_score() {
     // Verify raw storage has persisted the decayed score (79)
     t.env.as_contract(&t.contract.address, || {
         let rep = crate::invoice::get_reputation(&t.env, &t.payer);
-        assert_eq!(rep.score, 79, "Decayed score must be persisted in ReputationProfile");
+        assert_eq!(
+            rep.score, 79,
+            "Decayed score must be persisted in ReputationProfile"
+        );
     });
 }
 

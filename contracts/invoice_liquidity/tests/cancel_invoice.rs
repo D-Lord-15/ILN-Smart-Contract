@@ -1,5 +1,6 @@
 use invoice_liquidity::{
-    ContractError, InvoiceLiquidityContract, InvoiceLiquidityContractClient, InvoiceStatus, ReferralCode,
+    ContractError, InvoiceLiquidityContract, InvoiceLiquidityContractClient, InvoiceStatus,
+    ReferralCode,
 };
 use soroban_sdk::{testutils::Address as _, Address, Env};
 

@@ -93,7 +93,8 @@ fn make_defaulted_invoice(t: &PauseTestEnv) -> u64 {
     let id = submit_invoice_pause(t);
 
     // Fund the invoice.
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
 
     // Advance past the due date.
     let mut ledger = t.env.ledger().get();
@@ -145,7 +146,10 @@ fn test_expire_invoice_succeeds_when_not_paused() {
 
     // Contract is NOT paused — must succeed.
     let result = t.contract.try_expire_invoice(&id);
-    assert!(result.is_ok(), "expire_invoice should succeed when not paused");
+    assert!(
+        result.is_ok(),
+        "expire_invoice should succeed when not paused"
+    );
 
     let invoice = t.contract.get_invoice(&id);
     assert_eq!(invoice.status, InvoiceStatus::Expired);
@@ -199,7 +203,10 @@ fn test_appeal_default_succeeds_when_not_paused() {
 
     // Contract is NOT paused — must succeed.
     let result = t.contract.try_appeal_default(&id, &evidence_hash(&t.env));
-    assert!(result.is_ok(), "appeal_default should succeed when not paused");
+    assert!(
+        result.is_ok(),
+        "appeal_default should succeed when not paused"
+    );
 
     let invoice = t.contract.get_invoice(&id);
     assert_eq!(invoice.status, InvoiceStatus::Appealed);
@@ -245,7 +252,9 @@ fn test_pause_blocks_both_expire_and_appeal_simultaneously() {
 
     // Both must be blocked.
     let expire_result = t.contract.try_expire_invoice(&expire_id);
-    let appeal_result = t.contract.try_appeal_default(&appeal_id, &evidence_hash(&t.env));
+    let appeal_result = t
+        .contract
+        .try_appeal_default(&appeal_id, &evidence_hash(&t.env));
 
     assert_eq!(expire_result, Err(Ok(ContractError::ContractPaused)));
     assert_eq!(appeal_result, Err(Ok(ContractError::ContractPaused)));

@@ -32,9 +32,9 @@ async function defaultFetcher(limit: number): Promise<TopPayer[]> {
 }
 
 export function makeTopPayersCommand(fetchPayers: TopPayersFetcher = defaultFetcher): Command {
-  const command = new Command("top-payers").description(
-    "List the highest-reputation invoice payers",
-  );
+  const command = new Command("top-payers")
+    .description("List the highest-reputation invoice payers")
+    .exitOverride();
 
   command
     .option("--limit <number>", "Number of payers to return (1-50)", parseLimit, 10)

@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::invoice::{InvoiceCore, InvoiceMetadata, Invoice, InvoiceStatus, ReferralCode};
+    use crate::invoice::{Invoice, InvoiceCore, InvoiceMetadata, InvoiceStatus, ReferralCode};
     use soroban_sdk::testutils::Address as TestAddress;
     use soroban_sdk::{Address, Env};
 
@@ -127,6 +127,9 @@ mod tests {
         assert_eq!(invoice.status, reconstructed.status);
         assert_eq!(invoice.funder, reconstructed.funder);
         assert_eq!(invoice.funded_at, reconstructed.funded_at);
-        assert_eq!(invoice.submitter_reputation, reconstructed.submitter_reputation);
+        assert_eq!(
+            invoice.submitter_reputation,
+            reconstructed.submitter_reputation
+        );
     }
 }

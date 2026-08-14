@@ -1006,7 +1006,8 @@ impl GovContract {
                     Self::invoke_and_check(&env, &iln_contract, "update_fee_rate", args)
                 }
                 ProposalAction::AddToken(token, decimals) => {
-                    let args: Vec<soroban_sdk::Val> = vec![&env, token.into_val(&env), decimals.into_val(&env)];
+                    let args: Vec<soroban_sdk::Val> =
+                        vec![&env, token.into_val(&env), decimals.into_val(&env)];
                     Self::invoke_and_check(&env, &iln_contract, "add_token", args)
                 }
                 ProposalAction::RemoveToken(token) => {

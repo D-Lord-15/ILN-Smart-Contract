@@ -2,7 +2,8 @@
 
 mod test_context;
 use invoice_liquidity::{
-    ContractError, InvoiceLiquidityContract, InvoiceLiquidityContractClient, InvoiceStatus, ReferralCode,
+    ContractError, InvoiceLiquidityContract, InvoiceLiquidityContractClient, InvoiceStatus,
+    ReferralCode,
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -35,17 +36,15 @@ fn assert_lifecycle_for_token(
     amount: i128,
 ) {
     // 1. Submit
-    let invoice_id = ctx
-        .contract
-        .submit_invoice(
-            &ctx.submitter,
-            &ctx.payer,
-            &amount,
-            &due_date(ctx),
-            &DISCOUNT_RATE,
-            &token.address,
-            &ReferralCode::None,
-        );
+    let invoice_id = ctx.contract.submit_invoice(
+        &ctx.submitter,
+        &ctx.payer,
+        &amount,
+        &due_date(ctx),
+        &DISCOUNT_RATE,
+        &token.address,
+        &ReferralCode::None,
+    );
 
     let invoice = ctx.contract.get_invoice(&invoice_id);
     assert_eq!(
@@ -142,17 +141,15 @@ fn test_integration_fund_removed_token_fails() {
     let ctx = setup();
 
     // Submit invoice with EURC (currently approved)
-    let invoice_id = ctx
-        .contract
-        .submit_invoice(
-            &ctx.submitter,
-            &ctx.payer,
-            &INVOICE_AMOUNT,
-            &due_date(&ctx),
-            &100,
-            &ctx.eurc.address,
-            &ReferralCode::None,
-        );
+    let invoice_id = ctx.contract.submit_invoice(
+        &ctx.submitter,
+        &ctx.payer,
+        &INVOICE_AMOUNT,
+        &due_date(&ctx),
+        &100,
+        &ctx.eurc.address,
+        &ReferralCode::None,
+    );
 
     // Admin removes EURC from approved list
     ctx.contract.remove_token(&ctx.eurc.address);

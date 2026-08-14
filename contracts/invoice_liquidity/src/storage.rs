@@ -291,7 +291,6 @@ pub fn save_invoice_funders(env: &Env, id: u64, funders: &soroban_sdk::Vec<(Addr
 // Reputation Helpers
 // ----------------------------------------------------------------
 
-
 pub fn get_lp_score(env: &Env, lp: &Address) -> u32 {
     env.storage()
         .persistent()

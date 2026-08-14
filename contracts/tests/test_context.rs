@@ -7,8 +7,6 @@ use soroban_sdk::{
     Address, Env,
 };
 
-
-
 const DEFAULT_INVOICE_AMOUNT: i128 = 1_000_000_000;
 const DEFAULT_DISCOUNT_RATE: u32 = 300;
 const DEFAULT_DUE_DATE_OFFSET: u64 = 60 * 60 * 24 * 30;
@@ -89,16 +87,15 @@ impl TestContext {
 
     pub fn submit_invoice(&self, amount: i128, rate: u32, due_days: u64) -> u64 {
         let due_date = self.env.ledger().timestamp() + due_days;
-        self.contract
-            .submit_invoice(
-                &self.submitter,
-                &self.payer,
-                &amount,
-                &due_date,
-                &rate,
-                &self.usdc.address,
-                &ReferralCode::None,
-            )
+        self.contract.submit_invoice(
+            &self.submitter,
+            &self.payer,
+            &amount,
+            &due_date,
+            &rate,
+            &self.usdc.address,
+            &ReferralCode::None,
+        )
     }
 
     pub fn fund_invoice(&self, invoice_id: u64) {

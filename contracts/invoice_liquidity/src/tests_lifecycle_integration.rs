@@ -153,8 +153,7 @@ fn test_cancel_invoice_partial_funding_multiple_funders() {
     let env = setup();
 
     let lp2 = Address::generate(&env.env);
-    env.token.admin_client
-        .mint(&lp2, &(INVOICE_AMOUNT * 10));
+    env.token.admin_client.mint(&lp2, &(INVOICE_AMOUNT * 10));
 
     let invoice_id = env.contract.submit_invoice(
         &env.freelancer,
@@ -174,8 +173,7 @@ fn test_cancel_invoice_partial_funding_multiple_funders() {
 
     env.contract
         .fund_invoice(&env.lp, &invoice_id, &fund1, &false);
-    env.contract
-        .fund_invoice(&lp2, &invoice_id, &fund2, &false);
+    env.contract.fund_invoice(&lp2, &invoice_id, &fund2, &false);
 
     let invoice_partial = env.contract.get_invoice(&invoice_id);
     assert_eq!(invoice_partial.status, InvoiceStatus::PartiallyFunded);
