@@ -6,6 +6,9 @@
     "iln": "./dist/index.js"
   },
   "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
   "type": "commonjs",
   "scripts": {
     "build": "tsc",

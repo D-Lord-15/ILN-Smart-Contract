@@ -15,4 +15,12 @@ sdk/node_modules/
 .turbo
 .turbo-cache
 
+# Build outputs
+sdk/dist/
+cli/dist/
+
+# Test coverage
+sdk/coverage/
+cli/coverage/
+
 fix.md
