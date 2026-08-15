@@ -1,6 +1,6 @@
 import { Command } from "commander";
 import { ILNClient } from "@iln/sdk";
-import { resolveProfile, loadConfig } from "../config.js";
+import { resolveProfile } from "../config.js";
 import { formatOutput, formatError, isJsonMode } from "../format.js";
 
 /** Basic ANSI colors for terminal output. */
@@ -31,7 +31,6 @@ export function makeReputationCommand(): Command {
       const json = opts.json || isJsonMode(parentOpts);
 
       try {
-        const config = loadConfig();
         const client = ILNClient.testnet(); // Default to testnet for CLI
 
         let address = opts.address;
@@ -57,8 +56,8 @@ export function makeReputationCommand(): Command {
           console.log(`Decay:       N/A`);
           console.log(`--------------------------------------------------`);
         });
-      } catch (err: any) {
-        formatError(err.message, "REPUTATION_ERROR", json);
+      } catch (err) {
+        formatError((err as Error).message, "REPUTATION_ERROR", json);
       }
     });
 

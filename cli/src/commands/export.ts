@@ -131,10 +131,7 @@ export function makeExportCommand(
 }
 
 /** Default fetcher — placeholder for SDK integration. */
-async function defaultFetcher(_opts: {
-  submitter?: string;
-  lp?: string;
-}): Promise<InvoiceRow[]> {
+async function defaultFetcher(): Promise<InvoiceRow[]> {
   // TODO: replace with real SDK call once the SDK exposes a listInvoices method
   return [];
 }

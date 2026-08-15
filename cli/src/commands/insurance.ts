@@ -29,15 +29,15 @@ async function defaultStatusFetcher(contractId: string, address: string): Promis
   return client.getInsurancePoolInfo(contractId, address);
 }
 
-async function defaultEnrollExecutor(_contractId: string): Promise<{ txHash: string }> {
+async function defaultEnrollExecutor(): Promise<{ txHash: string }> {
   return { txHash: `TX${Math.random().toString(36).slice(2).toUpperCase()}` };
 }
 
-async function defaultDepositExecutor(_contractId: string, _amount: number): Promise<{ txHash: string }> {
+async function defaultDepositExecutor(): Promise<{ txHash: string }> {
   return { txHash: `TX${Math.random().toString(36).slice(2).toUpperCase()}` };
 }
 
-async function defaultClaimExecutor(_contractId: string, _invoiceId: string, _lpAddress: string): Promise<{ txHash: string }> {
+async function defaultClaimExecutor(): Promise<{ txHash: string }> {
   return { txHash: `TX${Math.random().toString(36).slice(2).toUpperCase()}` };
 }
 

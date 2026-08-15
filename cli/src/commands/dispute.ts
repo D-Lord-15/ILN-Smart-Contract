@@ -28,7 +28,7 @@ async function defaultFetcher(id: string): Promise<InvoiceSummary> {
   return { id, status: "Funded", amount: "100", token: "USDC", dueDate: "2025-12-31" };
 }
 
-async function defaultDisputeExecutor(invoiceId: string, reasonHash: string, payer?: string): Promise<DisputeResult> {
+async function defaultDisputeExecutor(invoiceId: string): Promise<DisputeResult> {
   return {
     invoiceId,
     txHash: `TX${Math.random().toString(36).slice(2).toUpperCase()}`,

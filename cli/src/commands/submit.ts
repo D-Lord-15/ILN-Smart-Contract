@@ -23,7 +23,7 @@ function validateStellarAddress(addr: string): boolean {
 }
 
 export async function runInteractivePrompts(): Promise<Required<Omit<SubmitOptions, "dryRun">>> {
-  const { input, select, confirm } = await import("@inquirer/prompts");
+  const { input, select } = await import("@inquirer/prompts");
 
   const payer = await input({
     message: "Payer Stellar address:",

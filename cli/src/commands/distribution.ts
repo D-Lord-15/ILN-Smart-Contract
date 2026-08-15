@@ -22,7 +22,7 @@ async function defaultAccrualFetcher(contractId: string, address: string): Promi
   return client.getDistributionAccrual(contractId, address);
 }
 
-async function defaultClaimExecutor(_contractId: string): Promise<{ txHash: string; amount: number }> {
+async function defaultClaimExecutor(): Promise<{ txHash: string; amount: number }> {
   return { txHash: `TX${Math.random().toString(36).slice(2).toUpperCase()}`, amount: 0 };
 }
 

@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { listProfiles, saveProfile, loadProfile, resolveProfile } from "../config.js";
+import { listProfiles, saveProfile, resolveProfile } from "../config.js";
 import { Keypair, Horizon } from "@stellar/stellar-sdk";
 import readline from "readline/promises";
 import { formatOutput, formatError, isJsonMode } from "../format.js";
@@ -85,8 +85,8 @@ export function makeWalletCommand(): Command {
           console.log(`✓ Secret key imported and saved as profile "${opts.profile}"`);
           console.log(`  Public key : ${kp.publicKey()}`);
         });
-      } catch (err: any) {
-        formatError(`Invalid secret key. ${err.message}`, "INVALID_SECRET", json);
+      } catch (err) {
+        formatError(`Invalid secret key. ${(err as Error).message}`, "INVALID_SECRET", json);
       }
     });
 
@@ -110,8 +110,10 @@ export function makeWalletCommand(): Command {
         const targets = ["XLM", "USDC", "EURC"];
         const balances: Record<string, string> = {};
         for (const asset of targets) {
-          const bal = account.balances.find((b: any) =>
-            b.asset_type === "native" ? asset === "XLM" : b.asset_code === asset
+          const bal = account.balances.find((b) =>
+            b.asset_type === "native"
+              ? asset === "XLM"
+              : b.asset_type !== "liquidity_pool_shares" && b.asset_code === asset
           );
           balances[asset] = bal ? bal.balance : "0";
         }
@@ -128,8 +130,8 @@ export function makeWalletCommand(): Command {
             }
           }
         );
-      } catch (err: any) {
-        formatError(`Could not fetch balances: ${err.message}`, "BALANCE_ERROR", json);
+      } catch (err) {
+        formatError(`Could not fetch balances: ${(err as Error).message}`, "BALANCE_ERROR", json);
       }
     });
 
@@ -159,8 +161,8 @@ export function makeWalletCommand(): Command {
         } else {
           formatError(`Friendbot request failed with status ${res.status}`, "FRIENDBOT_ERROR", json);
         }
-      } catch (err: any) {
-        formatError(err.message, "FRIENDBOT_ERROR", json);
+      } catch (err) {
+        formatError((err as Error).message, "FRIENDBOT_ERROR", json);
       }
     });
 
