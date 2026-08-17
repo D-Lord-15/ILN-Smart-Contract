@@ -9,7 +9,7 @@ exclude = [
 ]
 
 [workspace.dependencies]
-soroban-sdk = "21.4.0"
+soroban-sdk = "27.0.6"
 proptest = "1"
 rand = "0.10.1"
 
