@@ -6,6 +6,7 @@ use soroban_sdk::{
     token::{Client as TokenClient, StellarAssetClient},
     Address, BytesN, Env,
 };
+use std::format;
 
 const DUE_DATE_OFFSET: u64 = 60 * 60 * 24 * 30;
 const DISCOUNT_RATE: u32 = 300;
@@ -59,6 +60,18 @@ fn setup() -> LifecycleTestEnv {
     let xlm_id = env.register_stellar_asset_contract_v2(xlm_admin);
     let xlm_address = xlm_id.address();
     contract.initialize(&admin, &token.address, &eurc_address, &xlm_address);
+
+    // Fund the contract treasury so it can cover LP refunds on upheld
+    // disputes: the LP's original contribution (invoice amount minus the
+    // discount) is forwarded to the freelancer immediately on full
+    // funding, so a later refund of that same amount draws on this
+    // reserve rather than the LP's own (already-disbursed) escrowed
+    // funds. Sized to exactly the LP's contribution — not a large,
+    // arbitrary buffer like test.rs's setup() — so that dispute-resolution
+    // tests can assert the contract's balance nets back to zero once the
+    // reserve has covered the refund.
+    let lp_contribution = INVOICE_AMOUNT - (INVOICE_AMOUNT * DISCOUNT_RATE as i128 / 10_000);
+    token.admin_client.mint(&contract.address, &lp_contribution);
 
     let mut ledger_info = env.ledger().get();
     ledger_info.timestamp = 1_700_000_000;
@@ -269,6 +282,21 @@ fn test_dispute_upheld_with_partial_payment_refunds_payer() {
     env.contract
         .resolve_dispute(&invoice_id, &resolution_hash, &1);
 
+    // events().all() reflects only the most recently completed top-level
+    // contract call in this SDK's mock test host, not accumulated history
+    // across the whole test — so check it right after resolve_dispute,
+    // before any of the read-only calls below become the "most recent"
+    // call and leave it empty.
+    let events = env.env.events().all();
+    let refund_event_exists = events
+        .events()
+        .into_iter()
+        .any(|e| format!("{:?}", e).contains("dispute_upheld_payer_refund"));
+    assert!(
+        refund_event_exists,
+        "DisputeUpheldPayerRefund event should be emitted"
+    );
+
     let invoice_cancelled = env.contract.get_invoice(&invoice_id);
     assert_eq!(invoice_cancelled.status, InvoiceStatus::Cancelled);
 
@@ -283,16 +311,6 @@ fn test_dispute_upheld_with_partial_payment_refunds_payer() {
     assert_eq!(
         contract_balance, 0,
         "Contract balance must be zero after dispute resolution"
-    );
-
-    let events = env.env.events().all();
-    let refund_event_exists = events
-        .events()
-        .into_iter()
-        .any(|e| format!("{:?}", e).contains("dispute_upheld_payer_refund"));
-    assert!(
-        refund_event_exists,
-        "DisputeUpheldPayerRefund event should be emitted"
     );
 }
 

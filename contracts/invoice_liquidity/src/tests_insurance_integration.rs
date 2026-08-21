@@ -156,7 +156,7 @@ fn test_claim_default_insurance_event_reports_compensated_payout() {
 
     let events = t.env.events().all();
     assert!(
-        !events.is_empty(),
+        !events.events().is_empty(),
         "InsuranceClaimAttempted event should be emitted"
     );
 }

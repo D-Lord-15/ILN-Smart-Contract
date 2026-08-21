@@ -8,6 +8,7 @@ use soroban_sdk::{
     token::{Client as TokenClient, StellarAssetClient},
     Address, Env,
 };
+use std::format;
 
 const INVOICE_AMOUNT: i128 = 100_000_000;
 const DISCOUNT_RATE: u32 = 300;

@@ -151,7 +151,18 @@ fn test_integration_fund_removed_token_fails() {
         &ReferralCode::None,
     );
 
-    // Admin removes EURC from approved list
+    // Admin removes EURC from approved list. Advance the ledger past
+    // remove_token's rate-limit cooldown first: the last-call ledger for a
+    // rate-limited function defaults to 0 when never called, and
+    // TestContext::new() starts the ledger at sequence 100 (below the
+    // 120-ledger cooldown), so calling remove_token() immediately after
+    // setup() incorrectly trips the cooldown on its very first-ever call.
+    // See tests_oracle_registry.rs's `advance_past_rate_limit_cooldown` for
+    // the same workaround applied elsewhere in the ILN contract's own test
+    // suite.
+    let mut ledger_info = ctx.env.ledger().get();
+    ledger_info.sequence_number += invoice_liquidity::constants::DEFAULT_RATE_LIMIT_LEDGERS as u32;
+    ctx.env.ledger().set(ledger_info);
     ctx.contract.remove_token(&ctx.eurc.address);
 
     // LP tries to fund it - should fail with Unauthorized

@@ -2985,17 +2985,23 @@ fn validate_invoice_terms_for_min(
 }
 
 fn is_approved_token(env: &Env, token: &Address) -> bool {
-    // First check the explicit allowlist in storage
-    if env
+    // The explicit allowlist flag is authoritative once set — `initialize()`
+    // sets it `true` for the three core tokens (USDC/EURC/XLM) and
+    // `remove_token()` sets it `false`, so an explicit `false` here means
+    // the token was deliberately removed and must not fall through to the
+    // Config-based check below (which would otherwise re-approve a removed
+    // core token unconditionally).
+    if let Some(approved) = env
         .storage()
         .persistent()
-        .get(&crate::storage::DataKey::ApprovedToken(token.clone()))
-        .unwrap_or(false)
+        .get::<_, bool>(&crate::storage::DataKey::ApprovedToken(token.clone()))
     {
-        return true;
+        return approved;
     }
 
-    // Then check the wired tokens in Config
+    // No explicit flag has ever been recorded for this token — fall back to
+    // the wired tokens in Config (covers state that predates the explicit
+    // ApprovedToken flag).
     if let Some(config) = crate::storage::get_config(env) {
         if token == &config.usdc_sac_address
             || token == &config.eurc_sac_address

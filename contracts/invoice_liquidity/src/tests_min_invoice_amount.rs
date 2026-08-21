@@ -2,7 +2,7 @@
 
 use super::*;
 use soroban_sdk::{
-    testutils::Address as _,
+    testutils::{Address as _, Ledger},
     token::{Client as TokenClient, StellarAssetClient},
     Address, Env,
 };
@@ -66,6 +66,19 @@ fn setup_extended() -> TestEnv {
 
 fn due_date(t: &TestEnv) -> u64 {
     t.env.ledger().timestamp() + DUE_DATE_OFFSET
+}
+
+/// Advance the ledger past `add_token`'s rate-limit cooldown
+/// (`DEFAULT_RATE_LIMIT_LEDGERS`). The last-call ledger for a rate-limited
+/// function defaults to 0 when never called, so calling `add_token()` at
+/// the default sequence 0 incorrectly trips the cooldown on its very
+/// first-ever call. See tests_oracle_registry.rs's
+/// `advance_past_rate_limit_cooldown` for the same workaround applied to
+/// other rate-limited functions.
+fn advance_past_rate_limit_cooldown(env: &Env) {
+    let mut info = env.ledger().get();
+    info.sequence_number += crate::constants::DEFAULT_RATE_LIMIT_LEDGERS as u32;
+    env.ledger().set(info);
 }
 
 #[test]
@@ -197,6 +210,7 @@ fn test_admin_adds_token_with_different_decimals() {
     // it isn't fee-on-transfer (admin is the one that performs the test transfer).
     new_sac.mint(&t.admin, &10_000_000);
 
+    advance_past_rate_limit_cooldown(&t.env);
     t.contract.add_token(&new_token, &8);
 
     let min_8 = 100_000_000i128;

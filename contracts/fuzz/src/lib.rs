@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use iln_governance::{GovernanceContract, GovernanceContractClient};
+    use iln_governance::{GovContract, GovContractClient};
     use invoice_liquidity::{
         InvoiceLiquidityContract, InvoiceLiquidityContractClient, ReferralCode,
     };
@@ -37,7 +37,9 @@ mod tests {
         let xlm_contract_id = env.register_stellar_asset_contract_v2(xlm_admin);
         let xlm_address = xlm_contract_id.address();
 
-        contract.initialize(&usdc_admin, &usdc_address, &xlm_address);
+        let eurc_address = Address::generate(&env);
+
+        contract.initialize(&usdc_admin, &usdc_address, &eurc_address, &xlm_address);
 
         // Fix ledger timestamp to a known baseline
         let mut ledger_info = env.ledger().get();
@@ -70,21 +72,21 @@ mod tests {
             } else {
                 AddressPayload::AccountIdPublicKeyEd25519(BytesN::from_array(&t.env, &payer_bytes))
             };
-            let payer = Address::from_val(&t.env, &payer_payload);
+            let payer = payer_payload.to_address(&t.env);
 
             let freelancer_payload = if freelancer_is_contract {
                 AddressPayload::ContractIdHash(BytesN::from_array(&t.env, &freelancer_bytes))
             } else {
                 AddressPayload::AccountIdPublicKeyEd25519(BytesN::from_array(&t.env, &freelancer_bytes))
             };
-            let freelancer = Address::from_val(&t.env, &freelancer_payload);
+            let freelancer = freelancer_payload.to_address(&t.env);
 
             let token_payload = if token_is_contract {
                 AddressPayload::ContractIdHash(BytesN::from_array(&t.env, &token_bytes))
             } else {
                 AddressPayload::AccountIdPublicKeyEd25519(BytesN::from_array(&t.env, &token_bytes))
             };
-            let token = Address::from_val(&t.env, &token_payload);
+            let token = token_payload.to_address(&t.env);
 
             // Call try_submit_invoice with fuzzed random inputs.
             // We want to ensure that regardless of the fuzzed inputs,
@@ -140,20 +142,22 @@ mod tests {
         ) {
             let env = Env::default();
             env.mock_all_auths();
-            let contract_id = env.register_contract(None, GovernanceContract);
-            let gov = GovernanceContractClient::new(&env, &contract_id);
+            let contract_id = env.register_contract(None, GovContract);
+            let gov = GovContractClient::new(&env, &contract_id);
 
             // Initialize gov contract
+            let iln_contract = Address::generate(&env);
+            let dist_contract = Address::generate(&env);
             let admin = Address::generate(&env);
             let token = Address::generate(&env);
-            let _ = gov.try_initialize(&admin, &token);
+            let _ = gov.try_initialize(&iln_contract, &dist_contract, &token, &admin, &10_000);
 
             let voter_payload = if voter_is_contract {
                 AddressPayload::ContractIdHash(BytesN::from_array(&env, &voter_bytes))
             } else {
                 AddressPayload::AccountIdPublicKeyEd25519(BytesN::from_array(&env, &voter_bytes))
             };
-            let voter = Address::from_val(&env, &voter_payload);
+            let voter = voter_payload.to_address(&env);
 
             let _ = gov.try_cast_vote(&voter, &proposal_id, &support);
         }
@@ -165,16 +169,18 @@ mod tests {
         ) {
             let env = Env::default();
             env.mock_all_auths();
-            let contract_id = env.register_contract(None, GovernanceContract);
-            let gov = GovernanceContractClient::new(&env, &contract_id);
+            let contract_id = env.register_contract(None, GovContract);
+            let gov = GovContractClient::new(&env, &contract_id);
 
             // Initialize gov contract
+            let iln_contract = Address::generate(&env);
+            let dist_contract = Address::generate(&env);
             let admin = Address::generate(&env);
             let token = Address::generate(&env);
-            let _ = gov.try_initialize(&admin, &token);
+            let _ = gov.try_initialize(&iln_contract, &dist_contract, &token, &admin, &10_000);
 
-            let delegator = Address::from_val(&env, &AddressPayload::AccountIdPublicKeyEd25519(BytesN::from_array(&env, &delegator_bytes)));
-            let delegate = Address::from_val(&env, &AddressPayload::AccountIdPublicKeyEd25519(BytesN::from_array(&env, &delegate_bytes)));
+            let delegator = AddressPayload::AccountIdPublicKeyEd25519(BytesN::from_array(&env, &delegator_bytes)).to_address(&env);
+            let delegate = AddressPayload::AccountIdPublicKeyEd25519(BytesN::from_array(&env, &delegate_bytes)).to_address(&env);
 
             let _ = gov.try_delegate_votes(&delegator, &delegate);
         }
@@ -207,7 +213,7 @@ mod tests {
             } else {
                 AddressPayload::AccountIdPublicKeyEd25519(BytesN::from_array(&t.env, &funder_bytes))
             };
-            let funder = Address::from_val(&t.env, &funder_payload);
+            let funder = funder_payload.to_address(&t.env);
 
             // Random invoice token address, so the funding path exercises the
             // token allowlist / transfer logic with arbitrary tokens.
@@ -216,7 +222,7 @@ mod tests {
             } else {
                 AddressPayload::AccountIdPublicKeyEd25519(BytesN::from_array(&t.env, &token_bytes))
             };
-            let token = Address::from_val(&t.env, &token_payload);
+            let token = token_payload.to_address(&t.env);
 
             // Optionally seed a real invoice with the fuzzed token, then fund it.
             // Otherwise fund a purely random (likely non-existent) invoice id.

@@ -418,7 +418,7 @@ fn test_cast_vote_emits_vote_cast_event() {
     let id = create_fee_proposal(&t);
     t.contract.cast_vote(&t.voter_a, &id, &true);
     let events = t.env.events().all();
-    assert!(!events.is_empty(), "VoteCast event should be emitted");
+    assert!(!events.events().is_empty(), "VoteCast event should be emitted");
 }
 
 #[test]
@@ -661,7 +661,7 @@ fn test_delegate_votes_emits_votes_delegated_event() {
     let t = setup();
     t.contract.delegate_votes(&t.voter_a, &t.voter_b);
     let events = t.env.events().all();
-    assert!(!events.is_empty(), "VotesDelegated event should be emitted");
+    assert!(!events.events().is_empty(), "VotesDelegated event should be emitted");
 }
 
 #[test]
@@ -671,7 +671,7 @@ fn test_undelegate_votes_emits_votes_undelegated_event() {
     t.contract.undelegate_votes(&t.voter_a);
     let events = t.env.events().all();
     assert!(
-        !events.is_empty(),
+        !events.events().is_empty(),
         "VotesUndelegated event should be emitted"
     );
 }
@@ -926,7 +926,7 @@ fn test_veto_emits_proposal_vetoed_event() {
     t.contract.veto_proposal(&id, &reason_hash(&t.env));
 
     let events = t.env.events().all();
-    assert!(!events.is_empty(), "ProposalVetoed event should be emitted");
+    assert!(!events.events().is_empty(), "ProposalVetoed event should be emitted");
 }
 
 /// Veto power is enabled after initialisation.
@@ -1092,7 +1092,7 @@ fn test_create_proposal_emits_proposal_created_event() {
     );
     let events = t.env.events().all();
     assert!(
-        !events.is_empty(),
+        !events.events().is_empty(),
         "ProposalCreated event should be emitted"
     );
 }
@@ -1991,11 +1991,11 @@ fn test_execute_proposal_failure_emits_event() {
         GovContract::execute_proposal(t.env.clone(), id)
     });
 
-    let events_before = t.env.events().all().len();
+    let events_before = t.env.events().all().events().len();
     let _ = t.env.as_contract(&t.contract.address, || {
         GovContract::execute_proposal(t.env.clone(), id)
     });
-    let events_after = t.env.events().all().len();
+    let events_after = t.env.events().all().events().len();
     assert!(
         events_after > events_before,
         "ProposalExecutionFailed event should be emitted"

@@ -20,7 +20,9 @@ use mock_token::{MockToken, MockTokenClient};
 use iln_governance::{
     GovContract, GovContractClient, GovernanceError, ProposalAction, ProposalStatus,
 };
-use invoice_liquidity::{ContractError, InvoiceLiquidityContract, InvoiceLiquidityContractClient};
+use invoice_liquidity::{
+    ContractError, InvoiceLiquidityContract, InvoiceLiquidityContractClient, ReferralCode,
+};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token::StellarAssetClient,
@@ -94,9 +96,13 @@ fn setup() -> GovIntegrationEnv {
     iln.initialize(&admin, &payment_token_addr, &eurc_addr, &xlm_addr);
 
     // ── Governance contract ───────────────────────────────────────────────
+    // Distribution contract isn't exercised by these tests (no
+    // distribution-related proposals), so a generated placeholder address
+    // is sufficient.
+    let dist_addr = Address::generate(&env);
     let governance_id = env.register_contract(None, GovContract);
     let governance = GovContractClient::new(&env, &governance_id);
-    governance.initialize(&iln_id, &gov_token_addr, &admin);
+    governance.initialize(&iln_id, &dist_addr, &gov_token_addr, &admin, &GOV_TOTAL_SUPPLY);
 
     // Fix ledger timestamp.
     let mut ledger = env.ledger().get();
@@ -128,9 +134,19 @@ fn setup() -> GovIntegrationEnv {
 fn pass_and_execute(t: &GovIntegrationEnv, proposal_id: u64) {
     t.governance.cast_vote(&t.voter, &proposal_id, &true);
 
-    // Advance past the 259 200-second voting window.
+    // Advance past the 259 200-second voting window. Also advance the
+    // ledger sequence: executing an economic-parameter proposal (e.g.
+    // UpdateFeeRate, UpdateMaxDiscountRate) calls into the ILN contract's
+    // own rate-limited setters, whose cooldown is keyed off ledger
+    // sequence, not timestamp. The last-call ledger for a rate-limited
+    // function defaults to 0 when never called, so without this the
+    // first-ever call at the default sequence 0 incorrectly trips the
+    // cooldown — see tests_oracle_registry.rs's
+    // `advance_past_rate_limit_cooldown` for the same workaround applied
+    // elsewhere in the ILN contract's own test suite.
     let mut ledger = t.env.ledger().get();
     ledger.timestamp += 259_201;
+    ledger.sequence_number += invoice_liquidity::constants::ECONOMIC_PARAM_COOLDOWN_LEDGERS as u32;
     t.env.ledger().set(ledger);
 
     // Active → Passed
@@ -155,7 +171,7 @@ fn test_update_max_discount_via_governance_takes_effect() {
         &t.payer,
         &INVOICE_AMOUNT,
         &due_date,
-        &DISCOUNT_RATE,
+        &2_000,
         &t.payment_token_addr,
         &ReferralCode::None,
     );
@@ -184,7 +200,7 @@ fn test_update_max_discount_via_governance_takes_effect() {
         &t.payer,
         &INVOICE_AMOUNT,
         &due_date_2,
-        &DISCOUNT_RATE,
+        &2_000,
         &t.payment_token_addr,
         &ReferralCode::None,
     );

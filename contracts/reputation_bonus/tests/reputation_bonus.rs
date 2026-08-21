@@ -142,10 +142,11 @@ fn test_governance_setters_and_access_control() {
         },
     ];
 
-    assert_eq!(events.len(), expected.len() as u32);
+    assert_eq!(events.events().len(), expected.len());
     for (idx, expected_event) in expected.iter().enumerate() {
         let event = events
-            .get(idx.try_into().expect("index fits in u32"))
+            .events()
+            .get(idx)
             .expect("expected event to exist");
         assert!(format!("{event:?}").contains(&expected_event.param_name.to_string()));
     }
