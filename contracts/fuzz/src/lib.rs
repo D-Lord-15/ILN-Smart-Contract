@@ -255,7 +255,7 @@ mod tests {
                 &require_oracle,
             );
 
-            if let Err(_) = result {}
+            if result.is_err() {}
         }
     }
 }
