@@ -11,8 +11,8 @@ use soroban_sdk::{
 use test_context::TestContext;
 
 const _DUE_DATE_OFFSET: u64 = 60 * 60 * 24 * 30; // 30 days
-const _DISCOUNT_RATE: u32 = 300; // 3.00%
-const _INVOICE_AMOUNT: i128 = 1_000_000_000;
+const DISCOUNT_RATE: u32 = 300; // 3.00%
+const INVOICE_AMOUNT: i128 = 1_000_000_000;
 
 fn setup() -> TestContext {
     TestContext::new()
