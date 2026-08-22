@@ -45,6 +45,10 @@ jobs:
           pnpm --filter @iln/sdk build
           pnpm --filter @iln/cli build
 
+      - name: Configure npm auth
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+
       - name: Version packages
         run: pnpm changeset version
         env:

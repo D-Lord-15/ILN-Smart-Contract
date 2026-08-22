@@ -530,7 +530,7 @@ impl InsurancePool {
         }
     }
 
-    fn get_token_client(env: &Env) -> token::Client {
+    fn get_token_client(env: &Env) -> token::Client<'_> {
         let token_addr: Address = env
             .storage()
             .instance()
@@ -605,7 +605,7 @@ impl InsurancePoolInterface for InsurancePool {
         let token = Self::get_token_client(&env);
         token.transfer(
             &lp,                             // from (caller)
-            &env.current_contract_address(), // to (this contract)
+            env.current_contract_address(), // to (this contract)
             &amount,
         );
 
