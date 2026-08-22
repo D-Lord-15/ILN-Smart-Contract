@@ -604,7 +604,7 @@ impl InsurancePoolInterface for InsurancePool {
         // State changes above must complete before this external call.
         let token = Self::get_token_client(&env);
         token.transfer(
-            &lp,                             // from (caller)
+            &lp,                            // from (caller)
             env.current_contract_address(), // to (this contract)
             &amount,
         );
