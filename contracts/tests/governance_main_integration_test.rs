@@ -255,7 +255,7 @@ fn test_update_fee_rate_via_governance_takes_effect() {
     assert_eq!(p.status, ProposalStatus::Executed);
 
     // Run the invoice lifecycle: submit → fund → mark_paid.
-    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
+    let _due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
     let invoice_id = t.iln.submit_invoice(
         &t.freelancer,
         &t.payer,
@@ -322,7 +322,7 @@ fn test_veto_proposal_prevents_execution() {
 
     // The ILN fee rate was NOT changed — submitting and funding an invoice
     // with the default fee (0) means admin receives no fee.
-    let due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
+    let _due_date = t.env.ledger().timestamp() + DUE_DATE_OFFSET;
     let invoice_id = t.iln.submit_invoice(
         &t.freelancer,
         &t.payer,
