@@ -102,7 +102,13 @@ fn setup() -> GovIntegrationEnv {
     let dist_addr = Address::generate(&env);
     let governance_id = env.register_contract(None, GovContract);
     let governance = GovContractClient::new(&env, &governance_id);
-    governance.initialize(&iln_id, &dist_addr, &gov_token_addr, &admin, &GOV_TOTAL_SUPPLY);
+    governance.initialize(
+        &iln_id,
+        &dist_addr,
+        &gov_token_addr,
+        &admin,
+        &GOV_TOTAL_SUPPLY,
+    );
 
     // Fix ledger timestamp.
     let mut ledger = env.ledger().get();
