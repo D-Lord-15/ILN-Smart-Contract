@@ -19,7 +19,6 @@ struct ErrorTestEnv {
     env: Env,
     contract: InvoiceLiquidityContractClient<'static>,
     token: TokenClient<'static>,
-    token_admin: StellarAssetClient<'static>,
     admin: Address,
     freelancer: Address,
     payer: Address,
@@ -75,7 +74,6 @@ fn setup_errors() -> ErrorTestEnv {
         env,
         contract,
         token,
-        token_admin,
         admin,
         freelancer,
         payer,
@@ -110,8 +108,11 @@ fn test_err_invoice_not_found() {
 fn test_err_already_funded() {
     let t = setup_errors();
     let id = create_standard_invoice(&t);
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
-    let res = t.contract.try_fund_invoice(&t.other, &id, &INVOICE_AMOUNT, &false);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+    let res = t
+        .contract
+        .try_fund_invoice(&t.other, &id, &INVOICE_AMOUNT, &false);
     assert_eq!(res, Err(Ok(ContractError::AlreadyFunded)));
 }
 
@@ -120,7 +121,8 @@ fn test_err_already_funded() {
 fn test_err_already_paid() {
     let t = setup_errors();
     let id = create_standard_invoice(&t);
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     t.contract.mark_paid(&id, &INVOICE_AMOUNT);
     let res = t.contract.try_mark_paid(&id, &INVOICE_AMOUNT);
     assert_eq!(res, Err(Ok(ContractError::AlreadyPaid)));
@@ -203,12 +205,15 @@ fn test_err_invalid_due_date() {
 fn test_err_invoice_defaulted() {
     let t = setup_errors();
     let id = create_standard_invoice(&t);
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     let mut ledger = t.env.ledger().get();
     ledger.timestamp += DUE_DATE_OFFSET + 100;
     t.env.ledger().set(ledger);
     t.contract.claim_default(&t.funder, &id);
-    let res = t.contract.try_fund_invoice(&t.other, &id, &INVOICE_AMOUNT, &false);
+    let res = t
+        .contract
+        .try_fund_invoice(&t.other, &id, &INVOICE_AMOUNT, &false);
     assert_eq!(res, Err(Ok(ContractError::InvoiceDefaulted)));
 }
 
@@ -226,7 +231,8 @@ fn test_err_nothing_to_claim() {
 fn test_err_not_yet_defaulted() {
     let t = setup_errors();
     let id = create_standard_invoice(&t);
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     let res = t.contract.try_claim_default(&t.funder, &id);
     assert_eq!(res, Err(Ok(ContractError::NotYetDefaulted)));
 }
@@ -236,7 +242,9 @@ fn test_err_not_yet_defaulted() {
 fn test_err_overfunding_rejected() {
     let t = setup_errors();
     let id = create_standard_invoice(&t);
-    let res = t.contract.try_fund_invoice(&t.funder, &id, &(INVOICE_AMOUNT + 1000), &false);
+    let res = t
+        .contract
+        .try_fund_invoice(&t.funder, &id, &(INVOICE_AMOUNT + 1000), &false);
     assert_eq!(res, Err(Ok(ContractError::OverfundingRejected)));
 }
 
@@ -249,7 +257,9 @@ fn test_err_invoice_expired() {
     ledger.timestamp += DUE_DATE_OFFSET + 100;
     t.env.ledger().set(ledger);
     t.contract.expire_invoice(&id);
-    let res = t.contract.try_fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+    let res = t
+        .contract
+        .try_fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     assert_eq!(res, Err(Ok(ContractError::InvoiceExpired)));
 }
 
@@ -293,7 +303,9 @@ fn test_err_already_initialized() {
             .instance()
             .set(&crate::storage::DataKey::InvoiceCount, &1_u64);
     });
-    let res = t.contract.try_initialize(&t.admin, &t.token.address, &t.other, &t.other);
+    let res = t
+        .contract
+        .try_initialize(&t.admin, &t.token.address, &t.other, &t.other);
     assert_eq!(res, Err(Ok(ContractError::AlreadyInitialized)));
 }
 
@@ -302,7 +314,8 @@ fn test_err_already_initialized() {
 fn test_err_already_appealed() {
     let t = setup_errors();
     let id = create_standard_invoice(&t);
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     let mut ledger = t.env.ledger().get();
     ledger.timestamp += DUE_DATE_OFFSET + 1;
     t.env.ledger().set(ledger);
@@ -319,7 +332,8 @@ fn test_err_already_appealed() {
 fn test_err_appeal_window_closed() {
     let t = setup_errors();
     let id = create_standard_invoice(&t);
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     let mut ledger = t.env.ledger().get();
     ledger.timestamp += DUE_DATE_OFFSET + 1;
     t.env.ledger().set(ledger);
@@ -364,7 +378,9 @@ fn test_err_not_approved_funder() {
     ledger.sequence_number += QUEUE_DELAY_LEDGERS + 1;
     t.env.ledger().set(ledger);
     t.contract.resolve_fund_queue(&id);
-    let res = t.contract.try_fund_invoice(&t.other, &id, &INVOICE_AMOUNT, &false);
+    let res = t
+        .contract
+        .try_fund_invoice(&t.other, &id, &INVOICE_AMOUNT, &false);
     assert_eq!(res, Err(Ok(ContractError::NotApprovedFunder)));
 }
 
@@ -373,7 +389,8 @@ fn test_err_not_approved_funder() {
 fn test_err_invoice_appealed() {
     let t = setup_errors();
     let id = create_standard_invoice(&t);
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     let mut ledger = t.env.ledger().get();
     ledger.timestamp += DUE_DATE_OFFSET + 1;
     t.env.ledger().set(ledger);
@@ -413,7 +430,9 @@ fn test_err_invoice_disputed() {
     let id = create_standard_invoice(&t);
     let reason = BytesN::from_array(&t.env, &[2u8; 32]);
     t.contract.dispute_invoice(&id, &reason);
-    let res = t.contract.try_fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+    let res = t
+        .contract
+        .try_fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     assert_eq!(res, Err(Ok(ContractError::InvoiceDisputed)));
 }
 
@@ -423,7 +442,9 @@ fn test_err_contract_paused() {
     let t = setup_errors();
     let id = create_standard_invoice(&t);
     t.contract.pause();
-    let res = t.contract.try_fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+    let res = t
+        .contract
+        .try_fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     assert_eq!(res, Err(Ok(ContractError::ContractPaused)));
 }
 
@@ -483,7 +504,8 @@ fn test_err_self_invoice() {
 fn test_err_overpayment_rejected() {
     let t = setup_errors();
     let id = create_standard_invoice(&t);
-    t.contract.fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+    t.contract
+        .fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     let res = t.contract.try_mark_paid(&id, &(INVOICE_AMOUNT + 1000));
     assert_eq!(res, Err(Ok(ContractError::OverpaymentRejected)));
 }
@@ -496,7 +518,9 @@ fn test_err_payer_reputation_too_low() {
     t.contract.set_min_payer_reputation(&80);
     let id = create_standard_invoice(&t);
     // Payer has default reputation 50 < 80
-    let res = t.contract.try_fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
+    let res = t
+        .contract
+        .try_fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &false);
     assert_eq!(res, Err(Ok(ContractError::PayerReputationTooLow)));
 }
 
@@ -547,7 +571,9 @@ fn test_err_payer_unverified() {
     t.contract.set_price_oracle(&oracle_id);
 
     let id = create_standard_invoice(&t);
-    let res = t.contract.try_fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &true);
+    let res = t
+        .contract
+        .try_fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &true);
     assert_eq!(res, Err(Ok(ContractError::PayerUnverified)));
 }
 
@@ -563,7 +589,9 @@ fn test_err_oracle_data_stale() {
     t.contract.set_price_oracle(&oracle_id);
 
     let id = create_standard_invoice(&t);
-    let res = t.contract.try_fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &true);
+    let res = t
+        .contract
+        .try_fund_invoice(&t.funder, &id, &INVOICE_AMOUNT, &true);
     assert_eq!(res, Err(Ok(ContractError::OracleDataStale)));
 }
 

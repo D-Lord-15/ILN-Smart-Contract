@@ -209,7 +209,10 @@ fn test_err_reputation_invoice_not_found() {
     client.init(&admin);
 
     let res = client.try_mark_paid(&9999);
-    assert_eq!(res, Err(Ok(reputation_bonus::errors::ContractError::InvoiceNotFound)));
+    assert_eq!(
+        res,
+        Err(Ok(reputation_bonus::errors::ContractError::InvoiceNotFound))
+    );
 }
 
 #[test]
@@ -234,7 +237,10 @@ fn test_err_reputation_illegal_state() {
 
     // Marking paid again on already Paid invoice is IllegalState
     let res = client.try_mark_paid(&inv.id);
-    assert_eq!(res, Err(Ok(reputation_bonus::errors::ContractError::IllegalState)));
+    assert_eq!(
+        res,
+        Err(Ok(reputation_bonus::errors::ContractError::IllegalState))
+    );
 }
 
 #[test]
@@ -254,7 +260,12 @@ fn test_err_reputation_config_unauthorized() {
     client.set_config(&config);
 
     let res = client.try_update_config(&other, &80, &150, &50);
-    assert_eq!(res, Err(Ok(reputation_bonus::errors::ContractError::ConfigErrorUnauthorized)));
+    assert_eq!(
+        res,
+        Err(Ok(
+            reputation_bonus::errors::ContractError::ConfigErrorUnauthorized
+        ))
+    );
 }
 
 #[test]
@@ -267,7 +278,12 @@ fn test_err_reputation_invalid_bonus_bps() {
     client.init(&admin);
 
     let res = client.try_update_config(&admin, &80, &501, &50);
-    assert_eq!(res, Err(Ok(reputation_bonus::errors::ContractError::ConfigErrorUnauthorized)));
+    assert_eq!(
+        res,
+        Err(Ok(
+            reputation_bonus::errors::ContractError::ConfigErrorUnauthorized
+        ))
+    );
 }
 
 #[test]
@@ -280,15 +296,34 @@ fn test_err_reputation_invalid_min_discount() {
     client.init(&admin);
 
     let res = client.try_update_config(&admin, &80, &150, &0);
-    assert_eq!(res, Err(Ok(reputation_bonus::errors::ContractError::ConfigErrorUnauthorized)));
+    assert_eq!(
+        res,
+        Err(Ok(
+            reputation_bonus::errors::ContractError::ConfigErrorUnauthorized
+        ))
+    );
 }
 
 #[test]
 fn test_err_reputation_arithmetic_errors() {
-    assert_eq!(reputation_bonus::errors::ContractError::ArithmeticError as u32, 1);
-    assert_eq!(reputation_bonus::errors::ContractError::RateErrorArithmeticUnderflow as u32, 7);
-    assert_eq!(reputation_bonus::errors::ContractError::RateErrorArithmeticOverflow as u32, 8);
-    assert_eq!(reputation_bonus::errors::ContractError::ConfigErrorInvalidBonusBps as u32, 5);
-    assert_eq!(reputation_bonus::errors::ContractError::ConfigErrorInvalidMinDiscountRate as u32, 6);
+    assert_eq!(
+        reputation_bonus::errors::ContractError::ArithmeticError as u32,
+        1
+    );
+    assert_eq!(
+        reputation_bonus::errors::ContractError::RateErrorArithmeticUnderflow as u32,
+        7
+    );
+    assert_eq!(
+        reputation_bonus::errors::ContractError::RateErrorArithmeticOverflow as u32,
+        8
+    );
+    assert_eq!(
+        reputation_bonus::errors::ContractError::ConfigErrorInvalidBonusBps as u32,
+        5
+    );
+    assert_eq!(
+        reputation_bonus::errors::ContractError::ConfigErrorInvalidMinDiscountRate as u32,
+        6
+    );
 }
-

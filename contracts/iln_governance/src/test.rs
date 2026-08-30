@@ -2150,4 +2150,3 @@ fn test_err_not_admin() {
     let err = GovernanceError::NotAdmin;
     assert_eq!(err as u32, 16);
 }
-

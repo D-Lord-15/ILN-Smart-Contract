@@ -37,10 +37,10 @@
               "function_name": "accrue_lp",
               "args": [
                 {
-                  "address": "GCICCXE3NONPFBJU3ZVSFS4XY355E6OCBDTJCMV33ZREYVRE2CPJ7A3K"
+                  "address": "GA2H2SKMAX4ZIVL6DXVPETCGSIFCKITZ35YTPWPUVY7PLDFM6ZTP3UDS"
                 },
                 {
-                  "i128": "161344772773502789658799167817501975657"
+                  "i128": "-45020652577488470557416116908308834768"
                 }
               ]
             }
@@ -59,7 +59,7 @@
               "function_name": "accrue_settlement",
               "args": [
                 {
-                  "address": "GCICCXE3NONPFBJU3ZVSFS4XY355E6OCBDTJCMV33ZREYVRE2CPJ7A3K"
+                  "address": "GA2H2SKMAX4ZIVL6DXVPETCGSIFCKITZ35YTPWPUVY7PLDFM6ZTP3UDS"
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
@@ -140,40 +140,13 @@
                     "symbol": "FreelancerSettled"
                   },
                   {
-                    "address": "GCICCXE3NONPFBJU3ZVSFS4XY355E6OCBDTJCMV33ZREYVRE2CPJ7A3K"
+                    "address": "GA2H2SKMAX4ZIVL6DXVPETCGSIFCKITZ35YTPWPUVY7PLDFM6ZTP3UDS"
                   }
                 ]
               },
               "durability": "persistent",
               "val": {
                 "u64": "1"
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 4095
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "LpFundedVolume"
-                  },
-                  {
-                    "address": "GCICCXE3NONPFBJU3ZVSFS4XY355E6OCBDTJCMV33ZREYVRE2CPJ7A3K"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "i128": "161344772773502789658799167817501975657"
               }
             }
           },

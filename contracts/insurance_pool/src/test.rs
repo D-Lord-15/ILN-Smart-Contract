@@ -530,4 +530,3 @@ fn test_err_arithmetic_overflow() {
     let err = InsuranceError::ArithmeticOverflow;
     assert_eq!(err as u32, 8);
 }
-

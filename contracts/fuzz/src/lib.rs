@@ -9,9 +9,7 @@ mod tests {
         InvoiceLiquidityContract, InvoiceLiquidityContractClient, ReferralCode,
     };
     use proptest::prelude::*;
-    use reputation_bonus::{
-        ReputationBonusContract, ReputationBonusContractClient,
-    };
+    use reputation_bonus::{ReputationBonusContract, ReputationBonusContractClient};
     use soroban_sdk::{
         address_payload::AddressPayload,
         testutils::{Address as _, Ledger},
@@ -439,4 +437,3 @@ mod tests {
         }
     }
 }
-
