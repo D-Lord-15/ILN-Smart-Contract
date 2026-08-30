@@ -41,8 +41,11 @@ Status legend: `Not started`, `In progress`, `Blocked`, `Complete`.
 |------|-------------|-------|--------|------|
 | Local development guide complete | Verify a fresh-machine local setup path for contracts, Docker, SDK, CLI, indexer, and notifications. | Docs lead | Complete | [#300](https://github.com/Invoice-Liquidity-Network/ILN-Smart-Contract/issues/300) |
 | Glossary complete | Publish protocol terminology for DeFi, invoice factoring, Stellar, and ILN-specific terms. | Docs lead | Complete | [#301](https://github.com/Invoice-Liquidity-Network/ILN-Smart-Contract/issues/301) |
+| Auditor onboarding package | Prepare guided reading path and known-accepted-risk register for external auditors. | Docs lead | Complete | [#791](https://github.com/Invoice-Liquidity-Network/ILN-Smart-Contract/issues/791) |
 | SDK guide complete | Confirm SDK examples match current contract IDs, methods, and error handling. | SDK lead | In progress | [SDK Integration](sdk-integration.md) |
 | Security docs linked | Link security policy from root, docs index, and release checklist. | Docs lead | In progress | [Security Policy](security.md) |
+| Documentation consistency audit | Cross-check all docs for contradictions after hardening batch. | Docs lead | Complete | [#789](https://github.com/Invoice-Liquidity-Network/ILN-Smart-Contract/issues/789) |
+| License compliance verified | Confirm LICENSE file and dependency license compatibility across Rust and TypeScript. | Security lead | Complete | [#790](https://github.com/Invoice-Liquidity-Network/ILN-Smart-Contract/issues/790) |
 | User-facing launch notes | Prepare final mainnet usage, known limitations, and migration notes. | Release lead | Not started | [CHANGELOG](../CHANGELOG.md) |
 
 ## Community
@@ -59,12 +62,14 @@ Status legend: `Not started`, `In progress`, `Blocked`, `Complete`.
 
 Mainnet launch requires sign-off from core maintainers after all blocking items are complete.
 
+**Reconciliation performed:** 2026-08-30 — Checklist updated to reflect batch completion. See [#792](https://github.com/Invoice-Liquidity-Network/ILN-Smart-Contract/issues/792).
+
 | Maintainer | Area | Signed off | Date | Notes |
 |------------|------|------------|------|-------|
 | TBD | Contracts | No | TBD | Pending audit and upgrade dry run. |
 | TBD | Security | No | TBD | Pending advisory process and incident runbook review. |
 | TBD | Infrastructure | No | TBD | Pending production monitoring and deployment runbook. |
-| TBD | Documentation | No | TBD | Pending final guide review. |
+| TBD | Documentation | No | TBD | Auditor onboarding package, consistency audit, and license compliance completed in batch. |
 | TBD | Community | No | TBD | Pending support channel confirmation. |
 
 ## Automation
