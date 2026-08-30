@@ -48,3 +48,62 @@ jobs:
 
       - name: Run Clippy
         run: cargo clippy --all-targets -- -D warnings -A deprecated
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run workspace unit tests
+        run: cargo test --workspace --lib
+
+      - name: Run workspace integration tests
+        run: cargo test --workspace --tests --all
+
+      - name: Run fuzz test suite
+        run: cargo test -p iln_fuzz
+
+  coverage:
+    name: Code Coverage Gate (≥95%)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin --locked
+
+      - name: Run coverage check (blocking gate, fail under 95%)
+        # Note: continue-on-error is intentionally omitted to make coverage regressions strictly blocking.
+        run: cargo tarpaulin --workspace --timeout 300 --fail-under 95 --out xml
+

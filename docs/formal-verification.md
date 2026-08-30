@@ -217,3 +217,45 @@ The function `check_invariants()` in `tests_invariants.rs` programmatically asse
 | Storage isolation | `tests_security.rs` — adjacency test |
 | Cross-invoice independence | `tests_invariants.rs` — `check_invariants` |
 | Admin function guards | `tests_access_control.rs` |
+| MEV funding queue single winner & no stuck funds | `tests_mev_mitigation.rs`, `tests_lp_priority_queue.rs` |
+
+---
+
+## 8. Funding Queue Resolution Invariant (MEV Mitigation)
+
+### 8.1 Specification & Invariants
+
+To mitigate front-running and MEV extraction around high-yield invoice funding, the contract implements a reputation-weighted queue with a mandatory maturity window.
+
+#### Invariant Q1: Deterministic Single Winner
+**Formal Property:**
+$$\forall \text{invoice } i, \text{ if } |\text{Queue}(i)| \ge 1, \quad \text{resolve\_fund\_queue}(i) = LP^*$$
+where:
+$$LP^* = \operatorname{argmax}_{lp \in \text{Queue}(i)} (\text{score}(lp))$$
+Ties are broken deterministically by initial queue join order (first-come, first-served). Exactly one LP is designated as `approved_lp`.
+
+#### Invariant Q2: Zero Stuck Funds & Solvency Guarantee
+**Formal Property:**
+$$\forall lp \in \text{Queue}(i) \setminus \{LP^*\}, \quad \Delta \text{Balance}(lp) = 0$$
+Joining the funding queue registers intent and snapshots reputation without escrowing or locking tokens. Non-winning LPs are rejected from calling `fund_invoice` with `ContractError::NotApprovedFunder` and retain 100% of their token balances with zero capital locked or stranded in contract storage.
+
+#### Invariant Q3: Monotonic Maturity Delay Guard
+**Formal Property:**
+$$\text{resolve\_fund\_queue}(i) \text{ succeeds} \iff \text{LedgerSeq} \ge \text{OpenedAt}(i) + \text{QUEUE\_DELAY\_LEDGERS}$$
+where $\text{OpenedAt}(i)$ is permanently anchored to the ledger sequence of the *first* LP joining the queue. Subsequent LP joins strictly preserve $\text{OpenedAt}(i)$ and cannot reset the maturity timer. Calls prior to maturity strictly revert with `ContractError::QueueNotMature`.
+
+#### Invariant Q4: Resolution Idempotency
+**Formal Property:**
+$$\forall t \ge t_{\text{resolved}}, \quad \text{resolve\_fund\_queue}_t(i) = \text{resolve\_fund\_queue}_{t_{\text{resolved}}}(i) = LP^*$$
+
+### 8.2 Guard Summary
+
+| Function | Pre-condition Guard | Failure Error |
+|---|---|---|
+| `join_fund_queue(lp, id)` | Invoice exists and is in `Pending` / `PartiallyFunded` | `InvoiceNotFound` / `AlreadyFunded` / etc. |
+| `join_fund_queue(lp, id)` | Queue not yet resolved | `NotApprovedFunder` |
+| `join_fund_queue(lp, id)` | LP not already in queue | `AlreadyInQueue` |
+| `resolve_fund_queue(id)` | At least one LP in queue | `NotFunded` |
+| `resolve_fund_queue(id)` | Current ledger $\ge \text{OpenedAt} + \text{QUEUE\_DELAY\_LEDGERS}$ | `QueueNotMature` |
+| `fund_invoice(lp, id, ...)` | If queue resolved, caller $lp == LP^*$ | `NotApprovedFunder` |
+

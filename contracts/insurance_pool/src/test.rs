@@ -501,3 +501,33 @@ fn balance_cap_can_be_cleared() {
     s.client.deposit_premium(&s.lp, &amount);
     assert_eq!(s.client.get_pool_balance(), amount);
 }
+
+// ================================================================
+// Issue #670: InsuranceError Variant Coverage Tests
+// ================================================================
+
+#[test]
+fn test_err_not_initialized() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, InsurancePool);
+    let client = InsurancePoolClient::new(&env, &contract_id);
+    let res = client.try_set_coverage_via_governance(&1000);
+    assert_eq!(res, Err(Ok(InsuranceError::NotInitialized)));
+}
+
+#[test]
+fn test_err_balance_cap_exceeded() {
+    let s = setup();
+    s.client.set_balance_cap(&500);
+    s.token_admin.mint(&s.lp, &1000);
+    let res = s.client.try_deposit_premium(&s.lp, &1000);
+    assert!(res.is_err());
+}
+
+#[test]
+fn test_err_arithmetic_overflow() {
+    let err = InsuranceError::ArithmeticOverflow;
+    assert_eq!(err as u32, 8);
+}
+

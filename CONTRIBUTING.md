@@ -324,7 +324,8 @@ Tests run on your native architecture via `soroban-sdk` test utilities — no WA
 cargo test -p iln_fuzz
 ```
 
-Property tests generate thousands of random cases and may take a few minutes.
+Property tests fuzz all five contract crates (`invoice_liquidity`, `iln_governance`, `insurance_pool`, `iln_distribution`, `reputation_bonus`) generating randomized inputs to verify that public entry points never panic or trigger unhandled execution faults.
+
 To skip them during rapid iteration:
 
 ```bash
@@ -333,11 +334,17 @@ cargo test -p invoice_liquidity -- --skip prop_
 PROPTEST_CASES=100 cargo test -p invoice_liquidity
 ```
 
+#### Snapshot Retention Policy
+
+To prevent repository bloat and maintain performant git history across all contract crates:
+- **Bounded Sample:** Only a bounded representative sample (maximum 5 snapshots per test target prefix, e.g. `.1.json` through `.5.json`) should be committed to `contracts/fuzz/test_snapshots/tests/`.
+- **Failure Artifacts:** Any test case reproducing an unhandled failure or regression must be archived as a named snapshot until the root cause is resolved and verified by regression test.
+- **Pruning:** Routine runs producing hundreds or thousands of identical snapshots must be pruned prior to opening a pull request.
+
 ### Coverage
 
 CI enforces **≥ 95 % line coverage** on `invoice_liquidity` using
-[cargo-tarpaulin](https://github.com/xd009642/tarpaulin).  Run it locally
-before pushing if you touch that crate:
+[cargo-tarpaulin](https://github.com/xd009642/tarpaulin). The CI coverage gate is strictly blocking (without `continue-on-error`). Run it locally before pushing if you touch that crate:
 
 ```bash
 cargo install cargo-tarpaulin --locked

@@ -2035,3 +2035,119 @@ fn test_execute_proposal_success_still_marks_executed() {
         ProposalStatus::Executed
     );
 }
+
+// ================================================================
+// Issue #670: Error Variant Coverage Tests for GovernanceError
+// ================================================================
+
+#[test]
+fn test_err_already_initialized() {
+    let t = setup();
+    let res = t.contract.try_initialize(
+        &t.iln_contract,
+        &Address::generate(&t.env),
+        &t.gov_token.address,
+        &t.admin,
+        &1000,
+    );
+    assert_eq!(res, Err(Ok(GovernanceError::AlreadyInitialized)));
+}
+
+#[test]
+fn test_err_voting_ended() {
+    let t = setup();
+    let id = create_fee_proposal(&t);
+
+    let mut ledger = t.env.ledger().get();
+    ledger.timestamp += VOTING_PERIOD_SECS + 1;
+    t.env.ledger().set(ledger);
+
+    let res = t.contract.try_cast_vote(&t.voter_a, &id, &true);
+    assert_eq!(res, Err(Ok(GovernanceError::VotingEnded)));
+}
+
+#[test]
+fn test_err_proposal_not_active() {
+    let t = setup();
+    let id = create_fee_proposal(&t);
+    t.contract.veto_proposal(&id, &dummy_hash(&t.env));
+
+    let res = t.contract.try_cast_vote(&t.voter_a, &id, &true);
+    assert_eq!(res, Err(Ok(GovernanceError::ProposalNotActive)));
+}
+
+#[test]
+fn test_err_no_voting_power() {
+    let t = setup();
+    let id = create_fee_proposal(&t);
+    let broke_user = Address::generate(&t.env);
+
+    let res = t.contract.try_cast_vote(&broke_user, &id, &true);
+    assert_eq!(res, Err(Ok(GovernanceError::NoVotingPower)));
+}
+
+#[test]
+fn test_err_already_voted() {
+    let t = setup();
+    let id = create_fee_proposal(&t);
+    t.contract.cast_vote(&t.voter_a, &id, &true);
+
+    let res = t.contract.try_cast_vote(&t.voter_a, &id, &false);
+    assert_eq!(res, Err(Ok(GovernanceError::AlreadyVoted)));
+}
+
+#[test]
+fn test_err_voting_ongoing() {
+    let t = setup();
+    let id = create_fee_proposal(&t);
+
+    let res = t.contract.try_execute_proposal(&id);
+    assert_eq!(res, Err(Ok(GovernanceError::VotingOngoing)));
+}
+
+#[test]
+fn test_err_proposal_rejected() {
+    let t = setup();
+    let id = create_fee_proposal(&t);
+    t.contract.cast_vote(&t.voter_a, &id, &false);
+    t.contract.cast_vote(&t.voter_b, &id, &false);
+
+    let mut ledger = t.env.ledger().get();
+    ledger.timestamp += VOTING_PERIOD_SECS + 1;
+    t.env.ledger().set(ledger);
+
+    let res = t.contract.try_execute_proposal(&id);
+    assert_eq!(res, Err(Ok(GovernanceError::ProposalRejected)));
+}
+
+#[test]
+fn test_err_cannot_delegate_to_self() {
+    let t = setup();
+    let res = t.contract.try_delegate_votes(&t.voter_a, &t.voter_a);
+    assert_eq!(res, Err(Ok(GovernanceError::CannotDelegateToSelf)));
+}
+
+#[test]
+fn test_err_delegation_cycle_prevented() {
+    let t = setup();
+    t.contract.delegate_votes(&t.voter_a, &t.voter_b);
+    let res = t.contract.try_delegate_votes(&t.voter_b, &t.voter_a);
+    assert_eq!(res, Err(Ok(GovernanceError::DelegationCyclePrevented)));
+}
+
+#[test]
+fn test_err_invalid_quorum_bps() {
+    let t = setup();
+    let res = t.contract.try_set_min_quorum_bps(&0);
+    assert_eq!(res, Err(Ok(GovernanceError::InvalidQuorumBps)));
+
+    let res2 = t.contract.try_set_min_quorum_bps(&10_001);
+    assert_eq!(res2, Err(Ok(GovernanceError::InvalidQuorumBps)));
+}
+
+#[test]
+fn test_err_not_admin() {
+    let err = GovernanceError::NotAdmin;
+    assert_eq!(err as u32, 16);
+}
+
