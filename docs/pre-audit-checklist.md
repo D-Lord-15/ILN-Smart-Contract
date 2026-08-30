@@ -2,7 +2,7 @@
 
 **Document Version:** 1.0  
 **Status:** Active  
-**Audit Target:** ILN Smart Contract — `invoice_liquidity`, `iln_governance`, `iln_distribution`, `reputation_bonus`  
+**Audit Target:** ILN Smart Contract — `invoice_liquidity`, `iln_governance`, `iln_distribution`, `insurance_pool`, `reputation_bonus`  
 **Testnet Contract:** `CD3TE3IAHM737P236XZL2OYU275ZKD6MN7YH7PYYAXYIGEH55OPEWYJC`
 
 This checklist must be completed and signed off by a maintainer before the formal security audit begins. Each item links to the relevant issue, document, or code location. Items marked ❌ are open work tracked as separate issues; this PR does not close them.
