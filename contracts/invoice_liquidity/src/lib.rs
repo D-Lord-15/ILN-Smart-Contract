@@ -735,8 +735,7 @@ impl InvoiceLiquidityContract {
     pub fn propose_pause(env: Env, proposer: Address) -> Result<u64, ContractError> {
         proposer.require_auth();
 
-        let admin = storage::get_multisig_admin(&env)
-            .ok_or(ContractError::NotAuthorizedSigner)?;
+        let admin = storage::get_multisig_admin(&env).ok_or(ContractError::NotAuthorizedSigner)?;
 
         if !multisig::is_signer(&env, &admin.signers, &proposer) {
             return Err(ContractError::NotAuthorizedSigner);
@@ -766,8 +765,7 @@ impl InvoiceLiquidityContract {
     pub fn propose_unpause(env: Env, proposer: Address) -> Result<u64, ContractError> {
         proposer.require_auth();
 
-        let admin = storage::get_multisig_admin(&env)
-            .ok_or(ContractError::NotAuthorizedSigner)?;
+        let admin = storage::get_multisig_admin(&env).ok_or(ContractError::NotAuthorizedSigner)?;
 
         if !multisig::is_signer(&env, &admin.signers, &proposer) {
             return Err(ContractError::NotAuthorizedSigner);
@@ -795,15 +793,10 @@ impl InvoiceLiquidityContract {
     /// once (`AlreadySigned`), and signing an expired proposal is rejected.
     ///
     /// Access: Multi-sig authorized signer
-    pub fn sign_proposal(
-        env: Env,
-        signer: Address,
-        proposal_id: u64,
-    ) -> Result<(), ContractError> {
+    pub fn sign_proposal(env: Env, signer: Address, proposal_id: u64) -> Result<(), ContractError> {
         signer.require_auth();
 
-        let admin = storage::get_multisig_admin(&env)
-            .ok_or(ContractError::NotAuthorizedSigner)?;
+        let admin = storage::get_multisig_admin(&env).ok_or(ContractError::NotAuthorizedSigner)?;
 
         if !multisig::is_signer(&env, &admin.signers, &signer) {
             return Err(ContractError::NotAuthorizedSigner);
@@ -842,8 +835,7 @@ impl InvoiceLiquidityContract {
     ) -> Result<(), ContractError> {
         executor.require_auth();
 
-        let admin = storage::get_multisig_admin(&env)
-            .ok_or(ContractError::NotAuthorizedSigner)?;
+        let admin = storage::get_multisig_admin(&env).ok_or(ContractError::NotAuthorizedSigner)?;
 
         if !multisig::is_signer(&env, &admin.signers, &executor) {
             return Err(ContractError::NotAuthorizedSigner);

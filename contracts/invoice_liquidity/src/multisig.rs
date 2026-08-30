@@ -9,7 +9,6 @@
 /// 2. Signers call sign_proposal() to approve the proposal
 /// 3. Once the threshold is reached, any signer calls execute_proposal()
 /// 4. Proposals expire after MULTISIG_WINDOW_LEDGERS if not executed
-
 use soroban_sdk::{contracttype, Address, Env, Vec};
 
 /// Number of ledgers a multisig proposal remains valid (approximately 24 hours)
@@ -68,7 +67,7 @@ pub struct MultisigProposal {
 }
 
 /// Validate that an address is in the signer list
-pub fn is_signer(env: &Env, signers: &Vec<Address>, address: &Address) -> bool {
+pub fn is_signer(_env: &Env, signers: &Vec<Address>, address: &Address) -> bool {
     for i in 0..signers.len() {
         if signers.get(i).unwrap() == *address {
             return true;
@@ -89,7 +88,7 @@ pub fn has_signed(proposal: &MultisigProposal, signer: &Address) -> bool {
 
 /// Check if proposal has reached the approval threshold
 pub fn threshold_reached(proposal: &MultisigProposal, threshold: u32) -> bool {
-    proposal.signers_approved.len() as u32 >= threshold
+    proposal.signers_approved.len() >= threshold
 }
 
 /// Check if proposal has expired

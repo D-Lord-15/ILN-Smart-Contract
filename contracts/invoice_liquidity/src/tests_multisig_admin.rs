@@ -7,13 +7,16 @@
 /// - Threshold validation
 /// - Various admin actions
 /// - Production threshold flow (2-of-3) mirroring docs/multisig-admin-runbook.md
-
 #[cfg(test)]
+// The generated `try_*` contract clients return `Result<Result<.., _>, _>`;
+// asserting success with `.unwrap()` triggers unused_must_use under -D warnings.
+#[allow(unused_must_use)]
 mod tests {
     use crate::*;
     use soroban_sdk::testutils::{Address as _, Ledger};
     use soroban_sdk::{Address, Env, Vec};
 
+    #[allow(dead_code)]
     struct TestEnv {
         env: Env,
         contract: InvoiceLiquidityContractClient<'static>,
@@ -21,11 +24,10 @@ mod tests {
         admin2: Address,
         admin3: Address,
         other: Address,
-        usdc_token: Address,
     }
 
     fn setup_multisig() -> TestEnv {
-        let mut env = Env::default();
+        let env = Env::default();
         // Multisig entry points call require_auth() on the proposer/signer/
         // executor; mock auth so the generated client calls pass.
         env.mock_all_auths();
@@ -54,12 +56,7 @@ mod tests {
         let contract = InvoiceLiquidityContractClient::new(&env, &contract_id);
 
         // Initialize the contract
-        contract.initialize(
-            &admin1,
-            &usdc_token_addr,
-            &eurc_token_addr,
-            &xlm_token_addr,
-        );
+        contract.initialize(&admin1, &usdc_token_addr, &eurc_token_addr, &xlm_token_addr);
 
         TestEnv {
             env,
@@ -68,7 +65,6 @@ mod tests {
             admin2,
             admin3,
             other,
-            usdc_token: usdc_token_addr,
         }
     }
 
@@ -353,12 +349,8 @@ mod tests {
 
         // First pause
         let pause_id = t.contract.try_propose_pause(&t.admin1).unwrap().unwrap();
-        t.contract
-            .try_sign_proposal(&t.admin1, &pause_id)
-            .unwrap();
-        t.contract
-            .try_sign_proposal(&t.admin2, &pause_id)
-            .unwrap();
+        t.contract.try_sign_proposal(&t.admin1, &pause_id).unwrap();
+        t.contract.try_sign_proposal(&t.admin2, &pause_id).unwrap();
         t.contract
             .try_execute_proposal(&t.admin1, &pause_id)
             .unwrap();
