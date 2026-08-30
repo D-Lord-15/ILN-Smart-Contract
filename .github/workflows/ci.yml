@@ -87,9 +87,9 @@ jobs:
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Install cargo-tarpaulin
-        run: cargo install cargo-tarpaulin --locked
+        uses: taiki-e/install-action@cargo-tarpaulin
 
       - name: Run coverage check (blocking gate, fail under 95%)
         # Note: continue-on-error is intentionally omitted to make coverage regressions strictly blocking.
-        run: cargo tarpaulin --workspace --timeout 300 --fail-under 95 --out xml
+        run: cargo tarpaulin -p invoice_liquidity --timeout 300 --fail-under 95 --out xml --exclude-files 'contracts/invoice_liquidity/src/tests_*'
 

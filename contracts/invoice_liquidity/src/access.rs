@@ -155,3 +155,55 @@ pub fn clear_rate_limit(env: &Env, fn_name: &str) {
     let key = StorageKey::RateLimit(Symbol::new(env, fn_name));
     env.storage().instance().remove(&key);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::InvoiceLiquidityContract;
+    use soroban_sdk::testutils::Ledger;
+
+    #[test]
+    fn test_role_variants() {
+        assert_eq!(Role::Submitter, Role::Submitter);
+        assert_eq!(Role::Payer, Role::Payer);
+        assert_eq!(Role::LP, Role::LP);
+        assert_eq!(Role::Admin, Role::Admin);
+        assert_eq!(Role::Governance, Role::Governance);
+        assert_eq!(Role::Anyone, Role::Anyone);
+        assert_ne!(Role::Submitter, Role::Payer);
+    }
+
+    #[test]
+    fn test_access_reentrancy_and_rate_limits() {
+        let env = Env::default();
+        let contract_id = env.register(InvoiceLiquidityContract, ());
+
+        env.as_contract(&contract_id, || {
+            // lock_reentrancy and unlock
+            assert_eq!(lock_reentrancy(&env), Ok(()));
+            assert_eq!(lock_reentrancy(&env), Err(ContractError::Reentrancy));
+            unlock_reentrancy(&env);
+            assert_eq!(lock_reentrancy(&env), Ok(()));
+            unlock_reentrancy(&env);
+
+            // rate limiting
+            let mut ledger = env.ledger().get();
+            ledger.sequence_number = 100;
+            env.ledger().set(ledger);
+
+            assert_eq!(check_rate_limit(&env, "test_fn", 10), Ok(()));
+            assert_eq!(
+                check_rate_limit(&env, "test_fn", 10),
+                Err(ContractError::RateLimited)
+            );
+
+            clear_rate_limit(&env, "test_fn");
+            assert_eq!(check_rate_limit(&env, "test_fn", 10), Ok(()));
+
+            let mut ledger = env.ledger().get();
+            ledger.sequence_number += 15;
+            env.ledger().set(ledger);
+            assert_eq!(check_rate_limit(&env, "test_fn", 10), Ok(()));
+        });
+    }
+}

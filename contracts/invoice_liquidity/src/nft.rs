@@ -264,3 +264,103 @@ pub fn query_nft_metadata(env: Env, invoice_id: u64) -> Option<InvoiceNftMetadat
 pub fn query_nft_owner(env: Env, invoice_id: u64) -> Option<Address> {
     get_invoice_nft_owner(&env, invoice_id)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::InvoiceLiquidityContract;
+    use soroban_sdk::testutils::Address as _;
+
+    #[test]
+    fn test_nft_full_lifecycle() {
+        let env = Env::default();
+        let contract_id = env.register(InvoiceLiquidityContract, ());
+
+        env.as_contract(&contract_id, || {
+            let owner = Address::generate(&env);
+            let recipient = Address::generate(&env);
+            let token = Address::generate(&env);
+            let invoice_id = 42;
+
+            assert!(!invoice_nft_exists(&env, invoice_id));
+            assert_eq!(get_invoice_nft_metadata(&env, invoice_id), None);
+            assert_eq!(get_invoice_nft_owner(&env, invoice_id), None);
+            assert_eq!(query_nft_metadata(env.clone(), invoice_id), None);
+            assert_eq!(query_nft_owner(env.clone(), invoice_id), None);
+
+            // Mint
+            let mint_res = mint_invoice_nft(
+                &env,
+                invoice_id,
+                owner.clone(),
+                100_000,
+                2_000_000_000,
+                300,
+                token.clone(),
+            );
+            assert!(mint_res.is_ok());
+            assert!(invoice_nft_exists(&env, invoice_id));
+
+            // Duplicate mint error
+            let dup_res = mint_invoice_nft(
+                &env,
+                invoice_id,
+                owner.clone(),
+                100_000,
+                2_000_000_000,
+                300,
+                token,
+            );
+            assert_eq!(dup_res, Err(ContractError::AlreadyFunded));
+
+            // Query
+            let meta = get_invoice_nft_metadata(&env, invoice_id).unwrap();
+            assert_eq!(meta.invoice_id, invoice_id);
+            assert_eq!(meta.amount, 100_000);
+            assert_eq!(meta.owner, owner);
+            assert_eq!(get_invoice_nft_owner(&env, invoice_id), Some(owner.clone()));
+            assert_eq!(
+                query_nft_metadata(env.clone(), invoice_id)
+                    .unwrap()
+                    .invoice_id,
+                invoice_id
+            );
+            assert_eq!(
+                query_nft_owner(env.clone(), invoice_id),
+                Some(owner.clone())
+            );
+
+            // Unauthorized transfer
+            let bad_xfer =
+                transfer_invoice_nft(&env, invoice_id, recipient.clone(), recipient.clone());
+            assert_eq!(bad_xfer, Err(ContractError::Unauthorized));
+
+            // Nonexistent transfer
+            let missing_xfer = transfer_invoice_nft(&env, 999, owner.clone(), recipient.clone());
+            assert_eq!(missing_xfer, Err(ContractError::InvoiceNotFound));
+
+            // Valid transfer
+            let xfer_res = transfer_invoice_nft(&env, invoice_id, owner.clone(), recipient.clone());
+            assert!(xfer_res.is_ok());
+            assert_eq!(
+                get_invoice_nft_owner(&env, invoice_id),
+                Some(recipient.clone())
+            );
+
+            // Unauthorized burn
+            let bad_burn = burn_invoice_nft(&env, invoice_id, owner);
+            assert_eq!(bad_burn, Err(ContractError::Unauthorized));
+
+            // Nonexistent burn
+            let missing_burn = burn_invoice_nft(&env, 999, recipient.clone());
+            assert_eq!(missing_burn, Err(ContractError::InvoiceNotFound));
+
+            // Valid burn
+            let burn_res = burn_invoice_nft(&env, invoice_id, recipient);
+            assert!(burn_res.is_ok());
+            assert!(!invoice_nft_exists(&env, invoice_id));
+            assert_eq!(get_invoice_nft_metadata(&env, invoice_id), None);
+            assert_eq!(get_invoice_nft_owner(&env, invoice_id), None);
+        });
+    }
+}

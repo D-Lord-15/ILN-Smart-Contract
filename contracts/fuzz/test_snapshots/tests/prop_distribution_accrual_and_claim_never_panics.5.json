@@ -37,10 +37,10 @@
               "function_name": "accrue_lp",
               "args": [
                 {
-                  "address": "GBJDVY3XYJGBANR5TLZAAV6QDYMMFU5MOZ3T4RE2IK3MHRHU2QP327FX"
+                  "address": "GAOB6MRYWP2TEHHVJFOWBUNCAVSZ45O7UJE5ICRHSMRTVD6FGWVSV5O7"
                 },
                 {
-                  "i128": "18158511907560841614464572040207950070"
+                  "i128": "45538304999272410671387507263778385980"
                 }
               ]
             }
@@ -59,7 +59,7 @@
               "function_name": "accrue_settlement",
               "args": [
                 {
-                  "address": "GBJDVY3XYJGBANR5TLZAAV6QDYMMFU5MOZ3T4RE2IK3MHRHU2QP327FX"
+                  "address": "GAOB6MRYWP2TEHHVJFOWBUNCAVSZ45O7UJE5ICRHSMRTVD6FGWVSV5O7"
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
@@ -140,7 +140,7 @@
                     "symbol": "FreelancerSettled"
                   },
                   {
-                    "address": "GBJDVY3XYJGBANR5TLZAAV6QDYMMFU5MOZ3T4RE2IK3MHRHU2QP327FX"
+                    "address": "GAOB6MRYWP2TEHHVJFOWBUNCAVSZ45O7UJE5ICRHSMRTVD6FGWVSV5O7"
                   }
                 ]
               },
@@ -167,13 +167,13 @@
                     "symbol": "LpFundedVolume"
                   },
                   {
-                    "address": "GBJDVY3XYJGBANR5TLZAAV6QDYMMFU5MOZ3T4RE2IK3MHRHU2QP327FX"
+                    "address": "GAOB6MRYWP2TEHHVJFOWBUNCAVSZ45O7UJE5ICRHSMRTVD6FGWVSV5O7"
                   }
                 ]
               },
               "durability": "persistent",
               "val": {
-                "i128": "18158511907560841614464572040207950070"
+                "i128": "45538304999272410671387507263778385980"
               }
             }
           },
