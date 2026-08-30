@@ -204,6 +204,9 @@ mod tests {
             ledger.sequence_number += 15;
             env.ledger().set(ledger);
             assert_eq!(check_rate_limit(&env, "test_fn", 10), Ok(()));
+
+            // governance
+            assert_eq!(require_governance(&env), Err(ContractError::Unauthorized));
         });
     }
 }

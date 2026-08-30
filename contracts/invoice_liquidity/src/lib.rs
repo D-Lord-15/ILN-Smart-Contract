@@ -3075,4 +3075,5 @@ mod tests_batch_submit_reputation;
 // Issue #pause-checks: expire_invoice and appeal_default pause guards
 mod tests_pause_checks;
 // Pre-audit Item 1.6 & Issue #670: ContractError variant coverage
+mod tests_coverage_boost;
 mod tests_error_cases;
