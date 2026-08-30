@@ -516,3 +516,146 @@ pub fn get_total_paid(env: &Env) -> u64 {
         .get(&DataKey::TotalPaid)
         .unwrap_or(0)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::invoice::InvoiceStatus;
+    use crate::InvoiceLiquidityContract;
+    use soroban_sdk::testutils::Address as _;
+
+    #[test]
+    fn test_storage_helpers_and_stats() {
+        let env = Env::default();
+        let contract_id = env.register(InvoiceLiquidityContract, ());
+
+        env.as_contract(&contract_id, || {
+            let user = Address::generate(&env);
+            let admin = Address::generate(&env);
+
+            // Admin
+            assert_eq!(get_admin(&env), None);
+            set_admin(&env, &admin);
+            assert_eq!(get_admin(&env), Some(admin.clone()));
+
+            // Config
+            assert_eq!(get_config(&env), None);
+            let config = Config {
+                high_rep_threshold: 80,
+                bonus_bps: 100,
+                min_discount_rate_bps: 50,
+                decay_rate_bps: 50,
+                decay_period_ledgers: 1000,
+                dispute_timeout_ledgers: 5000,
+                xlm_sac_address: user.clone(),
+                usdc_sac_address: user.clone(),
+                eurc_sac_address: user.clone(),
+                price_oracle: None,
+                max_oracle_age_ledgers: 17280,
+            };
+            set_config(&env, &config);
+            assert_eq!(get_config(&env), Some(config));
+
+            // Insurance pool & pause
+            assert_eq!(get_insurance_pool(&env), None);
+            set_insurance_pool(&env, &admin);
+            assert_eq!(get_insurance_pool(&env), Some(admin.clone()));
+
+            assert!(!is_paused(&env));
+            set_paused(&env, true);
+            assert!(is_paused(&env));
+            set_paused(&env, false);
+
+            // Next invoice id
+            assert_eq!(read_next_invoice_id(&env), 1);
+            let id1 = next_invoice_id(&env).unwrap();
+            assert_eq!(id1, 1);
+            assert_eq!(read_next_invoice_id(&env), 2);
+
+            // Invoice save / load / exists
+            assert!(!invoice_exists(&env, 1));
+            let inv = Invoice {
+                id: 1,
+                freelancer: user.clone(),
+                payer: user.clone(),
+                token: user.clone(),
+                amount: 1000,
+                due_date: 100000,
+                discount_rate: 300,
+                status: InvoiceStatus::Pending,
+                funder: None,
+                funded_at: None,
+                amount_funded: 0,
+                amount_paid: 0,
+                referral_code: crate::invoice::ReferralCode::None,
+                submitter_reputation: 50,
+            };
+            save_invoice(&env, &inv);
+            assert!(invoice_exists(&env, 1));
+            let loaded = load_invoice(&env, 1);
+            assert_eq!(loaded.id, 1);
+            let core = load_invoice_core(&env, 1);
+            assert_eq!(core.id, 1);
+            assert!(try_load_invoice_core(&env, 1).is_some());
+            assert!(try_load_invoice_core(&env, 999).is_none());
+
+            // Funders list
+            let mut funders = get_invoice_funders(&env, 1);
+            assert_eq!(funders.len(), 0);
+            funders.push_back((user.clone(), 5000));
+            save_invoice_funders(&env, 1, &funders);
+            assert_eq!(get_invoice_funders(&env, 1).len(), 1);
+
+            // LP score
+            assert_eq!(get_lp_score(&env, &user), 50);
+            set_lp_score(&env, &user, 90);
+            assert_eq!(get_lp_score(&env, &user), 90);
+
+            // Queue
+            let queue = get_fund_queue(&env, 1);
+            assert_eq!(queue.len(), 0);
+            save_fund_queue(&env, 1, &queue);
+            assert_eq!(get_queue_resolution(&env, 1), None);
+            save_queue_resolution(&env, 1, &user);
+            assert_eq!(get_queue_resolution(&env, 1), Some(user.clone()));
+
+            // Queue opened at
+            assert_eq!(get_fund_queue_opened_at(&env, 1), None);
+            try_set_fund_queue_opened_at(&env, 1);
+            assert!(get_fund_queue_opened_at(&env, 1).is_some());
+
+            // Appeal & pre-default score
+            assert_eq!(get_appeal(&env, 1), None);
+            let appeal_rec = AppealRecord {
+                evidence_hash: soroban_sdk::BytesN::from_array(&env, &[1u8; 32]),
+                appealed_at: 5000,
+                pre_default_score: 80,
+            };
+            save_appeal(&env, 1, &appeal_rec);
+            assert_eq!(get_appeal(&env, 1), Some(appeal_rec));
+
+            assert_eq!(get_pre_default_payer_score(&env, 1), None);
+            save_pre_default_payer_score(&env, 1, 75);
+            assert_eq!(get_pre_default_payer_score(&env, 1), Some(75));
+
+            // Stats accumulator & incrementors
+            let mut acc = StatsAccumulator::default();
+            acc.add_invoice();
+            acc.add_funded();
+            acc.add_paid();
+            acc.commit(&env);
+
+            assert_eq!(get_total_invoices(&env), 1);
+            assert_eq!(get_total_funded(&env), 1);
+            assert_eq!(get_total_paid(&env), 1);
+
+            increment_total_invoices(&env);
+            increment_total_funded(&env);
+            increment_total_paid(&env);
+
+            assert_eq!(get_total_invoices(&env), 2);
+            assert_eq!(get_total_funded(&env), 2);
+            assert_eq!(get_total_paid(&env), 2);
+        });
+    }
+}
