@@ -3291,3 +3291,6 @@ mod tests_batch_submit_reputation;
 mod tests_pause_checks;
 // Issue #124: multi-sig admin (2-of-3 threshold flow)
 mod tests_multisig_admin;
+// Pre-audit Item 1.6 & Issue #670: ContractError variant coverage
+mod tests_coverage_boost;
+mod tests_error_cases;

@@ -14,11 +14,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          profile: minimal
-          override: true
           components: rustfmt
 
       - name: Check formatting
@@ -31,11 +28,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          profile: minimal
-          override: true
           components: clippy
 
       - name: Cache cargo registry
@@ -48,3 +42,54 @@ jobs:
 
       - name: Run Clippy
         run: cargo clippy --all-targets -- -D warnings -A deprecated
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Run workspace unit tests
+        run: cargo test --workspace --lib
+
+      - name: Run workspace integration tests
+        run: cargo test --workspace --tests --all
+
+      - name: Run fuzz test suite
+        run: cargo test -p iln_fuzz
+
+  coverage:
+    name: Code Coverage Gate (≥95%)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install cargo-tarpaulin
+        uses: taiki-e/install-action@cargo-tarpaulin
+
+      - name: Run coverage check (blocking gate, fail under 95%)
+        # Note: continue-on-error is intentionally omitted to make coverage regressions strictly blocking.
+        run: cargo tarpaulin -p invoice_liquidity --timeout 300 --fail-under 95 --out xml --include-path 'contracts/invoice_liquidity/src' --exclude-files 'contracts/invoice_liquidity/src/tests_*' 'contracts/invoice_liquidity/src/test.rs'
+
