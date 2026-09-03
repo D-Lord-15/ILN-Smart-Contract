@@ -3293,4 +3293,6 @@ mod tests_pause_checks;
 mod tests_multisig_admin;
 // Pre-audit Item 1.6 & Issue #670: ContractError variant coverage
 mod tests_coverage_boost;
+// Coverage-gate tests: branches left uncovered by the suites above
+mod tests_coverage_gate;
 mod tests_error_cases;
