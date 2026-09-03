@@ -595,9 +595,14 @@ fn test_claim_default_partial_funding() {
     ledger.timestamp = due + 10;
     t.env.ledger().set(ledger);
 
-    t.contract.claim_default(&t.funder, &id);
+    // claim_default only applies to fully Funded invoices; a partially
+    // funded invoice must be rejected with NotFunded, leaving the invoice
+    // untouched in PartiallyFunded state (cancel_invoice is the exit path).
+    let result = t.contract.try_claim_default(&t.funder, &id);
+    assert_eq!(result, Err(Ok(ContractError::NotFunded)));
+
     let inv = t.contract.get_invoice(&id);
-    assert_eq!(inv.status, InvoiceStatus::Defaulted);
+    assert_eq!(inv.status, InvoiceStatus::PartiallyFunded);
 }
 
 // ----------------------------------------------------------------
@@ -689,16 +694,7 @@ fn test_update_config_happy_path() {
     let new_eurc = Address::generate(&t.env);
 
     t.contract.update_config(
-        &t.admin,
-        &70,
-        &200,
-        &100,
-        &50,
-        &2000,
-        &5000,
-        &new_xlm,
-        &new_usdc,
-        &new_eurc,
+        &t.admin, &70, &200, &100, &50, &2000, &5000, &new_xlm, &new_usdc, &new_eurc,
     );
 
     let cfg = t.contract.get_config();
@@ -720,16 +716,8 @@ fn test_update_config_rejects_invalid_bonus_bps() {
 
     let dummy = Address::generate(&t.env);
     let result = t.contract.try_update_config(
-        &t.admin,
-        &70,
-        &501, // MAX_BONUS_BPS is 500, so 501 is too high
-        &100,
-        &50,
-        &2000,
-        &5000,
-        &dummy,
-        &dummy,
-        &dummy,
+        &t.admin, &70, &501, // MAX_BONUS_BPS is 500, so 501 is too high
+        &100, &50, &2000, &5000, &dummy, &dummy, &dummy,
     );
     assert_eq!(result, Err(Ok(ContractError::Unauthorized)));
 }
@@ -741,16 +729,8 @@ fn test_update_config_rejects_zero_min_discount() {
 
     let dummy = Address::generate(&t.env);
     let result = t.contract.try_update_config(
-        &t.admin,
-        &70,
-        &100,
-        &0, // zero min_discount_rate
-        &50,
-        &2000,
-        &5000,
-        &dummy,
-        &dummy,
-        &dummy,
+        &t.admin, &70, &100, &0, // zero min_discount_rate
+        &50, &2000, &5000, &dummy, &dummy, &dummy,
     );
     assert_eq!(result, Err(Ok(ContractError::Unauthorized)));
 }
