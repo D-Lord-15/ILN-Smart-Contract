@@ -91,5 +91,5 @@ jobs:
 
       - name: Run coverage check (blocking gate, fail under 95%)
         # Note: continue-on-error is intentionally omitted to make coverage regressions strictly blocking.
-        run: cargo tarpaulin -p invoice_liquidity --timeout 300 --fail-under 95 --out xml --include-path 'contracts/invoice_liquidity/src' --exclude-files 'contracts/invoice_liquidity/src/tests_*' 'contracts/invoice_liquidity/src/test.rs'
+        run: cargo tarpaulin -p invoice_liquidity --timeout 300 --fail-under 95 --out xml --exclude-files 'contracts/invoice_liquidity/src/tests_*' 'contracts/invoice_liquidity/src/test.rs'
 
